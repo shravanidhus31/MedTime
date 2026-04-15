@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+@theme {
+  /* MedTime Custom Color Palette */
+  --color-cream: #fdf8f0;
+  --color-parchment: #f5ede0;
+  
+  --color-blush: #f7ddd4;
+  --color-blush2: #f2c4b5;
+  --color-rose: #e8a090;
+  
+  --color-sage: #c8d9c4;
+  --color-sage2: #a8c4a2;
+  --color-sage3: #7da876;
+  
+  --color-sky: #c5dff0;
+  --color-sky2: #a4c8e5;
+  --color-sky3: #6babd4;
+  
+  --color-lavender: #dbd3ef;
+  
+  --color-amber-soft: #f7e4b0;
+  --color-amber2: #f2cc72;
+  --color-amber3: #d4a030;
+  
+  --color-sand: #e8dcc8;
+  --color-brown2: #5c4535;
+  
+  --color-text-dark: #2d2418;
+  --color-text-light: #8a7560;
+
+  /* Custom Fonts */
+  --font-sans: 'Nunito', sans-serif;
+  --font-serif: 'Lora', serif;
+}
+
+body {
+  background-color: var(--color-cream);
+  color: var(--color-text-dark);
+}
