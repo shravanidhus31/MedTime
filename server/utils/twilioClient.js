@@ -33,21 +33,27 @@ const makeCall = async (to, medName, dosage, mealTiming) => {
     return true; 
   }
 
+  // ⚠️ PASTE YOUR ACTIVE NGROK URL HERE (No trailing slash)
+  const ngrokUrl = 'https://cardiac-gallstone-quartet.ngrok-free.dev';
+
   try {
     const call = await client.calls.create({
-      // TwiML is the script the robot will read. 
-      // We use the <Say> tag to generate text-to-speech.
+      // We use <Gather> to listen for exactly 1 digit. 
+      // When pressed, it POSTs that digit to our new webhook route.
       twiml: `
         <Response>
-          <Say voice="alice">
-            Hello from Med Time. This is your automated reminder. 
-            It is time to take your ${medName}, ${dosage}. 
-            Instructions are: ${mealTiming} food. 
-            Have a wonderful day.
-          </Say>
+          <Gather numDigits="1" action="${ngrokUrl}/api/v1/webhooks/voice" method="POST">
+            <Say voice="alice">
+              Hello from Med Time. This is your automated reminder. 
+              It is time to take your ${medName}, ${dosage}. 
+              Instructions are: ${mealTiming} food. 
+              Press 1 to confirm you have taken it. Press 2 to skip.
+            </Say>
+          </Gather>
+          <Say voice="alice">We didn't receive any input. Goodbye!</Say>
         </Response>
       `,
-      to: `+91${to}`, // Ensure country code is here for calls
+      to: `+91${to}`, 
       from: process.env.TWILIO_PHONE_NUMBER
     });
     console.log(`📞 Call initiated to ${to}. Call SID: ${call.sid}`);

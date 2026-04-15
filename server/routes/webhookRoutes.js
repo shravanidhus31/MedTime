@@ -65,5 +65,55 @@ router.post('/sms', async (req, res) => {
     res.type('text/xml').send(twiml.toString());
   }
 });
+// POST /api/v1/webhooks/voice
+router.post('/voice', async (req, res) => {
+  const digits = req.body.Digits; // Will be '1' or '2'
+  let calledNumber = req.body.To; // Twilio sends the patient's number as 'To' for outbound calls
+
+  console.log(`📞 [VOICE WEBHOOK] Patient pressed: ${digits}`);
+
+  // Clean the +91 to match your database
+  if (calledNumber.startsWith('+91')) {
+    calledNumber = calledNumber.replace('+91', '');
+  }
+
+  try {
+    const user = await User.findOne({ phone: calledNumber });
+    if (user) {
+      const patient = await Patient.findOne({ user: user._id });
+      
+      // Find the most recent alerted reminder
+      const recentReminder = await Reminder.findOne({ 
+        patient: patient._id, 
+        status: 'alerted' 
+      }).sort({ scheduledTime: -1 });
+
+      if (recentReminder) {
+        if (digits === '1') {
+          recentReminder.status = 'taken';
+          await recentReminder.save();
+          console.log('✅ Database updated: Medicine TAKEN');
+        } else if (digits === '2') {
+          recentReminder.status = 'skipped';
+          await recentReminder.save();
+          console.log('⚠️ Database updated: Medicine SKIPPED');
+        }
+      }
+    }
+
+    // Tell the robot what to say before hanging up
+    const twimlResponse = `
+      <Response>
+        <Say voice="alice">Thank you, your medical records have been updated. Goodbye!</Say>
+      </Response>
+    `;
+    
+    res.type('text/xml').send(twimlResponse);
+
+  } catch (error) {
+    console.error('Voice Webhook Error:', error);
+    res.type('text/xml').send('<Response><Say>Sorry, an error occurred. Goodbye.</Say></Response>');
+  }
+});
 
 module.exports = router;

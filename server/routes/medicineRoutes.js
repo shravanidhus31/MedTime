@@ -78,16 +78,32 @@ router.post('/', verifyToken, requireRole(['patient', 'caregiver']), async (req,
 });
 
 // GET /api/v1/medicines - Get all medicines for the logged-in patient
+// GET /api/v1/medicines - Get all medicines for the logged-in patient
 router.get('/', verifyToken, async (req, res) => {
   try {
     const patient = await Patient.findOne({ user: req.user.id });
     if (!patient) return res.status(200).json([]); // No profile yet, return empty array
 
-    const medicines = await Medicine.find({ patient: patient._id, isActive: true });
-    res.status(200).json(medicines);
+    // 1. Add .lean() here! This turns the Mongoose document into a plain JavaScript object
+    // so we can safely attach the new 'status' property to it.
+    const medicines = await Medicine.find({ patient: patient._id, isActive: true }).lean();
+
+    // 2. Loop through each medicine and ask the Reminder database for the latest status
+    const medicinesWithStatus = await Promise.all(medicines.map(async (med) => {
+      const recentReminder = await Reminder.findOne({ medicine: med._id })
+        .sort({ scheduledTime: -1 }); // Sort by time descending (newest first)
+
+      return {
+        ...med,
+        // If a reminder exists, attach its status. If not, default to 'pending'
+        status: recentReminder ? recentReminder.status : 'pending' 
+      };
+    }));
+
+    // 3. Send the merged data back to React
+    res.status(200).json(medicinesWithStatus);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
-
 module.exports = router;

@@ -1,8 +1,11 @@
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const webhookRoutes = require('./routes/webhookRoutes');
-require('dotenv').config();
+const dns = require('dns');
+dns.setServers(["1.1.1.1", "8.8.8.8"]);
+
 
 // Initialize Express app
 const app = express();
@@ -12,6 +15,7 @@ const { startReminderJob } = require('./jobs/reminderJob');
 // Middleware
 app.use(cors());
 app.use(express.json()); // Parses incoming JSON requests
+app.use(express.urlencoded({ extended: true }));
 
 // Test Route
 app.get('/api/v1/health', (req, res) => {

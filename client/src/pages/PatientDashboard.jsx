@@ -23,6 +23,7 @@ export default function PatientDashboard() {
   });
 
   // Fetch medicines when the dashboard loads
+// Fetch medicines when the dashboard loads AND every 5 seconds
   useEffect(() => {
     const fetchMedicines = async () => {
       try {
@@ -32,7 +33,14 @@ export default function PatientDashboard() {
         console.error('Failed to fetch medicines:', error);
       }
     };
-    fetchMedicines();
+    
+    fetchMedicines(); // Initial fetch
+    
+    // Set up the auto-polling
+    const interval = setInterval(fetchMedicines, 5000); 
+    
+    // Clean up the interval when the user leaves the page
+    return () => clearInterval(interval);
   }, []);
 
   const handleFileUpload = (e) => {
@@ -139,30 +147,44 @@ export default function PatientDashboard() {
                       {med.mealTiming} Food • Scheduled: {med.scheduledTimes?.join(', ')}
                     </div>
                   </div>
-                  <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amberSoft text-[#7a5a10] animate-pulse">
-                    ● Due Now
-                  </span>
+                  
+                  {/* --- DYNAMIC BADGE --- */}
+                  {med.status === 'taken' ? (
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#e8f5e9] text-[#2e7d32]">
+                      ✓ Taken
+                    </span>
+                  ) : med.status === 'skipped' ? (
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#ffebee] text-[#c62828]">
+                      ✗ Skipped
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amberSoft text-[#7a5a10] animate-pulse">
+                      ● Due Now
+                    </span>
+                  )}
                 </div>
                 
-                <div className="flex gap-2 mt-2">
-                  <button 
-                    onClick={() => console.log('Take clicked')}
-                    className="flex-1 bg-sage2 text-[#1e3a1d] py-2 rounded-lg font-bold text-sm border-2 border-sage2 hover:bg-sage transition-colors"
-                  >
-                    ✓ Take Now
-                  </button>
-                  <button 
-                    onClick={() => console.log('Skip clicked')}
-                    className="flex-1 bg-blush2 text-[#7a2a1a] py-2 rounded-lg font-bold text-sm border-2 border-blush2 hover:bg-blush transition-colors"
-                  >
-                    ✗ Skip
-                  </button>
-                </div>
+                {/* --- DYNAMIC BUTTONS (Only show if NOT taken or skipped) --- */}
+                {med.status !== 'taken' && med.status !== 'skipped' && (
+                  <div className="flex gap-2 mt-2">
+                    <button 
+                      onClick={() => console.log('Take clicked')}
+                      className="flex-1 bg-sage2 text-[#1e3a1d] py-2 rounded-lg font-bold text-sm border-2 border-sage2 hover:bg-sage transition-colors"
+                    >
+                      ✓ Take Now
+                    </button>
+                    <button 
+                      onClick={() => console.log('Skip clicked')}
+                      className="flex-1 bg-blush2 text-[#7a2a1a] py-2 rounded-lg font-bold text-sm border-2 border-blush2 hover:bg-blush transition-colors"
+                    >
+                      ✗ Skip
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
-      </div>
 
       {/* ADD MEDICINE MODAL */}
       {isModalOpen && (
@@ -241,5 +263,6 @@ export default function PatientDashboard() {
         </div>
       )}
     </div>
+  </div>
   );
 }
