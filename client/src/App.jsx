@@ -6,7 +6,7 @@ import { useSelector } from 'react-redux';
 import Login from './pages/Login';
 import PatientDashboard from './pages/PatientDashboard';
 import CaregiverDashboard from './pages/CaregiverDashBoard';
-
+import VitalsDashboard from './pages/VitalsDashboard';
 export default function App() {
   // Grab auth state from Redux
   const { isAuthenticated, user } = useSelector((state) => state.auth);
@@ -35,6 +35,7 @@ export default function App() {
               : <Navigate to="/" />
           } 
         />
+        <Route path="/vitals" element={<VitalsDashboard />} />
       </Routes>
     </BrowserRouter>
   );

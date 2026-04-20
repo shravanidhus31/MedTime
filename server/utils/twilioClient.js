@@ -63,6 +63,25 @@ const makeCall = async (to, medName, dosage, mealTiming) => {
     throw error;
   }
 };
+// Add this to your existing twilioClient.js file
+
+const sendCaregiverSMS = async (toPhone, messageBody) => {
+  try {
+    // Add +91 for Indian numbers if it doesn't already have it
+    const formattedPhone = toPhone.startsWith('+') ? toPhone : `+91${toPhone}`;
+    
+    await client.messages.create({
+      body: messageBody,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: formattedPhone
+    });
+    console.log(`📱 SMS Alert sent to Caregiver at ${formattedPhone}`);
+  } catch (error) {
+    console.error(`❌ Failed to send SMS to ${toPhone}:`, error.message);
+  }
+};
+
+
 
 // Export both functions!
-module.exports = { sendSMS, makeCall };
+module.exports = { sendSMS, makeCall,sendCaregiverSMS };

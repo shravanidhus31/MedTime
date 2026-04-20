@@ -79,31 +79,101 @@ router.post('/', verifyToken, requireRole(['patient', 'caregiver']), async (req,
 
 // GET /api/v1/medicines - Get all medicines for the logged-in patient
 // GET /api/v1/medicines - Get all medicines for the logged-in patient
+// GET /api/v1/medicines - Get medicines with EXACT current status
 router.get('/', verifyToken, async (req, res) => {
   try {
     const patient = await Patient.findOne({ user: req.user.id });
-    if (!patient) return res.status(200).json([]); // No profile yet, return empty array
+    if (!patient) return res.status(200).json([]);
 
-    // 1. Add .lean() here! This turns the Mongoose document into a plain JavaScript object
-    // so we can safely attach the new 'status' property to it.
     const medicines = await Medicine.find({ patient: patient._id, isActive: true }).lean();
+    const now = new Date();
 
-    // 2. Loop through each medicine and ask the Reminder database for the latest status
     const medicinesWithStatus = await Promise.all(medicines.map(async (med) => {
-      const recentReminder = await Reminder.findOne({ medicine: med._id })
-        .sort({ scheduledTime: -1 }); // Sort by time descending (newest first)
+      // Find the most recent reminder that has passed or is happening RIGHT NOW
+      const currentReminder = await Reminder.findOne({
+        medicine: med._id,
+        scheduledTime: { $lte: now }
+      }).sort({ scheduledTime: -1 });
 
-      return {
-        ...med,
-        // If a reminder exists, attach its status. If not, default to 'pending'
-        status: recentReminder ? recentReminder.status : 'pending' 
-      };
+      let displayStatus = 'upcoming'; // Default if it's scheduled for the future
+
+      if (currentReminder) {
+        if (currentReminder.status === 'taken') displayStatus = 'taken';
+        else if (currentReminder.status === 'skipped') displayStatus = 'skipped';
+        else displayStatus = 'due'; // It's in the past but hasn't been taken/skipped yet
+      }
+
+      return { ...med, status: displayStatus };
     }));
 
-    // 3. Send the merged data back to React
     res.status(200).json(medicinesWithStatus);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
+
+// DELETE /api/v1/medicines/:id - Cancel a medicine
+router.delete('/:id', verifyToken, async (req, res) => {
+  try {
+    // Delete the medicine
+    await Medicine.findByIdAndDelete(req.params.id);
+    // CRITICAL: Delete all future reminders for this medicine so the cron job doesn't crash!
+    await Reminder.deleteMany({ medicine: req.params.id }); 
+    
+    res.status(200).json({ message: 'Medicine cancelled successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+// POST /api/v1/medicines/:id/status - Manually Take or Skip from the Web UI
+router.post('/:id/status', verifyToken, async (req, res) => {
+  try {
+    const { status } = req.body; // Expects 'taken' or 'skipped'
+    
+    // Find the most recent due reminder for this medicine
+    const recentReminder = await Reminder.findOne({
+      medicine: req.params.id,
+      scheduledTime: { $lte: new Date() }
+    }).sort({ scheduledTime: -1 });
+
+    if (recentReminder) {
+      recentReminder.status = status;
+      await recentReminder.save();
+      res.status(200).json({ message: `Medicine marked as ${status}` });
+    } else {
+      res.status(404).json({ message: 'No pending reminder found to update right now.' });
+    }
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// PUT /api/v1/medicines/:id - Edit an existing medicine
+router.put('/:id', verifyToken, async (req, res) => {
+  try {
+    const updatedMed = await Medicine.findByIdAndUpdate(
+      req.params.id, 
+      req.body, 
+      { new: true }
+    );
+    
+    // Note: In a production app, if they change the TIME, you would also need to 
+    // delete future reminders and regenerate them here. For now, this updates the core info!
+    res.status(200).json({ message: 'Medicine updated', medicine: updatedMed });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// DELETE /api/v1/medicines/:id - Cancel a medicine completely
+router.delete('/:id', verifyToken, async (req, res) => {
+  try {
+    await Medicine.findByIdAndDelete(req.params.id);
+    await Reminder.deleteMany({ medicine: req.params.id }); 
+    res.status(200).json({ message: 'Medicine cancelled successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 module.exports = router;

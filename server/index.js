@@ -3,6 +3,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const webhookRoutes = require('./routes/webhookRoutes');
+const ocrRoutes = require('./routes/ocrRoutes');
 const dns = require('dns');
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
 
@@ -11,7 +12,9 @@ dns.setServers(["1.1.1.1", "8.8.8.8"]);
 const app = express();
 const authRoutes = require('./routes/authRoutes');
 const medicineRoutes = require('./routes/medicineRoutes');
+const caregiverRoutes = require('./routes/caregiverRoutes');
 const { startReminderJob } = require('./jobs/reminderJob');
+require('./jobs/missedDoseCron');
 // Middleware
 app.use(cors());
 app.use(express.json()); // Parses incoming JSON requests
@@ -24,6 +27,9 @@ app.get('/api/v1/health', (req, res) => {
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/medicines', medicineRoutes);
 app.use('/api/v1/webhooks', webhookRoutes);
+app.use('/api/v1/caregiver', caregiverRoutes);
+app.use('/api/v1/ocr', ocrRoutes);
+app.use('/api/v1/vitals', require('./routes/vitalRoutes'));
 // Database Connection & Server Start
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;
