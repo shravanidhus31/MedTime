@@ -28,9 +28,13 @@ const { makePatientCall, sendCaregiverSMS } = require('../utils/twilioClient');
 // ── Helper: 10 minutes from now ───────────────────────────────────────────────
 const tenMinsFromNow = () => new Date(Date.now() + 10 * 60 * 1000);
 
-// ── Helper: "HH:mm" string from a Date object ─────────────────────────────────
-const toHHMM = (date) =>
-  `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+// ── Helper: "HH:mm" string in IST (UTC+5:30) — Render servers run in UTC but
+//    medicine scheduledTimes are stored as IST strings (e.g. "15:55").
+const toHHMM = (date) => {
+  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes
+  const istDate = new Date(date.getTime() + IST_OFFSET_MS);
+  return `${String(istDate.getUTCHours()).padStart(2, '0')}:${String(istDate.getUTCMinutes()).padStart(2, '0')}`;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main cron — runs every minute
