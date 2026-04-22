@@ -45,9 +45,12 @@ router.post('/', verifyToken, requireRole(['patient', 'caregiver']), async (req,
 
       // Create a reminder for each scheduled time on this day
       for (const timeStr of scheduledTimes) {
-        const [hours, minutes] = timeStr.split(':');
+        const [hours, minutes] = timeStr.split(':').map(Number);
         const reminderTime = new Date(currentDate);
-        reminderTime.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+        // Render server runs UTC. scheduledTimes are IST strings (e.g. "16:04").
+        // Convert IST → UTC: subtract 5h30m via setUTCHours.
+        // JS handles negatives: setUTCHours(11, -26) correctly becomes 10:34 UTC.
+        reminderTime.setUTCHours(hours - 5, minutes - 30, 0, 0);
 
         // Only create reminders for future times
         if (reminderTime > new Date()) {
