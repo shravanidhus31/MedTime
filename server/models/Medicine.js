@@ -56,6 +56,24 @@ const medicineSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  // ─── Escalation Engine Fields ────────────────────────────────────────────────
+  // When snoozed: holds the future time to re-call the patient. null = not snoozed.
+  snoozeUntil: {
+    type: Date,
+    default: null
+  },
+  // The deadline: if patient hasn't pressed 1 by this time, alert the caregiver.
+  // null = clock is disarmed (confirmed, snoozed-pending, or Normal status).
+  caregiverAlertTime: {
+    type: Date,
+    default: null
+  },
+  // Persists the "missed" state for the UI even after caregiverAlertTime is cleared.
+  // Set to true when the caregiver SMS is sent. Reset to false when patient confirms (presses 1).
+  caregiverAlerted: {
+    type: Boolean,
+    default: false
   }
 }, { timestamps: true });
 

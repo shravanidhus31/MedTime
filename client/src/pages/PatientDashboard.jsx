@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import api from '../utils/api';
 import { useNavigate } from 'react-router-dom'; // Add this line
+import DoctorSettings from '../components/DoctorSettings';
+
 
 export default function PatientDashboard() {
   const { user } = useSelector((state) => state.auth);
@@ -10,6 +12,7 @@ export default function PatientDashboard() {
   
   // UI States
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDoctorPanelOpen, setIsDoctorPanelOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const fileInputRef = useRef(null);
@@ -199,6 +202,12 @@ const handleFileUpload = async (e) => {
           <button className="px-4 py-2 rounded-lg text-sm font-semibold bg-parchment text-brown2">Home</button>
           <button className="px-4 py-2 rounded-lg text-sm font-semibold text-textLight hover:bg-cream hover:text-textDark transition-colors">Schedule</button>
           <button onClick={() => navigate('/vitals')} className="px-4 py-2 rounded-lg text-sm font-semibold text-textLight hover:bg-cream hover:text-textDark transition-colors">Vitals</button>
+          <button
+            onClick={() => setIsDoctorPanelOpen(true)}
+            className="px-4 py-2 rounded-lg text-sm font-semibold text-textLight hover:bg-cream hover:text-textDark transition-colors flex items-center gap-1.5"
+          >
+            <span className="text-base">🩺</span> My Doctor
+          </button>
         </div>
         <button className="flex items-center gap-2 bg-[#fff0ef] border-[1.5px] border-rose text-[#c0392b] rounded-lg px-4 py-2 font-bold transition-transform hover:scale-105">
           <span className="w-2 h-2 rounded-full bg-rose animate-pulse"></span> SOS
@@ -232,15 +241,30 @@ const handleFileUpload = async (e) => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             
             {/* EXACTLY ONE CLEAN MAP LOOP HERE */}
-            {medicines.map((med) => (
-              <div 
-                key={med._id} 
-                className={`rounded-[18px] p-5 border-2 shadow-sm flex flex-col gap-3 transition-colors duration-300
-                  ${med.status === 'taken' ? 'bg-[#e8f5e9] border-[#a5d6a7]' : 
-                    med.status === 'skipped' ? 'bg-[#ffebee] border-[#ef9a9a]' : 
-                    med.status === 'due' ? 'bg-[#fffef5] border-amber2' : 
-                    'bg-white border-sand'}
-                `}
+            {medicines.map((med) => {
+              // ── Escalation Engine Visual State (priority order) ─────────────
+              // 1. caregiverAlerted → solid red (missed, caregiver was notified)
+              // 2. snoozeUntil set → amber (patient snoozed, awaiting re-call)
+              // 3. Reminder-based status fallback (taken / skipped / due / upcoming)
+              const isMissed  = !!med.caregiverAlerted;
+              const isSnoozed = !isMissed && !!med.snoozeUntil;
+
+              const cardClass = isMissed
+                ? 'bg-[#ffebee] border-[#e57373]'          // solid red — missed
+                : isSnoozed
+                ? 'bg-[#fff8e1] border-[#ffca28]'          // amber — snoozed
+                : med.status === 'taken'
+                ? 'bg-[#e8f5e9] border-[#a5d6a7]'         // green — taken
+                : med.status === 'skipped'
+                ? 'bg-[#ffebee] border-[#ef9a9a]'          // light red — skipped
+                : med.status === 'due'
+                ? 'bg-[#fffef5] border-amber2'             // warm yellow — due
+                : 'bg-white border-sand';                  // default — upcoming
+
+              return (
+              <div
+                key={med._id}
+                className={`rounded-[18px] p-5 border-2 shadow-sm flex flex-col gap-3 transition-colors duration-300 ${cardClass}`}
               >
                 <div className="flex justify-between items-start">
                   <div>
@@ -249,12 +273,30 @@ const handleFileUpload = async (e) => {
                       {med.mealTiming} Food • Scheduled: {med.scheduledTimes?.join(', ')}
                     </div>
                   </div>
-                  
-                  {/* Dynamic Badges */}
-                  {med.status === 'taken' && <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#c8e6c9] text-[#2e7d32]">✓ Taken</span>}
-                  {med.status === 'skipped' && <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#ffcdd2] text-[#c62828]">✗ Skipped</span>}
-                  {med.status === 'due' && <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amberSoft text-[#7a5a10] animate-pulse">● Due Now</span>}
-                  {med.status === 'upcoming' && <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-500">⏳ Upcoming</span>}
+
+                  {/* Dynamic Badges — escalation states take priority */}
+                  {isMissed && (
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#ffcdd2] text-[#b71c1c] animate-pulse">
+                      🚨 Missed – Caregiver Alerted
+                    </span>
+                  )}
+                  {isSnoozed && (
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#fff9c4] text-[#7a5a10]">
+                      ⏰ Snoozed
+                    </span>
+                  )}
+                  {!isMissed && !isSnoozed && med.status === 'taken' && (
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#c8e6c9] text-[#2e7d32]">✓ Taken</span>
+                  )}
+                  {!isMissed && !isSnoozed && med.status === 'skipped' && (
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#ffcdd2] text-[#c62828]">✗ Skipped</span>
+                  )}
+                  {!isMissed && !isSnoozed && med.status === 'due' && (
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amberSoft text-[#7a5a10] animate-pulse">● Due Now</span>
+                  )}
+                  {!isMissed && !isSnoozed && med.status === 'upcoming' && (
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-500">⏳ Upcoming</span>
+                  )}
                 </div>
                 
                 <div className="flex gap-2 mt-2">
@@ -295,11 +337,54 @@ const handleFileUpload = async (e) => {
                   </button>
                 </div>
               </div>
-            ))}
+              );
+            })}
             {/* END OF MAP LOOP */}
 
           </div>
         )}
+
+      </div>
+
+      {/* ── My Doctor Slide-In Panel ─────────────────────────────────────────── */}
+      {/* Backdrop */}
+      {isDoctorPanelOpen && (
+        <div
+          className="fixed inset-0 bg-[#2d2418]/40 backdrop-blur-sm z-40"
+          onClick={() => setIsDoctorPanelOpen(false)}
+        />
+      )}
+
+      {/* Panel */}
+      <div
+        className={`fixed top-0 right-0 h-full w-full max-w-[480px] bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-in-out ${
+          isDoctorPanelOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        {/* Panel Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-sand bg-gradient-to-r from-[#fae8d8] to-[#f0dded]">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-white/70 flex items-center justify-center shadow-sm">
+              <span className="text-xl">🩺</span>
+            </div>
+            <div>
+              <h2 className="font-serif text-lg text-brown2 font-semibold leading-tight">My Doctor</h2>
+              <p className="text-xs text-textLight">Link physician &amp; automate monthly reports</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsDoctorPanelOpen(false)}
+            className="w-8 h-8 rounded-full bg-white/70 flex items-center justify-center text-textLight hover:bg-white hover:text-brown2 transition-colors shadow-sm"
+            aria-label="Close panel"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto">
+          <DoctorSettings />
+        </div>
       </div>
 
       {/* --- ADD MEDICINE MODAL --- */}

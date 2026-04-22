@@ -35,6 +35,25 @@ const userSchema = new mongoose.Schema({
   refreshToken: {
     type: String,
     default: null
+  },
+  // ─── Inbox-First Doctor Reporting Engine ────────────────────────────────────
+  linkedDoctor: {
+    name: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    email: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      default: ''
+    },
+    // When true, monthlyReportCron will auto-email this doctor every 1st of month
+    autoSendMonthly: {
+      type: Boolean,
+      default: false
+    }
   }
 }, { timestamps: true });
 
