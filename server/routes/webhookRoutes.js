@@ -75,6 +75,43 @@ router.post('/sms', async (req, res) => {
 //                                       disarm caregiverAlertTime so no false
 //                                       alert fires while they snooze.
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/v1/webhooks/voice/prompt?medicineId=...
+// Twilio fetches this when an outbound reminder call connects (makePatientCall
+// passes this URL instead of inline TwiML, which trial accounts reject).
+// Returns the keypad menu; the key press goes to POST /voice below.
+// ─────────────────────────────────────────────────────────────────────────────
+const escapeXml = (s) => String(s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+
+router.post('/voice/prompt', async (req, res) => {
+  const medicineId = req.query.medicineId;
+  const baseUrl = process.env.PUBLIC_BASE_URL || process.env.NGROK_URL || '';
+
+  let medName = 'medicine';
+  try {
+    const medicine = medicineId ? await Medicine.findById(medicineId) : null;
+    if (medicine?.name) medName = medicine.name;
+  } catch (error) {
+    console.error('❌ [Voice Prompt] Could not load medicine:', error.message);
+  }
+
+  const actionUrl = `${baseUrl}/api/v1/webhooks/voice?medicineId=${encodeURIComponent(medicineId || '')}`;
+  console.log(`📞 [Voice Prompt] Serving menu for "${medName}" (medicineId: ${medicineId})`);
+
+  res.type('text/xml').send(
+    `<Response>` +
+      `<Gather numDigits="1" action="${escapeXml(actionUrl)}" method="POST">` +
+        `<Say voice="alice">Hello from Med Time. This is your medication reminder. ` +
+        `It is time to take your ${escapeXml(medName)}. ` +
+        `Press 1 if you have taken it. Press 2 to snooze for 10 minutes.</Say>` +
+      `</Gather>` +
+      `<Say voice="alice">We did not receive any input. Goodbye!</Say>` +
+    `</Response>`
+  );
+});
+
 router.post('/voice', async (req, res) => {
   const digits     = req.body.Digits;           // '1' or '2'
   const medicineId = req.query.medicineId;      // Injected by makePatientCall()

@@ -72,7 +72,10 @@ const sendCaregiverSMS = async (toPhone, messageBody) => {
 // ─────────────────────────────────────────────────────────────────────────────
 const makePatientCall = async (toPhone, medName, medicineId) => {
   const formattedTo = toPhone.startsWith('+') ? toPhone : `+91${toPhone}`;
-  const webhookUrl  = `${NGROK_URL}/api/v1/webhooks/voice?medicineId=${medicineId}`;
+  // Twilio fetches the call's TwiML from our server. Trial accounts reject the
+  // inline `twiml` parameter ("trial accounts have limited parameter access"),
+  // but accept a `url` pointing at our own server.
+  const promptUrl = `${NGROK_URL}/api/v1/webhooks/voice/prompt?medicineId=${medicineId}`;
 
   if (!client) {
     console.log(`[SIMULATION] Voice Call → ${formattedTo} for "${medName}" (medicineId: ${medicineId})`);
@@ -81,18 +84,7 @@ const makePatientCall = async (toPhone, medName, medicineId) => {
 
   try {
     const call = await client.calls.create({
-      twiml: `
-        <Response>
-          <Gather numDigits="1" action="${webhookUrl}" method="POST">
-            <Say voice="alice">
-              Hello from Med Time. This is your medication reminder.
-              It is time to take your ${medName}.
-              Press 1 if you have taken it. Press 2 to snooze for 10 minutes.
-            </Say>
-          </Gather>
-          <Say voice="alice">We did not receive any input. Goodbye!</Say>
-        </Response>
-      `,
+      url: promptUrl,
       to: formattedTo,
       from: process.env.TWILIO_PHONE_NUMBER,
     });
