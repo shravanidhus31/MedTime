@@ -17,7 +17,9 @@ const caregiverRoutes = require('./routes/caregiverRoutes');
 const { startReminderJob }     = require('./jobs/reminderJob');
 const { startMonthlyReportCron } = require('./utils/monthlyReportCron');
 const { startReminderTopUpJob }  = require('./jobs/reminderTopUpJob');  // B1.4
+const { startJournalJob }        = require('./jobs/journalJob');        // B8
 require('./jobs/missedDoseCron');
+require('./events'); // Contract C4 event bus & refill listeners
 // Middleware
 app.use(cors());
 app.use(express.json()); // Parses incoming JSON requests
@@ -38,6 +40,8 @@ app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/proposals', require('./routes/proposalRoutes'));
 app.use('/api/v1/agent/questions', require('./routes/agentQuestionRoutes'));
 app.use('/api/v1/agent', require('./routes/agentRunRoutes'));
+app.use('/api/v1/journal', require('./routes/journalRoutes'));
+app.use('/api/v1/life-notes', require('./routes/lifeNoteRoutes'));
 // Database Connection & Server Start
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;
@@ -48,6 +52,7 @@ mongoose.connect(MONGO_URI)
     startReminderJob();
     startMonthlyReportCron();
     startReminderTopUpJob();   // B1.4: nightly reminder top-up
+    startJournalJob();         // B8: nightly 9:00 PM IST daily care journal
     app.listen(PORT, () => {
       console.log(`🚀 Server is running on port ${PORT}`);
     });

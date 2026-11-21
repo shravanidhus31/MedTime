@@ -6,6 +6,8 @@ import api from '../utils/api';
 import ApprovalsPanel from '../components/approvals/ApprovalsPanel';
 import QuestionsPanel from '../components/approvals/QuestionsPanel';
 import ActivityPanel from '../components/agent/ActivityPanel';
+import JournalPanel from '../components/journal/JournalPanel';
+import LifeNotesEditor from '../components/memory/LifeNotesEditor';
 
 export default function CaregiverDashboard() {
   const { user } = useSelector((state) => state.auth);
@@ -220,12 +222,14 @@ export default function CaregiverDashboard() {
               </div>
             )}
 
-            {/* Approvals and Questions Panels */}
+            {/* Approvals, Questions, Activity, Journal, and Memory Panels */}
             {selectedPatientId && (
               <>
                 <ApprovalsPanel patientId={selectedPatientId} onUpdate={setPendingApprovalsCount} />
                 <QuestionsPanel patientId={selectedPatientId} onUpdate={setPendingQuestionsCount} />
                 <ActivityPanel patientId={selectedPatientId} />
+                <JournalPanel patientId={selectedPatientId} />
+                <LifeNotesEditor patientId={selectedPatientId} />
               </>
             )}
 
