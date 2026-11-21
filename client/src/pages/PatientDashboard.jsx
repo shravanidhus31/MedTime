@@ -148,49 +148,51 @@ export default function PatientDashboard() {
       return;
     }
 
+    // 5MB file size limit (B12 requirement)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File is too large. Prescriptions must be 5 MB or smaller.');
+      return;
+    }
+
     setIsScanning(true);
     const uploadData = new FormData();
     uploadData.append('prescription', file);
 
     try {
-      // 1. Send image to Tesseract Backend
+      // 1. Send image to OCR & Prescription-to-Schedule Agent Backend
       const response = await api.post('/ocr/parse', uploadData, {
         headers: {
           'Content-Type': undefined
         }
-
       });
 
-      const { extractedMedicines } = response.data;
+      const { proposalId, proposalLevel, medicines: extractedMeds, message } = response.data;
 
-      if (extractedMedicines && extractedMedicines.length > 0) {
-        // 2. We found multiple medicines! Let's auto-save them all to the DB immediately.
-        const savePromises = extractedMedicines.map(med => {
-          return api.post('/medicines', {
-            name: med.name,
-            dosage: med.dosage,
-            frequency: med.frequency,
-            scheduledTimes: [med.time],
-            type: 'tablet',
-            mealTiming: med.mealTiming,
-            startDate: new Date(),
-            tabletCount: 30, // Defaulting stock to 30 for auto-scans
-            notificationType: 'sms'
-          });
-        });
+      if (proposalId && extractedMeds && extractedMeds.length > 0) {
+        // If Level 1 (clear lines, no conflicts), patient/caregiver can approve immediately
+        if (proposalLevel === 1) {
+          const autoApprove = window.confirm(
+            `Prescription parsed ${extractedMeds.length} medicine(s) successfully:\n` +
+            extractedMeds.map(m => `• ${m.name} (${m.strength || ''}) - ${m.frequency || 'once'}`).join('\n') +
+            `\n\nWould you like to approve and add these to your schedule now?`
+          );
 
-        // Wait for all of them to save
-        await Promise.all(savePromises);
+          if (autoApprove) {
+            await api.post(`/ocr/proposals/${proposalId}/approve`);
+            const refreshRes = await api.get('/medicines');
+            setMedicines(refreshRes.data);
+            alert(`Schedule approved! Added ${extractedMeds.length} medicines.`);
+          } else {
+            alert('Prescription schedule proposal saved. Awaiting review.');
+          }
+        } else {
+          // Level 2: Doctor review required
+          alert(`Prescription scanned! Some lines require clinical review (Level 2). A proposal has been queued for your doctor or primary caregiver.`);
+        }
 
-        // 3. Refresh the dashboard to show the new list!
-        const refreshRes = await api.get('/medicines');
-        setMedicines(refreshRes.data);
-
-        setIsModalOpen(false); // Close the modal, we're done!
-        alert(`Successfully scanned and auto-scheduled ${extractedMedicines.length} medicines!`);
-
+        setIsModalOpen(false);
       } else {
-        alert('We could not detect any standard medicines in this image. Please enter them manually.');
+        alert('Could not detect clear medicines in this image. Please enter them manually.');
       }
 
     } catch (error) {

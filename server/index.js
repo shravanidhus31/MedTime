@@ -42,6 +42,7 @@ app.use('/api/v1/agent/questions', require('./routes/agentQuestionRoutes'));
 app.use('/api/v1/agent', require('./routes/agentRunRoutes'));
 app.use('/api/v1/journal', require('./routes/journalRoutes'));
 app.use('/api/v1/life-notes', require('./routes/lifeNoteRoutes'));
+app.use('/api/v1/voice', require('./routes/voiceIncoming'));
 // Database Connection & Server Start
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;

@@ -21,8 +21,19 @@ const medicineSchema = new mongoose.Schema({
   },
   frequency: {
     type: String,
-    enum: ['once', 'twice', 'thrice', 'custom'],
+    enum: ['once', 'twice', 'thrice', 'custom', 'alternate_days', 'weekly'],
     required: true
+  },
+  // ─── B12: Extended frequency support ─────────────────────────────────────────
+  // For 'alternate_days': number of days between doses (e.g. 2)
+  intervalDays: {
+    type: Number,
+    default: null
+  },
+  // For 'weekly': which days of week (0=Sun … 6=Sat)
+  daysOfWeek: {
+    type: [Number],
+    default: undefined
   },
   scheduledTimes: [{
     type: String, // Stored as 'HH:mm' format (e.g., '08:00')

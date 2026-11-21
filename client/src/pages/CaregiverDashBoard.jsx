@@ -8,6 +8,7 @@ import QuestionsPanel from '../components/approvals/QuestionsPanel';
 import ActivityPanel from '../components/agent/ActivityPanel';
 import JournalPanel from '../components/journal/JournalPanel';
 import LifeNotesEditor from '../components/memory/LifeNotesEditor';
+import CallinSimulator from '../components/agent/CallinSimulator';
 
 export default function CaregiverDashboard() {
   const { user } = useSelector((state) => state.auth);
@@ -230,6 +231,7 @@ export default function CaregiverDashboard() {
                 <ActivityPanel patientId={selectedPatientId} />
                 <JournalPanel patientId={selectedPatientId} />
                 <LifeNotesEditor patientId={selectedPatientId} />
+                <CallinSimulator patientId={selectedPatientId} />
               </>
             )}
 

@@ -11,12 +11,13 @@
  *  - GET / still filters isActive: true (unchanged)
  */
 
-const express  = require('express');
+const express = require('express');
 const Medicine = require('../models/Medicine');
 const Reminder = require('../models/Reminder');
-const Patient  = require('../models/Patient');
+const Patient = require('../models/Patient');
 const { verifyToken, requireRole } = require('../middleware/authMiddleware');
-const { requirePatientAccess }     = require('../middleware/access');
+const { requirePatientAccess } = require('../middleware/access');
+const { generateRemindersForMedicine, regenerateFutureReminders } = require('../jobs/reminderTopUpJob');
 
 const router = express.Router();
 
@@ -26,6 +27,8 @@ const ALLOWED_UPDATE_FIELDS = new Set([
   'name', 'dosage', 'type', 'frequency', 'scheduledTimes',
   'mealTiming', 'notificationType', 'startDate', 'endDate',
   'tabletCount', 'refillThreshold',
+  // B12 extended frequencies
+  'intervalDays', 'daysOfWeek',
   // C10 step-by-step guidance fields
   'pillDescription', 'pillboxSlot', 'locationHint',
 ]);
@@ -39,6 +42,7 @@ router.post('/', verifyToken, requireRole(['patient', 'caregiver']), async (req,
       name, dosage, type, frequency, scheduledTimes,
       mealTiming, startDate, tabletCount, notificationType,
       pillDescription, pillboxSlot, locationHint,
+      intervalDays, daysOfWeek,
     } = req.body;
     const userId = req.user.id;
 
@@ -61,45 +65,21 @@ router.post('/', verifyToken, requireRole(['patient', 'caregiver']), async (req,
       startDate: new Date(startDate),
       tabletCount,
       notificationType: notificationType || 'sms',
+      intervalDays: intervalDays || null,
+      daysOfWeek: daysOfWeek || undefined,
       // C10 fields
       pillDescription, pillboxSlot, locationHint,
     });
 
     await newMedicine.save();
 
-    // 3. Auto-generate reminders for the next 7 days
-    const remindersToCreate = [];
-    const today = new Date();
-
-    for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
-      const currentDate = new Date(today);
-      currentDate.setDate(today.getDate() + dayOffset);
-
-      for (const timeStr of scheduledTimes) {
-        const [hours, minutes] = timeStr.split(':').map(Number);
-        const reminderTime = new Date(currentDate);
-        // Render runs UTC; scheduledTimes are IST strings → subtract 5 h 30 m
-        reminderTime.setUTCHours(hours - 5, minutes - 30, 0, 0);
-
-        if (reminderTime > new Date()) {
-          remindersToCreate.push({
-            medicine:      newMedicine._id,
-            patient:       patient._id,
-            scheduledTime: reminderTime,
-            status:        'pending',
-          });
-        }
-      }
-    }
-
-    if (remindersToCreate.length > 0) {
-      await Reminder.insertMany(remindersToCreate);
-    }
+    // 3. Auto-generate reminders for the next 7 days (B12 #5, #7)
+    const { created } = await generateRemindersForMedicine(newMedicine);
 
     res.status(201).json({
       message: 'Medicine added and reminders generated successfully.',
       medicine: newMedicine,
-      remindersGenerated: remindersToCreate.length,
+      remindersGenerated: created,
     });
 
   } catch (error) {
@@ -119,13 +99,13 @@ router.get('/', verifyToken, async (req, res) => {
 
     const medicinesWithStatus = await Promise.all(medicines.map(async (med) => {
       const currentReminder = await Reminder.findOne({
-        medicine:      med._id,
+        medicine: med._id,
         scheduledTime: { $lte: now },
       }).sort({ scheduledTime: -1 });
 
       let displayStatus = 'upcoming';
       if (currentReminder) {
-        if (currentReminder.status === 'taken')   displayStatus = 'taken';
+        if (currentReminder.status === 'taken') displayStatus = 'taken';
         else if (currentReminder.status === 'skipped') displayStatus = 'skipped';
         else displayStatus = 'due';
       }
@@ -153,7 +133,7 @@ router.post(
       const { status } = req.body; // 'taken' or 'skipped'
 
       const recentReminder = await Reminder.findOne({
-        medicine:      req.params.id,
+        medicine: req.params.id,
         scheduledTime: { $lte: new Date() },
       }).sort({ scheduledTime: -1 });
 
@@ -196,8 +176,14 @@ router.put(
 
       if (!updatedMed) return res.status(404).json({ message: 'Medicine not found.' });
 
-      // Note: future-reminder regeneration on time change is tracked as #6 (week 3).
-      res.status(200).json({ message: 'Medicine updated', medicine: updatedMed });
+      // Regenerate future reminders on edit (#6, B12)
+      const regenResult = await regenerateFutureReminders(updatedMed._id);
+
+      res.status(200).json({
+        message: 'Medicine updated and future reminders regenerated.',
+        medicine: updatedMed,
+        reminders: regenResult,
+      });
     } catch (error) {
       res.status(500).json({ message: 'Server error', error: error.message });
     }
@@ -219,16 +205,16 @@ router.delete(
       if (!medicine) return res.status(404).json({ message: 'Medicine not found.' });
 
       // Soft-delete the medicine
-      medicine.isActive   = false;
-      medicine.deletedAt  = new Date();
-      medicine.deletedBy  = req.user.id;
+      medicine.isActive = false;
+      medicine.deletedAt = new Date();
+      medicine.deletedBy = req.user.id;
       await medicine.save();
 
       // Delete only FUTURE reminders (past ones stay for history and the journal)
       await Reminder.deleteMany({
-        medicine:      medicine._id,
+        medicine: medicine._id,
         scheduledTime: { $gt: new Date() },
-        status:        'pending',  // don't remove already-alerted ones
+        status: 'pending',  // don't remove already-alerted ones
       });
 
       res.status(200).json({ message: 'Medicine deactivated and future reminders cleared.' });
