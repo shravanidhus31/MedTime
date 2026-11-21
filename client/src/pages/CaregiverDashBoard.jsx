@@ -3,6 +3,8 @@ import { useSelector, useDispatch } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
 import { logoutUser } from '../redux/authSlice';
 import api from '../utils/api';
+import ApprovalsPanel from '../components/approvals/ApprovalsPanel';
+import QuestionsPanel from '../components/approvals/QuestionsPanel';
 
 export default function CaregiverDashboard() {
   const { user } = useSelector((state) => state.auth);
@@ -13,6 +15,8 @@ export default function CaregiverDashboard() {
   const [patients, setPatients] = useState([]);
   const [selectedPatientId, setSelectedPatientId] = useState(null);
   const [patientHistory, setPatientHistory] = useState([]);
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
+  const [pendingQuestionsCount, setPendingQuestionsCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   
   // Link Patient State
@@ -197,6 +201,30 @@ export default function CaregiverDashboard() {
                   </button>
                 ))}
               </div>
+            )}
+
+            {/* Notification Banner for Pending Items (#B4) */}
+            {(pendingApprovalsCount > 0 || pendingQuestionsCount > 0) && (
+              <div className="mb-6 p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-900 font-bold flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl animate-bounce">🔔</span>
+                  <div>
+                    <div className="text-sm">Action Required by Caregiver</div>
+                    <div className="text-xs font-normal text-amber-800">
+                      {pendingApprovalsCount > 0 && `${pendingApprovalsCount} change proposal(s) waiting for approval. `}
+                      {pendingQuestionsCount > 0 && `${pendingQuestionsCount} agent question(s) need your answer.`}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Approvals and Questions Panels */}
+            {selectedPatientId && (
+              <>
+                <ApprovalsPanel patientId={selectedPatientId} onUpdate={setPendingApprovalsCount} />
+                <QuestionsPanel patientId={selectedPatientId} onUpdate={setPendingQuestionsCount} />
+              </>
             )}
 
             {/* ─── MAIN CALENDAR DASHBOARD ─── */}

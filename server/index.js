@@ -35,6 +35,8 @@ app.use('/api/v1/ocr', ocrRoutes);
 app.use('/api/v1/vitals', require('./routes/vitalRoutes'));
 app.use('/api/v1/reports', require('./routes/reportRoutes'));
 app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/proposals', require('./routes/proposalRoutes'));
+app.use('/api/v1/agent/questions', require('./routes/agentQuestionRoutes'));
 // Database Connection & Server Start
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;
