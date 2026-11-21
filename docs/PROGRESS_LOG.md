@@ -16,9 +16,9 @@ A running record of what's done, what's in progress and what's next. **It's upda
 | Design and research | ✅ Done. PRD, research notes and plan are final |
 | Task split | ✅ Done. Person A (calls, voice, live agent) and Person B (caregiver app, schedules, background agents, evaluation) |
 | Twilio | ✅ New trial account works end to end for keypad calls driven by our server |
-| Agent code | ⏳ Not started. Next: A2 agent runtime |
+| Agent code | 🟡 A2.1 LLM adapter, A2.2 tool registry + loop, A2.3 `AgentRun` + endpoints done on `feat/a-agent-runtime` (all checks pass). Next: A2.4 orchestrator |
 | Person B | 🟡 Working on a feature branch; Day-1 items (#2, #3, #1/#19 and soft delete, #5 top-up) |
-| Phase 0 security fixes | ⏳ Not started. Scheduled for Friday of week 1 (low priority) |
+| Phase 0 security fixes | ⏳ Not started. Comes after Phase 1 (low priority) |
 | Person B onboarding | 🟡 Docs pushed; access and secrets still to be sent privately |
 
 ## In progress / next up
@@ -29,8 +29,8 @@ A running record of what's done, what's in progress and what's next. **It's upda
    - `.env` values, sent privately. Each person makes their own free Groq key
    - the research papers
    - their phone number added to Twilio
-3. **Person A, week 1:** A2 agent runtime (Claude adapter, tool registry, loop, `AgentRun`, orchestrator, 5 core tools, simulate endpoints).
-4. **Person A, week 2:** A3.5 Twilio phone adapter (turn by turn, trial-compatible) and the Core dose agent.
+3. **Person A, next task: A2.4 orchestrator and `POST /agent/turn`**, then the rest of A2 (5 core tools, cron handover, simulate endpoints).
+4. **Person A, after A2 and A1:** A3.5 Twilio phone adapter (turn by turn, trial-compatible) and the Core dose agent.
 
 ## Open questions
 - **Submission deadline?** It decides whether Phases 7 and 8 (weekly review, copilot) are in.
@@ -64,6 +64,32 @@ A running record of what's done, what's in progress and what's next. **It's upda
 ## Change log
 
 ### 21 Nov 2026
+- **A2.3 `AgentRun` model and endpoints done** (branch `feat/a-agent-runtime`, not committed yet). Contract C2 is ready for Person B's Activity panel.
+  - `server/models/AgentRun.js`: trigger, patient, reminder, flow, status, outcome, fallbackReason, error, text, steps `{ tool, input, output, ms, at, approvalLevel, proposalId }`, stepCount, promptVersion, model, llmCalls, usage, approver, startedAt/endedAt/ms.
+  - `agent/runs.js`: `runRecorded()` wraps `runLoop()`; each step is saved as it happens. A database failure is logged and never stops the call.
+  - `GET /api/v1/agent/runs?patient=&from=&to=&limit=` (newest first, without steps) and `GET /api/v1/agent/runs/:id` (with steps). Login required; 403 on the list, 404 on a run, for users without access to that patient.
+  - `agent/access.js`: stand-in for B's C3 `canAccess` (patient, linked caregivers, admin). B swaps it with `setAccessChecker()`.
+  - `MONGO_URI` in `server/.env` now points to the dev database `medtime_dev_a`.
+  - `npm run runs:check`: 14/14 pass (a real Groq run saved, endpoints, access, bad input). It refuses to run unless the database name contains "dev" or "test", and deletes its test data afterwards.
+- **A2.2 tool registry and loop done** (branch `feat/a-agent-runtime`, not committed yet).
+  - `agent/tools/index.js`: `registerTool`, `getTool`, `listTools` (contract C1 shape checked on register).
+  - `agent/loop.js`: `runLoop()`. At most 8 tool calls, 30 s per run by default; tools with `approvalLevel > 0` are never run, they go to `proposeChange()` and the outcome is `queued_for_approval`; LLM error, refusal, timeout or overrun → outcome `fallback` with a reason. Each step `{ tool, input, output, ms, at }` goes to an `onStep` callback (A2.3 will save it).
+  - `agent/proposals.js`: stand-in for B's C5. B plugs the real one in with `setProposalHandler()`.
+  - `agent/prompts/`: versioned prompts (`loadPrompt('base')` → `base@2`).
+  - **Found in the live check:** with prompt v1 the model *said* "I've queued the request" without calling the tool. Prompt v2 adds "never say something was done or queued unless a tool result says so"; after that, 3/3 passed in 3 runs in a row.
+  - Tests: 20 offline (`npm test`) pass; `npm run loop:check` (3 live scenarios on Groq) passes.
+- **A2.1 LLM adapter done** (branch `feat/a-agent-runtime`, not committed yet).
+  - **Live check passed 5/5 on Groq:** plain reply (fast 549 ms, smart 1188 ms), `mark_dose` tool call (537 ms), structured turn label (444 ms), safety verdict flagged a fall as a red flag (490 ms). All within the 4-second turn budget.
+  - Groq key is in `server/.env` (gitignored); `.env.example` stays blank.
+  - `server/agent/llm/`: `index.js` (`chat({ tier, ... })`), `groq.js`, `anthropic.js` (placeholder that throws until a Claude key is added), `config.js` (tier → model), `errors.js` (`LlmError` with `kind` and `retryable`), `validate.js` (ajv schema check).
+  - Checked against Groq's docs: JSON schema and tools can't be in one request; strict JSON isn't available on `gpt-oss-safeguard-20b`; `reasoning_effort` only on 20b/120b; `retry-after` on 429.
+  - Free-plan limits from Groq's docs: 20b/120b 30 requests/min, 8K tokens/min; **safeguard-20b only 3 requests/min, 2K tokens/min**. That's tight for a safety check on every reply, so it needs a decision when the safety screen is built.
+  - Added the `openai` and `ajv` packages; `npm test` (10 offline tests, all pass) and `npm run llm:check` (5 live checks against Groq).
+- **Removed dates from the plan; work goes task by task.**
+  - TASKS_PERSON_A.md: no week, day or calendar labels. Section 0.5 is now an ordered list of phases, the dependency tables say which task uses each piece, and the checklist lists A2.1–A2.7 in order (A0 ticked).
+  - Section 0 copied into TASKS_PERSON_B.md so both stay identical. B's own task sections still have day labels.
+  - MEDTIME_AGENT_PLAN.md section 11: table rows are now steps (Phase 1 before Phase 0), and the dated Gantt chart is replaced by an order-of-work diagram.
+  - PRD phasing line now reads "Start with Phase 1 (agent platform), then Phase 0 (fixes, lower priority)".
 - **The LLM provider is now a setting; development uses Groq (free).**
   - Model tiers:
     - fast: `openai/gpt-oss-20b`

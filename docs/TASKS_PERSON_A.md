@@ -19,7 +19,7 @@ Person B owns everything a **caregiver sees or approves**, and the agents that w
 ## 0. How we split the work (same section in both files)
 
 ### Rule: one feature, one owner
-Interlinked work stays with one person. Each feature is owned end to end (model, routes, tools, prompt, UI, tests) by one person. The only crossings are the **contracts** in section 0.3. They're written once, on Day 1, and changed only by agreement.
+Interlinked work stays with one person. Each feature is owned end to end (model, routes, tools, prompt, UI, tests) by one person. The only crossings are the **contracts** in section 0.3. They're written once, before coding starts, and changed only by agreement.
 
 ### 0.1 Who owns what
 
@@ -51,14 +51,14 @@ Interlinked work stays with one person. Each feature is owned end to end (model,
 | `server/index.js`, `package.json` | Shared | Each person adds only their own lines, and says so in the PR |
 
 ### 0.2 The two edits that cross files
-Phase 0 is lower priority than the agent, so **A does it on Friday of week 1**, after the runtime.
-1. **B does #1 (medicine route ownership) on Day 1** in `medicineRoutes.js`, with no waiting.
-2. **On Friday, A edits B's files in one small PR:**
+Phase 0 is lower priority than the agent, so **A does it after the runtime (A2)**.
+1. **B does #1 (medicine route ownership) first** in `medicineRoutes.js`, with no waiting.
+2. **After the runtime, A edits B's files in one small PR:**
    - In `medicineRoutes.js`: moves `POST /medicines/:id/status` into A's new `doseRoutes.js` (#14), and adds today's per-dose fields to `GET /medicines` (#13).
    - In `PatientDashboard.jsx`: the take/skip call (around line 51) and the missed/escalation badge logic (around lines 248–290).
-   - B doesn't edit those handlers on Friday, and reviews the PR.
+   - B doesn't edit those handlers while that PR is open, and reviews it.
 
-### 0.3 Contracts, agreed on Day 1 (Monday, the first hour)
+### 0.3 Contracts, agreed before coding starts
 
 | # | Contract | Written by | Used by |
 |---|---|---|---|
@@ -71,7 +71,7 @@ Phase 0 is lower priority than the agent, so **A does it on Friday of week 1**, 
 | C7 | **Phrase bank:** `voice/phrasebank/catalogue.json` (line IDs, text, slots, tone, language), plus `resolveLine(lineId, slots, patientId) → { audioUrl } \| { neutralText }` | A | B (call-in lines, journal wording check) |
 | C8 | **Voice ↔ agent API:** the pipeline posts `POST /api/v1/agent/turn { sessionId, flow, transcript, isFinal, asrConfidence, dtmf? }` and gets back `{ actions:[{ type:'play', lineId, slots } \| { type:'neutral', text } \| { type:'hangup' } \| { type:'listen' }] }`. Flows are `dose \| callin \| chat`. Each flow registers a handler with `registerFlow(name, handler)`. Also `startDoseFlow(reminderId)`. **Two front ends call the same API:** the browser pipeline (streaming, with partial transcripts) and the **Twilio phone adapter** (A3.5), which sends one final transcript per turn and turns the returned actions into `<Gather>`/`<Play>`/`<Say>`/`<Hangup>` | A | B (call-in flow) |
 | C9 | **Safety screen:** `screen(text, ctx) → { verdict:'ok'\|'redflag'\|'unsafe', category, responseLineId? }` and `server/safety/redflags.json` (English, Hindi, Marathi) | B | A (called on every partial and final transcript) |
-| C10 | **Medicine fields for step-by-step:** `pillDescription`, `pillboxSlot`, `locationHint`, added by B to the model and the medicine form by **Day 3** | B | A (Feature 4) |
+| C10 | **Medicine fields for step-by-step:** `pillDescription`, `pillboxSlot`, `locationHint`, added by B to the model and the medicine form | B | A (Feature 4) |
 | C11 | **Env vars:** `LLM_PROVIDER` (`groq` or `anthropic`), `LLM_MODEL_FAST`, `LLM_MODEL_SMART`, `LLM_MODEL_SAFETY`, `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, `PUBLIC_BASE_URL`, `VOICE_WS_URL`, `TWILIO_*`, `CLOUDINARY_URL`, `AGENT_ENABLED`. **Model tiers:** the fast tier (live call turns) defaults to Groq `openai/gpt-oss-20b`, or Claude Haiku 5.5. The smart tier (journal, prescription, Planner, weekly review, test judge) defaults to Groq `openai/gpt-oss-120b`, or Claude Sonnet 5.5. The safety tier (safety screen) defaults to Groq `openai/gpt-oss-safeguard-20b`, or Claude Haiku 5.5. Code only ever asks for a tier, never a model name | A keeps `.env.example` | Both |
 
 ### 0.4 Working rules
@@ -82,21 +82,24 @@ Phase 0 is lower priority than the agent, so **A does it on Friday of week 1**, 
 - **Daily sync:** 15 minutes covering what's merged, what's blocked, and any contract changes.
 - **Definition of done:** merged to `main`, the gate test from the PRD passes, and the `.env.example` and README notes are updated.
 
-### 0.5 Calendar (both people)
-- **Week 1:** Mon 23 Nov to Fri 27 Nov 2026. Phase 1 (Mon–Thu); Phase 0 (Fri), since it's lower priority.
-- **Week 2:** Mon 30 Nov to Fri 4 Dec. Phase 2.
-- **Week 3:** Mon 7 Dec to Fri 11 Dec. Phases 3 to 5.
-- **Week 4:** Mon 14 Dec to Fri 18 Dec. Phase 6, plus 7 and 8 if time allows, and demo prep.
+### 0.5 Order of work (both people)
+No dates: work goes task by task, in this order.
+1. Phase 1: agent platform
+2. Phase 0: fixes (lower priority, so after Phase 1)
+3. Phase 2: Core dose agent and daily journal
+4. Phases 3 to 5: family voice, call-in agent, prescription-to-schedule
+5. Phase 6: step-by-step guidance
+6. Phases 7 and 8 if time allows, then demo prep
 
-The deadline isn't confirmed yet. If it's earlier, cut from the bottom of each list.
+If time runs short, cut from the bottom of each list.
 
 ---
 
-## A0a. LLM key ✅ decided 21 Nov
+## A0a. LLM key (provider decided: Groq)
 - Create a **free Groq API key** at console.groq.com → API Keys, and put it in `server/.env` and on Render as `GROQ_API_KEY`, with `LLM_PROVIDER=groq`. Person B makes their own.
 - Optional later: an Anthropic key (console.anthropic.com → Billing → API Keys) with a monthly spend limit, for the final runs and the demo.
 
-## A0. New Twilio account ✅ done 21 Nov 2026
+## A0. New Twilio account ✅ done
 
 What we found when testing the new trial account (Twilio's current trial, from the "1console"):
 - **There's no number of our own.** Calls come from a **shared trial number** shown as **From** in **Communications → Voice → Overview → Try out Voice** (it was `+17372212163`). It "can vary by product and by recipient", so if calls start failing on the From number, check that screen again and update `TWILIO_PHONE_NUMBER`.
@@ -106,11 +109,11 @@ What we found when testing the new trial account (Twilio's current trial, from t
 - **`<Stream>` is blocked on the trial** (Twilio's try-out-voice page). Live streaming over a real phone call needs an upgraded account. Browser mode is unaffected.
 - **SMS accepts only Twilio's predefined templates on the trial** ("Invalid template name"). Custom SMS reminders and **caregiver alert SMS fail** until upgrade. Use Call for testing.
 - **Testing setup:** no ngrok. Code is developed on the laptop in simulation mode (Twilio values left empty in `server/.env`). Real calls are tested on Render after merging to `main`, which Render auto-deploys.
-- **Verified end to end on 21 Nov:** MedTime placed the call, Twilio fetched the menu from Render, key 1 was pressed, and the dose was recorded as taken.
+- **Verified end to end:** MedTime placed the call, Twilio fetched the menu from Render, key 1 was pressed, and the dose was recorded as taken.
 
-## Week 1: Phase 1 (Days 1–4) and Phase 0 (Day 5)
+## Phase 1: agent platform, then Phase 0 fixes
 
-### A2. Agent runtime (Mon–Thu)
+### A2. Agent runtime (first task)
 
 Folder: `server/agent/`
 
@@ -173,7 +176,7 @@ Folder: `server/agent/`
 
 ---
 
-### A1. Phase 0 fixes (Fri, Day 5; moved after the runtime because it is lower priority)
+### A1. Phase 0 fixes (after A2, because it is lower priority)
 
 **A1.1 · #4 Verify Twilio webhooks** (`server/routes/webhookRoutes.js`)
 - Validate `X-Twilio-Signature` on `/webhooks/sms` and `/webhooks/voice`, using `twilio.validateRequest(authToken, signature, url, params)` or `twilio.webhook()` middleware.
@@ -197,16 +200,16 @@ Folder: `server/agent/`
 - **Test:** a medicine with two times a day escalates each dose separately (PRD gate); a confirmed dose stops all calls for that dose.
 
 **A1.4 · #14 Take/skip clears escalation** (new `server/routes/doseRoutes.js`)
-- New endpoint `POST /api/v1/doses/:reminderId/status { status }`. It checks access with B's `requirePatientAccess('primary')` (ready by Day 2). It then calls `markDose(..., 'app')`.
+- New endpoint `POST /api/v1/doses/:reminderId/status { status }`. It checks access with B's `requirePatientAccess('primary')`. It then calls `markDose(..., 'app')`.
 - Remove `POST /medicines/:id/status` from `medicineRoutes.js`. Add `todayReminderId` and per-dose `status`/`caregiverAlerted` to each medicine in `GET /medicines` (see 0.2).
 - Update `PatientDashboard.jsx`: take/skip calls the new endpoint, and the badges read the per-dose fields.
 - **Test:** confirming in the app means no caregiver alert 10 minutes later.
 
 **Phase 0 gate (PRD):** a forged webhook is rejected, and two doses of one medicine escalate independently.
 
-## Week 2: Phase 2, the Core dose agent with follow-ups
+## Phase 2: the Core dose agent with follow-ups
 
-### A3. Voice pipeline (Mon–Wed)
+### A3. Voice pipeline
 
 Folder: `voice/` (Python 3.11, with its own `requirements.txt`, run with `python -I`)
 
@@ -236,7 +239,7 @@ Folder: `voice/` (Python 3.11, with its own `requirements.txt`, run with `python
 - Keypad 9 does the same.
 
 **A3.5 · Twilio phone adapter (turn by turn; works on the free trial)** (`server/routes/voiceAgentRoutes.js`)
-- The cron places the call with `calls.create({ url: PUBLIC_BASE_URL + '/api/v1/voice/agent?runId=…' })`. The trial accepts a URL to our server but rejects inline `twiml` (confirmed on 21 Nov).
+- The cron places the call with `calls.create({ url: PUBLIC_BASE_URL + '/api/v1/voice/agent?runId=…' })`. The trial accepts a URL to our server but rejects inline `twiml` (confirmed in testing).
 - `POST /voice/agent?runId=` takes Twilio's `SpeechResult`, `Confidence` and `Digits`, calls `/agent/turn` (C8), and converts the returned actions into TwiML:
   - `play` → `<Play>` (the family-voice URL from `resolveLine`)
   - `neutral` → `<Say>`
@@ -251,7 +254,7 @@ Folder: `voice/` (Python 3.11, with its own `requirements.txt`, run with `python
 - Signature-check this route like the others once A1.1 is in.
 - **Test:** one real call to your verified phone. Say "I already took it", and confirm the agent checks the log and answers.
 
-### A4. Core dose agent (Wed–Fri)
+### A4. Core dose agent
 
 **A4.1 · Dose flow** (`agent/flows/dose.js`, prompt `agent/prompts/dose.md`)
 Implement the PRD call flow and section 6.1 of the plan:
@@ -289,7 +292,7 @@ Implement the PRD call flow and section 6.1 of the plan:
 
 ---
 
-## Week 3: Phase 3, family voice (phrase bank)
+## Phase 3: family voice (phrase bank)
 
 **A5.1 · Phrase-bank catalogue** (`voice/phrasebank/catalogue.json`, contract C7)
 - About 150 to 200 line IDs covering:
@@ -300,7 +303,7 @@ Implement the PRD call flow and section 6.1 of the plan:
   - hints
   - praise
   - follow-ups for each concern
-  - call-in answers (B supplies those line texts by Day 2 of week 3)
+  - call-in answers (B supplies those line texts)
   - weekly chat prompts
   - handovers
 - Slots: `{name}`, `{medicine}`, `{colour}`, `{time}`, `{slot}`. Every value is pre-rendered from a short list per patient.
@@ -329,7 +332,7 @@ Implement the PRD call flow and section 6.1 of the plan:
 
 ---
 
-## Week 4: Phase 6, step-by-step guidance; the chat call; live tests
+## Phase 6: step-by-step guidance; the chat call; live tests
 
 **A6.1 · Step planner** (`agent/flows/steps.js`)
 - From `pillDescription`, `pillboxSlot`, `locationHint` and `mealTiming` (C10), build 3 to 5 steps: open the box, take these pills, water, food if needed.
@@ -347,42 +350,53 @@ Implement the PRD call flow and section 6.1 of the plan:
 - **Record a backup demo call.**
 
 **A6.4 · Demo support**
-- Help B rehearse the demo script; freeze `main` the day before.
+- Help B rehearse the demo script; freeze `main` before the demo.
 
 **Phase 6 gate (PRD):** the agent adapts when the patient says "I can't find it", and hands over after 2 failed steps.
 
 ---
 
-## What you need from Person B, and when
+## What you need from Person B
 
-| Need | Contract | By |
+Until B's piece exists, use a stand-in and swap it in later.
+
+| Need | Contract | Used in |
 |---|---|---|
-| `requirePatientAccess` helper | C3 | Week 1, Day 2 |
-| `propose_change`, `ask_caregiver`, `registerProposalKind` | C5, C6 | Week 1, Day 4 |
-| Safety screen and `redflags.json` | C9 | Week 1, Day 5 (stub until then) |
-| Medicine fields for steps | C10 | Week 1, Day 3 |
-| Agent Activity panel | (C2 consumer) | Week 1, Day 5 |
-| 10 core persona scenarios runnable | (uses A2.7) | Week 2, Day 3 |
-| Call-in line texts for the phrase bank | C7 | Week 3, Day 2 |
+| `requirePatientAccess` helper | C3 | A2.3, A2.5 `notify_caregiver`, A1.4 |
+| `propose_change`, `ask_caregiver`, `registerProposalKind` | C5, C6 | A2.2, A4.1, A4.3 |
+| Safety screen and `redflags.json` | C9 | A2.4 (stub returns `ok`), A3.4 |
+| Medicine fields for steps | C10 | A6.1 |
+| Agent Activity panel | (C2 consumer) | Phase 1 gate |
+| 10 core persona scenarios runnable | (uses A2.7) | Phase 2 gate |
+| Call-in line texts for the phrase bank | C7 | A5.1 |
 
-## What Person B needs from you, and when
+## What Person B needs from you
 
-| Deliverable | Contract | By |
+| Deliverable | Contract | Comes from |
 |---|---|---|
-| Tool interface and `registerTool` | C1 | Week 1, Day 1 (end) |
-| `AgentRun` schema and `GET /agent/runs` | C2 | Week 1, Day 3 |
-| `doseService.markDose` and events | C4 | Week 1, Day 5 |
-| Friday `medicineRoutes.js` PR (status handler and per-dose fields) | 0.2 | Week 1, Day 5 |
-| Simulate text endpoints | A2.7 | Week 1, Day 5 |
-| `registerFlow`, `/agent/turn`, `startDoseFlow` (for the call-in flow) | C8 | Week 2, Day 5 |
-| `catalogue.json` format and `resolveLine` | C7 | Week 2, Day 5 |
-| Chat-call recording URL (browser) or transcripts (phone) on `AgentRun` | A6.2 | Week 4, Day 2 |
+| Tool interface and `registerTool` | C1 | A2.2 |
+| `AgentRun` schema and `GET /agent/runs` | C2 | A2.3 |
+| `doseService.markDose` and events | C4 | A2.5 (basic), A1.3 (full) |
+| `medicineRoutes.js` PR (status handler and per-dose fields) | 0.2 | A1.4 |
+| Simulate text endpoints | A2.7 | A2.7 |
+| `registerFlow`, `/agent/turn`, `startDoseFlow` (for the call-in flow) | C8 | A2.4, A4.1 |
+| `catalogue.json` format and `resolveLine` | C7 | A5.1, A5.5 |
+| Chat-call recording URL (browser) or transcripts (phone) on `AgentRun` | A6.2 | A6.2 |
 
 ## Your checklist
 
-- [ ] A0 New Twilio account, credentials swapped, smoke test passed
-- [ ] A2.1–A2.7 agent runtime, core tools, cron handover, simulate endpoints (Mon–Thu)
-- [ ] A1.1 #4 webhook signatures (Fri)
+In order, top to bottom:
+
+- [x] A0 New Twilio account, credentials swapped, smoke test passed
+- [x] A0a Free Groq key in `server/.env` (`GROQ_API_KEY`, `LLM_PROVIDER=groq`)
+- [x] A2.1 LLM adapter (first coding task)
+- [x] A2.2 tool registry and loop
+- [x] A2.3 `AgentRun` model and endpoints
+- [ ] A2.4 orchestrator and `/agent/turn`
+- [ ] A2.5 five core tools
+- [ ] A2.6 cron hands over to the agent
+- [ ] A2.7 text simulate endpoints
+- [ ] A1.1 #4 webhook signatures
 - [ ] A1.2 #10 `PUBLIC_BASE_URL` and `TWILIO_ENABLED`
 - [ ] A1.3 #13 per-dose escalation and `doseService`
 - [ ] A1.4 #14 dose endpoint and dashboard update
