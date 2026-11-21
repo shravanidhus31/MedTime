@@ -16,7 +16,7 @@ A running record of what's done, what's in progress and what's next. **It's upda
 | Design and research | ✅ Done. PRD, research notes and plan are final |
 | Task split | ✅ Done. Person A (calls, voice, live agent) and Person B (caregiver app, schedules, background agents, evaluation) |
 | Twilio | ✅ New trial account works end to end for keypad calls driven by our server |
-| Agent code | 🟡 A2.1 LLM adapter, A2.2 tool registry + loop, A2.3 `AgentRun` + endpoints done on `feat/a-agent-runtime` (all checks pass). Next: A2.4 orchestrator |
+| Agent code | 🟡 A2.1–A2.4 done on `feat/a-agent-runtime` (LLM adapter, tool registry + loop, `AgentRun` + endpoints, orchestrator + `/agent/turn`). Next: A2.5 five core tools |
 | Person B | 🟡 Working on a feature branch; Day-1 items (#2, #3, #1/#19 and soft delete, #5 top-up) |
 | Phase 0 security fixes | ⏳ Not started. Comes after Phase 1 (low priority) |
 | Person B onboarding | 🟡 Docs pushed; access and secrets still to be sent privately |
@@ -29,7 +29,7 @@ A running record of what's done, what's in progress and what's next. **It's upda
    - `.env` values, sent privately. Each person makes their own free Groq key
    - the research papers
    - their phone number added to Twilio
-3. **Person A, next task: A2.4 orchestrator and `POST /agent/turn`**, then the rest of A2 (5 core tools, cron handover, simulate endpoints).
+3. **Person A, next task: A2.5 five core tools**, then the rest of A2 (cron handover, simulate endpoints).
 4. **Person A, after A2 and A1:** A3.5 Twilio phone adapter (turn by turn, trial-compatible) and the Core dose agent.
 
 ## Open questions
@@ -64,6 +64,13 @@ A running record of what's done, what's in progress and what's next. **It's upda
 ## Change log
 
 ### 21 Nov 2026
+- **A2.4 orchestrator and `POST /api/v1/agent/turn` done** (contract C8; not committed yet).
+  - `agent/orchestrator.js`: `registerFlow()`, `startSession()`, `handleTurn()`. Order per turn: keypad 9 or a red flag in any transcript (partial or final) → fixed neutral-voice reply, caregiver alert, keep listening (the flow and LLM are skipped) → partial transcripts stop there → the flow runs inside a 4 s budget (too slow → "Let me check that for you" + `wait`, the next empty turn collects it) → crash or bad actions → `fallback` (keypad) → after 8 turns, hand over and hang up.
+  - **C8 extended** (both task files): new action types `wait` and `fallback`; red-flag replies carry `emergency: <category>`.
+  - `agent/safety.js`: stand-in keyword screen for C9 (fall, chest pain, breathing, extra pills, self-harm with Tele-MANAS 14416, scam/OTP), English plus common Hindi. B swaps in the real one with `setSafetyScreen()`. If that screen ever throws, the keyword list still runs. "took two"/"took both" are deliberately not red flags (a normal dose can be two pills).
+  - Caregiver alert is a logging stand-in until A2.5 (`setEmergencyHandler()`); red flags are saved as `safety_screen` steps on the run.
+  - `/agent/turn` has no login: the caller is the voice pipeline; the session id is a random UUID valid for one live call.
+  - Tests: 32 offline pass (12 new).
 - **A2.3 `AgentRun` model and endpoints done** (branch `feat/a-agent-runtime`, not committed yet). Contract C2 is ready for Person B's Activity panel.
   - `server/models/AgentRun.js`: trigger, patient, reminder, flow, status, outcome, fallbackReason, error, text, steps `{ tool, input, output, ms, at, approvalLevel, proposalId }`, stepCount, promptVersion, model, llmCalls, usage, approver, startedAt/endedAt/ms.
   - `agent/runs.js`: `runRecorded()` wraps `runLoop()`; each step is saved as it happens. A database failure is logged and never stops the call.

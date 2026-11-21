@@ -6,15 +6,47 @@
 //     → { run: { ...run, steps: [{ tool, input, output, ms, at, approvalLevel, proposalId }] } }
 //
 // Both need a login token, and the user must be allowed to see that patient.
+//
+//   POST /api/v1/agent/turn { sessionId, flow?, transcript?, isFinal?, asrConfidence?, dtmf? }
+//     → { actions: [...] }   (A2.4, contract C8; see agent/orchestrator.js)
+//   No login token: the caller is the voice pipeline, not a person. The sessionId is a random
+//   UUID handed out when the call starts, and only works for that one live call.
 
 const express = require('express');
 const mongoose = require('mongoose');
 const AgentRun = require('../models/AgentRun');
 const { verifyToken } = require('../middleware/authMiddleware');
 const { canAccess } = require('../agent/access');
+const { handleTurn, TurnError } = require('../agent/orchestrator');
 
 const router = express.Router();
 const MAX_LIMIT = 200;
+const MAX_TRANSCRIPT_CHARS = 2000;
+
+router.post('/turn', async (req, res) => {
+  const { sessionId, flow, transcript, isFinal, asrConfidence, dtmf } = req.body || {};
+  if (typeof sessionId !== 'string' || !sessionId) {
+    return res.status(400).json({ message: '"sessionId" is required.' });
+  }
+  if (transcript !== undefined && (typeof transcript !== 'string' || transcript.length > MAX_TRANSCRIPT_CHARS)) {
+    return res.status(400).json({ message: `"transcript" must be text of at most ${MAX_TRANSCRIPT_CHARS} characters.` });
+  }
+  if (isFinal !== undefined && typeof isFinal !== 'boolean') {
+    return res.status(400).json({ message: '"isFinal" must be true or false.' });
+  }
+  if (dtmf !== undefined && !/^[0-9*#]$/.test(String(dtmf))) {
+    return res.status(400).json({ message: '"dtmf" must be a single keypad key.' });
+  }
+  try {
+    const result = await handleTurn({ sessionId, flow, transcript, isFinal, asrConfidence, dtmf });
+    return res.json(result);
+  } catch (err) {
+    if (err instanceof TurnError) return res.status(err.status).json({ message: err.message });
+    console.error('[agentRoutes] turn failed:', err.message);
+    // Never leave a caller with nothing to do: the keypad menu still works.
+    return res.status(500).json({ actions: [{ type: 'fallback', reason: 'server_error' }] });
+  }
+});
 
 function parseDate(value) {
   if (value === undefined) return undefined;
