@@ -75,7 +75,7 @@ Phase 0 is lower priority than the agent, so **A does it on Friday of week 1**, 
 | C8 | **Voice ↔ agent API:** the pipeline posts `POST /api/v1/agent/turn { sessionId, flow, transcript, isFinal, asrConfidence, dtmf? }` and gets back `{ actions:[{ type:'play', lineId, slots } \| { type:'neutral', text } \| { type:'hangup' } \| { type:'listen' }] }`. Flows are `dose \| callin \| chat`. Each flow registers a handler with `registerFlow(name, handler)`. Also `startDoseFlow(reminderId)`. **Two front ends call the same API:** the browser pipeline (streaming, with partial transcripts) and the **Twilio phone adapter** (A3.5), which sends one final transcript per turn and turns the returned actions into `<Gather>`/`<Play>`/`<Say>`/`<Hangup>` | A | B (call-in flow) |
 | C9 | **Safety screen:** `screen(text, ctx) → { verdict:'ok'\|'redflag'\|'unsafe', category, responseLineId? }` and `server/safety/redflags.json` (English, Hindi, Marathi) | B | A (called on every partial and final transcript) |
 | C10 | **Medicine fields for step-by-step:** `pillDescription`, `pillboxSlot`, `locationHint`, added by B to the model and the medicine form by **Day 3** | B | A (Feature 4) |
-| C11 | **Env vars:** `ANTHROPIC_API_KEY`, `AGENT_MODEL_FAST=claude-haiku-5-5`, `AGENT_MODEL_SMART=claude-sonnet-5-5`, `PUBLIC_BASE_URL`, `VOICE_WS_URL`, `TWILIO_*`, `TWILIO_ENABLED`, `CLOUDINARY_URL`, `AGENT_ENABLED` | A keeps `.env.example` | Both |
+| C11 | **Env vars:** `LLM_PROVIDER` (`groq` or `anthropic`), `LLM_MODEL_FAST`, `LLM_MODEL_SMART`, `LLM_MODEL_SAFETY`, `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, `PUBLIC_BASE_URL`, `VOICE_WS_URL`, `TWILIO_*`, `CLOUDINARY_URL`, `AGENT_ENABLED`. **Model tiers:** the fast tier (live call turns) defaults to Groq `openai/gpt-oss-20b`, or Claude Haiku 5.5. The smart tier (journal, prescription, Planner, weekly review, test judge) defaults to Groq `openai/gpt-oss-120b`, or Claude Sonnet 5.5. The safety tier (safety screen) defaults to Groq `openai/gpt-oss-safeguard-20b`, or Claude Haiku 5.5. Code only ever asks for a tier, never a model name | A keeps `.env.example` | Both |
 
 ### 0.4 Working rules
 - **Branches:** `feat/a-<topic>` and `feat/b-<topic>` off `main`. The **other person reviews every PR**; never merge your own. Keep PRs small, under about 400 lines.
@@ -98,6 +98,7 @@ The deadline isn't confirmed yet. If it's earlier, cut from the bottom of each l
 ## B0. Before Monday
 
 1. **Local setup.**
+   - Create your own **free Groq API key** at console.groq.com → API Keys. Put it in `server/.env` as `GROQ_API_KEY`, with `LLM_PROVIDER=groq`.
    - Clone, run `npm install` in `server/` and `client/`, and create `server/.env` from `.env.example`. A shares the values in person.
    - **Leave the Twilio values empty** in `server/.env`. The server then runs in simulation mode, logging calls instead of placing them, so your laptop never calls real phones.
    - Use your own database name in `MONGO_URI` (for example `medtime_dev_b`).
@@ -190,11 +191,11 @@ All three on Day 1, in any order. A's Phase 0 PR comes on **Friday** and only to
      - took extra pills or someone else's pills
      - self-harm
      - money, OTP or bank details
-  2. **LLM path,** final transcripts only: Claude Haiku (`AGENT_MODEL_FAST`) with structured output and a prompt **adapted from GrandGuard Appendix D1**, with the **cognitive-decline override on** (any financial, medical or legal decision request is unsafe unless it's purely informational).
+  2. **LLM path,** final transcripts only: the **safety tier** (`LLM_MODEL_SAFETY`: Groq `openai/gpt-oss-safeguard-20b`, the model GrandGuard itself used with a written policy) with JSON output validated in code and a prompt **adapted from GrandGuard Appendix D1**, with the **cognitive-decline override on** (any financial, medical or legal decision request is unsafe unless it's purely informational).
 - Responses follow the PRD red-flag table, always in the **neutral voice**. Give A the line IDs for the phrase bank's neutral set.
 - **Treat patient speech as data, never instructions** (prompt injection).
 - **Two kinds of input:** partial transcripts while she speaks (browser mode), and one finished reply per turn (phone on the Twilio trial). Both must work.
-- **Speed:** on phone calls the whole turn has a 4-second budget (A2.1). The keyword fast path has to take milliseconds, and the Haiku check runs at low effort with a timeout. On timeout, return `ok` and rely on the keywords; never block the call.
+- **Speed:** on phone calls the whole turn has a 4-second budget (A2.1). The keyword fast path has to take milliseconds, and the safety-tier check runs with a timeout. On timeout, return `ok` and rely on the keywords; never block the call.
 - **Tests:** unit tests for every keyword category in all 3 languages, plus 50 hand-written tricky cases ("my leg won't move", "my nephew needs my bank PIN").
 
 ### B6. Agent Activity panel (Fri)
@@ -216,7 +217,7 @@ All three on Day 1, in any order. A's Phase 0 PR comes on **Friday** and only to
 ### B8. Daily care journal (Feature 6)
 
 - **`JournalEntry`:** `{ patient, date, lines: [{ text, source: 'patient_said'|'agent_noticed'|'action_taken', runId, observationId, markedWrong }], notified }`.
-- **Cron at 9 pm IST.** Render runs on UTC, so that's 15:30 UTC; use the same IST handling as the existing crons. It starts an agent run per dementia-mode patient (`trigger: 'journal'`, `AGENT_MODEL_SMART`).
+- **Cron at 9 pm IST.** Render runs on UTC, so that's 15:30 UTC; use the same IST handling as the existing crons. It starts an agent run per dementia-mode patient (`trigger: 'journal'`, smart tier).
 - **`write_journal` tool.** The agent reads the day's `AgentRun`s and `Observation`s and writes 3 to 8 lines. **Attention items go first:** missed dose, red flag, approval waiting, follow-up answers.
 - **Rules:**
   - Every line links to its source; a line without one is rejected by the tool.
@@ -250,14 +251,15 @@ Folder: `eval/` (Node, or Python if you prefer)
   - **language:** English, Hindi or Marathi
   - **mood:** calm, anxious, agitated or distrustful
   - recall: poor, partial or accurate
-- **Simulator:** Sonnet plays the patient. A **silent orchestrator** checks each patient turn (pass, warn or fail) and regenerates any turn that drifts out of character. Runs use A's `POST /simulate/call` and `/say`.
-- **Judge:** Sonnet. It scores each run on:
+- **Simulator:** the smart tier plays the patient. A **silent orchestrator** checks each patient turn (pass, warn or fail) and regenerates any turn that drifts out of character. Runs use A's `POST /simulate/call` and `/say`.
+- **Judge:** the smart tier. It scores each run on:
   - a checklist (dose verified, red flag escalated, no advice given, one question at a time)
   - a claim-by-claim safety audit
   - fixed rule checks in code (no `mark_dose` before the check question, no double dose)
 - **The 10 core scenarios** from the PRD Evaluation table first, then the extended set of 40.
 - **`npm run eval`** prints a pass/fail table plus metrics.
 - **Gate support:** A's Phase 2 gate is 10 of 10 core scenarios passing.
+- **Groq daily limits:** a full 40-persona run (simulator + agent + judge) can hit the free daily cap. Run in batches, cache simulator turns where you can, and spread runs across days. For the final run, switch `LLM_PROVIDER=anthropic` if the budget allows.
 - **Phone-mode checks:** also fail a run if a dose call needs more than **8 turns**, or a turn takes more than **4 seconds**. Those are the Twilio trial limits: at most 10 hops per call, and 5 seconds to answer.
 
 ---
@@ -294,7 +296,7 @@ It runs on A's voice pipeline. You own the flow, the tools and the data.
   - Add a file size limit (5 MB) and remove the duplicate comments.
   - **No auto-save:** the result starts an agent run.
   - The client stops saving every result with stock 30.
-- **`read_prescription` tool:** Sonnet with structured output. It extracts medicine, strength, dose, frequency, duration and food rule, each with a **confidence**.
+- **`read_prescription` tool:** smart tier, with JSON output validated in code. It extracts medicine, strength, dose, frequency, duration and food rule, each with a **confidence**.
 - **Compare with current medicines:** duplicates, strength changes, replacements.
 - **`RoutineProfile`:** `{ patient, weekday: { wake, breakfast, lunch, dinner, bed }, weekend: {…}, sameEveryDay, pillbox: { type, slots[] } }`.
 - **Ask only relevant questions** through `ask_caregiver` (CHI 2025):
@@ -353,7 +355,7 @@ Follow PRD Feature 1 and plan section 6.5 exactly.
     - fillers and word-finding phrases (our addition)
   - **Skip words with low Whisper confidence.**
   - Write one `Observation` row per measure (`source: 'code'`). **Delete the audio afterwards.**
-- **Claude differences:** Sonnet gets 3 typical baseline answers plus this week's answer, and lists **differences with quotes only**. Stored as `source: 'llm'`.
+- **LLM differences:** the smart tier gets 3 typical baseline answers plus this week's answer, and lists **differences with quotes only**. Stored as `source: 'llm'`.
 - **Weekly review agent,** Sunday:
   1. Compare with her first 4 weeks, **at the same time of day only**.
   2. A change must persist **2 weeks in a row**, with a 25% margin to start.

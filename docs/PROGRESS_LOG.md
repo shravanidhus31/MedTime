@@ -26,7 +26,7 @@ A running record of what's done, what's in progress and what's next. **It's upda
 2. **Send Person B their access:**
    - GitHub collaborator invite
    - PRD share
-   - `.env` values and the Anthropic key, sent privately
+   - `.env` values, sent privately. Each person makes their own free Groq key
    - the research papers
    - their phone number added to Twilio
 3. **Person A, week 1:** A2 agent runtime (Claude adapter, tool registry, loop, `AgentRun`, orchestrator, 5 core tools, simulate endpoints).
@@ -37,7 +37,7 @@ A running record of what's done, what's in progress and what's next. **It's upda
 - **Upgrade Twilio near the end?** That would add live streaming, caregiver SMS, call-in on our own number, and timing measures from phone calls.
 - **Does the trial route incoming calls to our server?** Test it via Try out Voice → Receive a call. This matters for Feature 7 on the phone.
 - **Marathi speech recognition:** Twilio's docs don't list it; test a Google V2 model on a real call.
-- **Anthropic API key and budget:** not set up yet.
+- **Groq free-plan limits:** check console.groq.com → Settings → Limits. The docs show about 1,000 requests a day per model on the Developer plan. Decide near the end whether to switch to Claude (≈ $10–20) for the final runs and the demo.
 
 ---
 
@@ -56,6 +56,7 @@ A running record of what's done, what's in progress and what's next. **It's upda
 | 21 Nov | No ngrok. Code locally in simulation mode; test real calls on Render after merging to `main` | Less setup (the user's choice) |
 | 21 Nov | Phase 0 security fixes moved to Friday of week 1 | The user said they're low priority |
 | 21 Nov | **Two ways of listening, one agent:** browser mode (streaming, the primary path for development and the demo), and phone via a Twilio `<Gather>` turn-by-turn adapter (works on the trial) | The Twilio trial blocks `<Stream>`, `<Record>` and custom SMS |
+| 21 Nov | **LLM provider is a setting; develop on Groq (free)**, with Claude optional for the final runs | Free for development; switching is a one-line env change; Claude scored safest in GrandGuard |
 | 21 Nov | On the trial, caregiver alerts are **phone calls**, and journal and approval notices go to the **dashboard** | Trial SMS only allows Twilio's templates |
 
 ---
@@ -63,6 +64,14 @@ A running record of what's done, what's in progress and what's next. **It's upda
 ## Change log
 
 ### 21 Nov 2026
+- **The LLM provider is now a setting; development uses Groq (free).**
+  - Model tiers:
+    - fast: `openai/gpt-oss-20b`
+    - smart: `openai/gpt-oss-120b`
+    - safety: `openai/gpt-oss-safeguard-20b` (preview; the model GrandGuard used)
+  - Claude (Haiku 5.5 / Sonnet 5.5) can be switched on for final runs and the demo: estimated ≈ $0.006 per dose call and ≈ $10–20 for the project.
+  - Updated: PRD (voice pipeline, stack, open questions, research notes prerequisites), plan section 10, contract C11, A2.1 (adapter with `groq` and `anthropic` back ends), B5, B8, B10, B12, B14, START_HERE, and `server/.env.example` (`LLM_*`, `GROQ_API_KEY`).
+  - Each person makes their own free Groq key, so no Anthropic key needs to be shared.
 - **Docs pushed to GitHub `main`:** `docs/` (plan, task files, START_HERE, this log), `ISSUES.md`, `server/.env.example`, and the `.gitignore` entry that keeps out `Medtime papers/`. Person B pulls `main` and merges it into his feature branch.
 - **Person B's review of the existing code: all 7 points accepted.**
   - Already planned: #1 ownership, #2 caregiver link, #19 duplicate DELETE, red-flag words in JSON (C9).

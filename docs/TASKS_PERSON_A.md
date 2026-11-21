@@ -72,7 +72,7 @@ Phase 0 is lower priority than the agent, so **A does it on Friday of week 1**, 
 | C8 | **Voice ↔ agent API:** the pipeline posts `POST /api/v1/agent/turn { sessionId, flow, transcript, isFinal, asrConfidence, dtmf? }` and gets back `{ actions:[{ type:'play', lineId, slots } \| { type:'neutral', text } \| { type:'hangup' } \| { type:'listen' }] }`. Flows are `dose \| callin \| chat`. Each flow registers a handler with `registerFlow(name, handler)`. Also `startDoseFlow(reminderId)`. **Two front ends call the same API:** the browser pipeline (streaming, with partial transcripts) and the **Twilio phone adapter** (A3.5), which sends one final transcript per turn and turns the returned actions into `<Gather>`/`<Play>`/`<Say>`/`<Hangup>` | A | B (call-in flow) |
 | C9 | **Safety screen:** `screen(text, ctx) → { verdict:'ok'\|'redflag'\|'unsafe', category, responseLineId? }` and `server/safety/redflags.json` (English, Hindi, Marathi) | B | A (called on every partial and final transcript) |
 | C10 | **Medicine fields for step-by-step:** `pillDescription`, `pillboxSlot`, `locationHint`, added by B to the model and the medicine form by **Day 3** | B | A (Feature 4) |
-| C11 | **Env vars:** `ANTHROPIC_API_KEY`, `AGENT_MODEL_FAST=claude-haiku-5-5`, `AGENT_MODEL_SMART=claude-sonnet-5-5`, `PUBLIC_BASE_URL`, `VOICE_WS_URL`, `TWILIO_*`, `TWILIO_ENABLED`, `CLOUDINARY_URL`, `AGENT_ENABLED` | A keeps `.env.example` | Both |
+| C11 | **Env vars:** `LLM_PROVIDER` (`groq` or `anthropic`), `LLM_MODEL_FAST`, `LLM_MODEL_SMART`, `LLM_MODEL_SAFETY`, `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, `PUBLIC_BASE_URL`, `VOICE_WS_URL`, `TWILIO_*`, `CLOUDINARY_URL`, `AGENT_ENABLED`. **Model tiers:** the fast tier (live call turns) defaults to Groq `openai/gpt-oss-20b`, or Claude Haiku 5.5. The smart tier (journal, prescription, Planner, weekly review, test judge) defaults to Groq `openai/gpt-oss-120b`, or Claude Sonnet 5.5. The safety tier (safety screen) defaults to Groq `openai/gpt-oss-safeguard-20b`, or Claude Haiku 5.5. Code only ever asks for a tier, never a model name | A keeps `.env.example` | Both |
 
 ### 0.4 Working rules
 - **Branches:** `feat/a-<topic>` and `feat/b-<topic>` off `main`. The **other person reviews every PR**; never merge your own. Keep PRs small, under about 400 lines.
@@ -92,6 +92,10 @@ The deadline isn't confirmed yet. If it's earlier, cut from the bottom of each l
 
 ---
 
+## A0a. LLM key ✅ decided 21 Nov
+- Create a **free Groq API key** at console.groq.com → API Keys, and put it in `server/.env` and on Render as `GROQ_API_KEY`, with `LLM_PROVIDER=groq`. Person B makes their own.
+- Optional later: an Anthropic key (console.anthropic.com → Billing → API Keys) with a monthly spend limit, for the final runs and the demo.
+
 ## A0. New Twilio account ✅ done 21 Nov 2026
 
 What we found when testing the new trial account (Twilio's current trial, from the "1console"):
@@ -110,22 +114,30 @@ What we found when testing the new trial account (Twilio's current trial, from t
 
 Folder: `server/agent/`
 
-**A2.1 · Claude adapter** (`agent/llm/claude.js`)
-- Install `@anthropic-ai/sdk`. Model IDs come from env:
-  - `AGENT_MODEL_FAST` defaults to `claude-haiku-5-5`, for live calls.
-  - `AGENT_MODEL_SMART` defaults to `claude-sonnet-5-5`, for background work.
-- We **host the loop ourselves** on the Messages API, with a manual tool loop. We need our own limit of 8 tool calls, approval gates and `AgentRun` logging around each call, and our tools run against our own database and Twilio.
-- **API notes:**
-  - Use `tool_choice: { type: "auto" }` with `strict: true` on tool schemas. Sonnet 5.5 **rejects** forcing a particular tool (`any` or `tool`).
-  - Use structured outputs (`output_config.format`) for the per-turn JSON label (`intent`, `pill_mentioned`, `matches_expected`, `confidence`).
-  - Don't send `temperature`, `top_p` or `top_k`. They're rejected on current models.
-  - No assistant prefill.
-  - Always check `stop_reason`, including `"refusal"`, before reading the content.
-  - Parse tool inputs with `JSON.parse`, never by string matching.
-  - Return every `tool_result` from one turn in **one** user message, with `is_error: true` for failures.
-  - Set effort explicitly: `low` for live call turns, which are latency-sensitive; `medium` or `high` for the weekly review and the judge. Haiku 5.5 defaults to `medium`.
+**A2.1 · LLM adapter, provider as a setting** (`agent/llm/index.js`, `agent/llm/groq.js`, `agent/llm/anthropic.js`)
+- **One interface:** `chat({ tier: 'fast'|'smart'|'safety', system, messages, tools, jsonSchema?, timeoutMs })` returns `{ text, toolCalls[], stopReason, usage }`. Flows and tools never name a provider or a model.
+- **Groq (default, free for development):** use the `openai` npm package with `baseURL: 'https://api.groq.com/openai/v1'` and `GROQ_API_KEY`.
+  - Models: `openai/gpt-oss-20b` (fast), `openai/gpt-oss-120b` (smart), `openai/gpt-oss-safeguard-20b` (safety). Groq's docs list tool use for all three.
+  - **`gpt-oss-safeguard-20b` is a *preview* model** that "may be discontinued at short notice". If it's gone, the safety tier falls back to the fast model with the GrandGuard prompt.
+  - Groq's docs show **no parallel tool calls** for the gpt-oss models, so the loop sends one tool call at a time.
+  - **Check the free-plan limits** in console.groq.com → Settings → Limits. The docs page shows Developer-plan figures (about 1,000 requests a day per model). On a 429, read `retry-after`, back off, and fall back to the keypad flow during a call.
+- **Anthropic (optional, for final runs and the demo):** `@anthropic-ai/sdk`.
+  - Models: `claude-haiku-5-5` (fast and safety), `claude-sonnet-5-5` (smart).
+  - API notes:
+    - use `tool_choice: { type: "auto" }` with `strict: true`, because Sonnet 5.5 rejects forcing a particular tool
+    - use structured outputs through `output_config.format`
+    - don't send `temperature`, `top_p` or `top_k`
+    - no assistant prefill
+    - check `stop_reason` (including `"refusal"`)
+    - return every `tool_result` from one turn in one user message
+    - set effort explicitly: `low` for live calls
+  - Cost estimate: about $0.006 per dose call, roughly $10–20 for the whole project (plan section 10).
+- **Both providers:**
+  - parse tool arguments with `JSON.parse` and **validate them against the tool's schema in our code**, because JSON mode alone doesn't guarantee the schema
+  - the per-turn label (`intent`, `pill_mentioned`, `matches_expected`, `confidence`) is JSON validated the same way
+- **Why we host the loop ourselves:** we need our own limit of 8 tool calls, approval gates and `AgentRun` logging around each call, and our tools run against our database and Twilio.
 - Catch SDK errors most-specific-first (rate limit → API status → connection). On any failure, **fall back to the keypad flow**.
-- **Speed budget for phone calls:** Twilio waits at most **5 seconds** for our next instruction. Each turn (database, safety screen, Haiku at low effort) gets **4 seconds**. If it runs over, return a fixed line ("Let me check that for you, Amma") with a short `<Pause>` and `<Redirect>` back to the same run, and finish the work meanwhile.
+- **Speed budget for phone calls:** Twilio waits at most **5 seconds** for our next instruction. Each turn (database, safety screen, fast-tier model) gets **4 seconds**. If it runs over, return a fixed line ("Let me check that for you, Amma") with a short `<Pause>` and `<Redirect>` back to the same run, and finish the work meanwhile.
 
 **A2.2 · Tool registry and loop** (`agent/tools/index.js`, `agent/loop.js`)
 - `registerTool()` follows contract C1.
@@ -261,7 +273,7 @@ Implement the PRD call flow and section 6.1 of the plan:
 - `place_call`, `play_clip`, `speak`/`listen`, and `log_observation` (fields per the PRD's Observation model: `metric, value, method, version, source, timeBlock, asrConfidence, wordCount`).
 
 **A4.3 · Planner follow-ups** (`FollowUp` model, `plan_followup` tool, `agent/flows/planner.js`)
-- After each call, a Sonnet run reads the transcript and pulls out concerns from the **fixed list**: knee, back, headache, stomach, sleep, appetite, feeling low, a visit.
+- After each call, a smart-tier run reads the transcript and pulls out concerns from the **fixed list**: knee, back, headache, stomach, sleep, appetite, feeling low, a visit.
 - It saves a `FollowUp` (`patient, concern, sourceRun, quote, status, nextAsk`).
 - On the next dose call, **after the dose**, it asks **once**: "Amma, yesterday you said your knee was hurting. Is it better today?" The answer goes to the journal (B reads `AgentRun`).
 - A concern closes when she says it's better, after 3 asks, or when the caregiver closes it. Concerns not on the list are noted for the journal only.

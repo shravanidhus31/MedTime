@@ -37,7 +37,7 @@ These are private or too large for git. Ask for anything on this list you haven'
 | **GitHub collaborator access** to `shravanidhus31/MedTime` | So you can push branches and open PRs | GitHub invite: accept it in your email |
 | **The PRD link** (a Claude Doc) | The full spec: every feature, requirement and acceptance test. It has a "Research notes" tab | Person A shares it from Claude |
 | **Values for `server/.env`**: `MONGO_URI`, `JWT_SECRET`, `ENCRYPTION_KEY`, `EMAIL_*` | To run the server locally | **In person or through a password manager. Never over chat, email or screenshots** |
-| **An Anthropic API key** (or a budget for your own) | Your agents use Claude: safety screen, journal, prescription reading, testing | Same as above |
+| **Nothing for the AI:** you make your own **free Groq API key** at console.groq.com → API Keys | Your agents (safety screen, journal, prescription reading, testing) call an LLM. We develop on Groq for free; Claude can be switched on later for final runs | You create it yourself |
 | **The research papers** (`Medtime papers/` folder) | You'll use GrandGuard, DischargeBench and CHI 2025 | Google Drive or USB. They're copyrighted, so not in git |
 | **Your phone number added in Twilio** as a verified recipient | So you can receive real test calls. The trial allows 5 numbers | Person A adds it; you enter the code Twilio texts you |
 | *(Optional)* Render and Vercel access | To read server logs while testing calls | Person A invites you |
@@ -83,7 +83,7 @@ cd ../client && npm install
 
 **Create `server/.env`:**
 1. Copy `server/.env.example` to `server/.env`. It's gitignored, so it won't be committed.
-2. Fill in the values Person A gives you.
+2. Fill in the values Person A gives you, plus your own `GROQ_API_KEY`. Keep `LLM_PROVIDER=groq`.
 3. **Use your own database name.** In `MONGO_URI`, change the database part to `medtime_dev_b`, as in `…mongodb.net/medtime_dev_b?…`. Then you never overwrite Person A's or the live data.
 4. **Leave every `TWILIO_*` value and `NGROK_URL` empty.** The server then runs in **simulation mode**: calls and SMS are only printed in the terminal (`[SIMULATION] Voice Call → …`). Your laptop will never call a real phone.
 5. `ENCRYPTION_KEY` must be 64 hex characters. Use the one Person A gives you, so data stays readable.

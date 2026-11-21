@@ -193,7 +193,7 @@ flowchart TB
         TRIG["Triggers<br/>dose due · patient speaks · call-in · prescription scanned<br/>copilot question · evening journal · weekly review"]
         SAFE["Safety screen<br/>GrandGuard policy, cognitive-decline override"]
         ORCH["Orchestrator<br/>agent loop, max 8 tool calls, fallback to keypad"]
-        LLM["Claude Haiku: live calls<br/>Claude Sonnet: review, copilot, judge"]
+        LLM["LLM adapter, provider is a setting<br/>Groq gpt-oss-20b / 120b / safeguard-20b (dev, free)<br/>or Claude Haiku / Sonnet (final runs)"]
         TOOLS["Tool registry<br/>17 tools"]
         GATE["Approval gate<br/>L0 agent · L1 caregiver · L2 doctor"]
         LOG["AgentRun audit log<br/>every step, input, output, approver"]
@@ -283,7 +283,7 @@ flowchart TD
     H --> I["Listen: VAD + speech-to-text"]
     I --> X{"Emergency words?<br/>fell, chest, can't breathe, extra pills"}
     X -->|"yes"| EM["Stop clip · neutral voice<br/>call + SMS caregivers · stay on the line"] --> Z3(["Red flag logged"])
-    X -->|"no"| J["Safety screen + Claude Haiku<br/>intent, pill mentioned, confidence"]
+    X -->|"no"| J["Safety screen + fast-tier LLM<br/>intent, pill mentioned, confidence"]
     J --> K{"What did she mean?"}
     K -->|"done"| L{"More steps?"}
     L -->|"yes"| H
@@ -383,7 +383,7 @@ This is based on the speech-screening LLM paper (arXiv 2509.03525), adapted. The
 | Every dose call | Time before answering, speech rate, answer length | Code (Whisper + Silero) |
 | Weekly chat call | Same prompt each week in the family voice ("Amma, tell me how you make your morning tea"). It stands in for the paper's standard picture-description task, which can't be shown over the phone | Agent |
 | Language measures | From the paper's Appendix 9: length-corrected vocabulary (MTLD, HD-D, Brunet's index, CTTR), noun and verb share, back-to-back repeated phrases, speech rate. Our additions: fillers and word-finding phrases, Stanza for tagging, skipping words with low Whisper confidence, nothing measured under about 50 words | Code |
-| Differences | Claude gets 3 typical answers from her first 4 weeks plus this week's, and lists differences with quotes only | Claude Sonnet |
+| Differences | Claude gets 3 typical answers from her first 4 weeks plus this week's, and lists differences with quotes only | Smart-tier LLM |
 | Weekly decision | Worse 2 weeks in a row, comparing the same time of day → check medicine changes, call quality, and ask the caregiver about sleep or illness → flag only if nothing explains it | Weekly review agent |
 
 **Not doing:** fine-tuning, classifying impaired versus normal, Tree-of-Thought, audio models. She already has a diagnosis; we track change.
@@ -421,7 +421,7 @@ The CHI 2025 study used GPT-4 inside Alexa, with 17 interviews, 10 people in co-
 2. **Silero VAD** detects when the patient starts and stops speaking. If she speaks while a clip is playing, the clip stops.
 3. **Speech-to-text:** faster-whisper, or Whisper on OpenVINO; AI4Bharat Indic models if Hindi or Marathi accuracy is weak.
 4. **Emergency reflex:** each partial transcript is checked against a fixed English, Hindi and Marathi word list before the LLM sees it. Keypad 9 means help at any time.
-5. **Agent:** the safety screen runs, then Claude Haiku returns structured JSON (`intent`, `pill_mentioned`, `matches_expected`, `confidence`) and the agent picks the next tool and phrase-bank line.
+5. **Agent:** the safety screen runs, then the fast-tier LLM returns structured JSON (`intent`, `pill_mentioned`, `matches_expected`, `confidence`) and the agent picks the next tool and phrase-bank line.
 6. **Out:** pre-rendered phrase-bank audio. There is no text-to-speech during the call, so each reply takes about 1 to 2 seconds.
 7. **Fallback:** the keypad (1 taken, 2 snooze, 9 help) always works. If the agent or the voice server fails, the call drops to today's keypad flow.
 
@@ -471,7 +471,7 @@ Develop and demo in browser call mode, which is free. On the trial, real calls u
 
 | Need | Choice | Status |
 |---|---|---|
-| LLM | Claude Haiku (calls), Claude Sonnet (review, copilot, judge) | **New API key: the only new paid item** |
+| LLM | **Provider is a setting.** Development: **Groq (free)**, with `gpt-oss-20b` (fast), `gpt-oss-120b` (smart) and `gpt-oss-safeguard-20b` (safety, preview). Optional for final runs and the demo: **Claude**, with Haiku 5.5 (fast, safety) and Sonnet 5.5 (smart), about $0.006 per dose call and roughly $10–20 for the project | Free Groq key each; Claude key optional |
 | Telephony | Twilio trial with Media Streams | Existing account |
 | Voice pipeline | Pipecat, Silero VAD, faster-whisper / OpenVINO Whisper | Free, open source |
 | Language measures | Stanza (English, Hindi, Marathi), simple Python for MTLD, HD-D, Brunet's index, CTTR | Free, open source |
