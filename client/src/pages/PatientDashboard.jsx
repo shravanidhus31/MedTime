@@ -29,7 +29,10 @@ export default function PatientDashboard() {
     frequency: 'once',
     time: '08:00', 
     mealTiming: 'any',
-    tabletCount: ''
+    tabletCount: '',
+    pillDescription: '',
+    pillboxSlot: '',
+    locationHint: ''
   });
 
   // --- 1. DATA FETCHING (Auto-updates every 5 seconds) ---
@@ -79,6 +82,9 @@ export default function PatientDashboard() {
       time: med.scheduledTimes[0] || '08:00',
       mealTiming: med.mealTiming,
       tabletCount: med.tabletCount,
+      pillDescription: med.pillDescription || '',
+      pillboxSlot: med.pillboxSlot || '',
+      locationHint: med.locationHint || ''
     });
     setNotificationType(med.notificationType || 'sms');
     setIsEditModalOpen(true);
@@ -115,7 +121,17 @@ export default function PatientDashboard() {
       });
       setMedicines([...medicines, response.data.medicine]);
       setIsModalOpen(false);
-      setFormData({ name: '', dosage: '', frequency: 'once', time: '08:00', mealTiming: 'any', tabletCount: '' });
+      setFormData({
+        name: '',
+        dosage: '',
+        frequency: 'once',
+        time: '08:00',
+        mealTiming: 'any',
+        tabletCount: '',
+        pillDescription: '',
+        pillboxSlot: '',
+        locationHint: ''
+      });
       setNotificationType('sms');
     } catch (error) {
       console.error('Failed to save medicine:', error);
@@ -291,6 +307,26 @@ const handleFileUpload = async (e) => {
                     <div className="text-xs text-textLight mt-0.5 capitalize">
                       {med.mealTiming} Food • Scheduled: {med.scheduledTimes?.join(', ')}
                     </div>
+                    {/* C10 Step-by-Step Guidance Badges */}
+                    {(med.pillDescription || med.locationHint || med.pillboxSlot) && (
+                      <div className="text-[11px] text-[#5c4535] mt-2 flex flex-wrap gap-1.5 items-center">
+                        {med.pillDescription && (
+                          <span className="bg-white/80 border border-sand px-2 py-0.5 rounded-md font-medium" title="Pill Appearance">
+                            💊 {med.pillDescription}
+                          </span>
+                        )}
+                        {med.pillboxSlot && (
+                          <span className="bg-white/80 border border-sand px-2 py-0.5 rounded-md font-medium" title="Pillbox Compartment">
+                            📦 {med.pillboxSlot}
+                          </span>
+                        )}
+                        {med.locationHint && (
+                          <span className="bg-white/80 border border-sand px-2 py-0.5 rounded-md font-medium" title="Storage Location">
+                            📍 {med.locationHint}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Dynamic Badges — escalation states take priority */}
@@ -456,6 +492,46 @@ const handleFileUpload = async (e) => {
                     <option value="call">Automated Voice Call</option>
                   </select>
                 </div>
+                {/* ── C10 Fields: Step-by-Step Guidance (Voice Agent) ── */}
+                <div className="col-span-2 pt-2 border-t border-sand">
+                  <h3 className="text-xs font-bold text-textDark uppercase tracking-wider mb-2">Step-by-Step Guidance (C10 Hints)</h3>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[13px] font-bold text-textLight mb-1">
+                    Pill Appearance / Description <span className="text-xs font-normal text-gray-400">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.pillDescription}
+                    onChange={(e) => setFormData({...formData, pillDescription: e.target.value})}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg text-sm"
+                    placeholder="e.g. Small round white tablet with a center score"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[13px] font-bold text-textLight mb-1">
+                    Pillbox Slot <span className="text-xs font-normal text-gray-400">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.pillboxSlot}
+                    onChange={(e) => setFormData({...formData, pillboxSlot: e.target.value})}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg text-sm"
+                    placeholder="e.g. Monday Morning / Slot 1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[13px] font-bold text-textLight mb-1">
+                    Storage Location Hint <span className="text-xs font-normal text-gray-400">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.locationHint}
+                    onChange={(e) => setFormData({...formData, locationHint: e.target.value})}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg text-sm"
+                    placeholder="e.g. Kitchen table beside water jug"
+                  />
+                </div>
               </div>
               <div className="flex gap-3 pt-4">
                 <button type="submit" className="flex-[2] bg-brown2 text-white py-3 rounded-lg font-bold hover:bg-[#4a3628]">Schedule & Save</button>
@@ -510,6 +586,46 @@ const handleFileUpload = async (e) => {
                     <option value="sms">SMS Text Message</option>
                     <option value="call">Automated Voice Call</option>
                   </select>
+                </div>
+                {/* ── C10 Fields: Step-by-Step Guidance (Voice Agent) ── */}
+                <div className="col-span-2 pt-2 border-t border-sand">
+                  <h3 className="text-xs font-bold text-textDark uppercase tracking-wider mb-2">Step-by-Step Guidance (C10 Hints)</h3>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[13px] font-bold text-textLight mb-1">
+                    Pill Appearance / Description <span className="text-xs font-normal text-gray-400">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.pillDescription}
+                    onChange={(e) => setFormData({...formData, pillDescription: e.target.value})}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg text-sm"
+                    placeholder="e.g. Small round white tablet with a center score"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[13px] font-bold text-textLight mb-1">
+                    Pillbox Slot <span className="text-xs font-normal text-gray-400">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.pillboxSlot}
+                    onChange={(e) => setFormData({...formData, pillboxSlot: e.target.value})}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg text-sm"
+                    placeholder="e.g. Monday Morning / Slot 1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[13px] font-bold text-textLight mb-1">
+                    Storage Location Hint <span className="text-xs font-normal text-gray-400">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.locationHint}
+                    onChange={(e) => setFormData({...formData, locationHint: e.target.value})}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg text-sm"
+                    placeholder="e.g. Kitchen table beside water jug"
+                  />
                 </div>
               </div>
               <div className="flex gap-3 pt-4">
