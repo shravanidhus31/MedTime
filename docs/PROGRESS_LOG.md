@@ -16,7 +16,7 @@ A running record of what's done, what's in progress and what's next. **It's upda
 | Design and research | ✅ Done. PRD, research notes and plan are final |
 | Task split | ✅ Done. Person A (calls, voice, live agent) and Person B (caregiver app, schedules, background agents, evaluation) |
 | Twilio | ✅ New trial account works end to end for keypad calls driven by our server |
-| Agent code | 🟡 A2.1–A2.5 done on `feat/a-agent-runtime` (LLM adapter, tool registry + loop, `AgentRun` + endpoints, orchestrator + `/agent/turn`, five core tools + dose service). Next: A2.6 cron handover |
+| Agent code | 🟡 A2.1–A2.5 done on `feat/a-agent-runtime` (LLM adapter, tool registry + loop, `AgentRun` + endpoints, orchestrator + `/agent/turn`, five core tools + dose service, cron handover). Next: A2.7 simulate endpoints |
 | Person B | 🟡 Working on a feature branch; Day-1 items (#2, #3, #1/#19 and soft delete, #5 top-up) |
 | Phase 0 security fixes | ⏳ Not started. Comes after Phase 1 (low priority) |
 | Person B onboarding | 🟡 Docs pushed; access and secrets still to be sent privately |
@@ -29,7 +29,7 @@ A running record of what's done, what's in progress and what's next. **It's upda
    - `.env` values, sent privately. Each person makes their own free Groq key
    - the research papers
    - their phone number added to Twilio
-3. **Person A, next task: A2.6 cron hands over to the agent**, then A2.7 simulate endpoints.
+3. **Person A, next task: A2.7 text simulate endpoints** (the last Phase 1 task).
 4. **Person A, after A2 and A1:** A3.5 Twilio phone adapter (turn by turn, trial-compatible) and the Core dose agent.
 
 ## Open questions
@@ -64,6 +64,12 @@ A running record of what's done, what's in progress and what's next. **It's upda
 ## Change log
 
 ### 22 Nov 2026
+- **A2.6 the scheduler hands dose calls to the agent** (branch `feat/a-agent-runtime`, not committed yet).
+  - `Patient.js`: `dementiaMode` (default false), `language` (`en|hi|mr`, default `en`), `familyClipsEnabled` (default false).
+  - `agent/doseDue.js` `handleDoseDue()`: starts an `AgentRun` (`trigger: 'dose_due'`), runs `check_double_dose` on the due Reminder; already taken → no call; otherwise places the call and logs it as a `place_call` step. If anything fails, it calls anyway.
+  - `jobs/missedDoseCron.js`: for dementiaMode patients the first call [C] and the re-call after a snooze [B] go through `handleDoseDue()`; everyone else is unchanged; escalation [A] is unchanged. The tick is now an exported `runTick(now)`, with the timer exported as `task`.
+  - The call is still today's keypad call. The phone adapter (A3.5) and dose flow (A4.1) replace it at this point. The decision is a rule in code, not an LLM call (it would add nothing yet and cost a request per dose).
+  - `npm run cron:check`: 9/9 (dev database, Twilio simulated, timer stopped, no Groq requests): due → check → call; regular patient untouched; already taken in the app → no call; no reminder record → calls anyway; re-call after snooze checks again; confirmed meanwhile → no re-call.
 - **A2.5 five core tools done** (branch `feat/a-agent-runtime`, not committed yet).
   - `agent/tools/core.js`: `get_patient_context` (no phone numbers given to the model), `get_dose_history` (IST times), `check_double_dose`, `mark_dose`, `notify_caregiver`. Every tool works only on the run's own patient; another patient's reminder id is refused.
   - `services/doseService.js` (contract C4): `markDose(reminderId, status, source)`. A dose already taken is never changed (checked inside the database write, so two confirmations at once record it once); confirming clears the escalation on `Medicine` (A1.3 moves it per dose); emits `dose.taken|skipped|missed` on `server/events.js`. `Reminder.confirmedBy` gains `speech` and `agent`.

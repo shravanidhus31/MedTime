@@ -9,7 +9,8 @@
     "llm:check": "node scripts/llm-check.js",
     "loop:check": "node scripts/loop-check.js",
     "runs:check": "node scripts/runs-check.js",
-    "tools:check": "node scripts/tools-check.js"
+    "tools:check": "node scripts/tools-check.js",
+    "cron:check": "node scripts/cron-check.js"
   },
   "keywords": [],
   "author": "",

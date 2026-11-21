@@ -24,6 +24,7 @@ const Medicine = require('../models/Medicine');
 const Patient  = require('../models/Patient');
 const Reminder = require('../models/Reminder');
 const { makePatientCall, sendCaregiverSMS } = require('../utils/twilioClient');
+const { handleDoseDue } = require('../agent/doseDue');
 
 // ── Helper: 10 minutes from now ───────────────────────────────────────────────
 const tenMinsFromNow = () => new Date(Date.now() + 10 * 60 * 1000);
@@ -36,11 +37,27 @@ const toHHMM = (date) => {
   return `${String(istDate.getUTCHours()).padStart(2, '0')}:${String(istDate.getUTCMinutes()).padStart(2, '0')}`;
 };
 
+// ── Helper: arm the 10-minute escalation clock, then call. Disarms if the call fails,
+//    so the caregiver isn't alerted for a call that never reached the patient.
+const armAndCall = async (medicine, patientPhone) => {
+  medicine.caregiverAlertTime = tenMinsFromNow();
+  await medicine.save();
+  try {
+    await makePatientCall(patientPhone, medicine.name, medicine._id.toString());
+    return true;
+  } catch (callError) {
+    medicine.caregiverAlertTime = null;
+    await medicine.save();
+    throw callError;
+  }
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Main cron — runs every minute
+// One tick of the cron. Exported so checks can run a tick directly.
+// Patients with dementiaMode: the first call [C] and re-call [B] are handed to the
+// agent (agent/doseDue.js), which checks the dose log first. Everyone else: unchanged.
 // ─────────────────────────────────────────────────────────────────────────────
-cron.schedule('* * * * *', async () => {
-  const now     = new Date();
+async function runTick(now = new Date()) {
   const nowHHMM = toHHMM(now);
 
   console.log(`\n⏱️  [Escalation Cron] Tick at ${now.toLocaleTimeString()} (${nowHHMM})`);
@@ -132,6 +149,15 @@ cron.schedule('* * * * *', async () => {
 
         console.log(`   ⏰ [B] SNOOZE EXPIRED: Re-calling ${patientName} for ${medName}.`);
 
+        // Dementia mode: the agent checks the dose log before re-calling (A2.6)
+        if (patient.dementiaMode) {
+          medicine.snoozeUntil = null;
+          await medicine.save();
+          const r = await handleDoseDue({ medicine, patient, attempt: 'retry', now, placeCall: () => armAndCall(medicine, patientPhone) });
+          console.log(`      🤖 Agent handover (re-call): ${r.called ? 'called' : 'no call'} — ${r.reason} (run ${r.runId}).`);
+          continue;
+        }
+
         // Clear snooze, arm a fresh 10-minute escalation window
         medicine.snoozeUntil        = null;
         medicine.caregiverAlertTime = tenMinsFromNow();
@@ -158,6 +184,13 @@ cron.schedule('* * * * *', async () => {
       ) {
         console.log(`   🔔 [C] INITIAL CALL: Calling ${patientName} for ${medName} at ${nowHHMM}.`);
 
+        // Dementia mode: the agent checks the dose log, then calls (A2.6)
+        if (patient.dementiaMode) {
+          const r = await handleDoseDue({ medicine, patient, attempt: 'initial', now, placeCall: () => armAndCall(medicine, patientPhone) });
+          console.log(`      🤖 Agent handover: ${r.called ? 'called' : 'no call'} — ${r.reason} (run ${r.runId}).`);
+          continue;
+        }
+
         // Arm the clock BEFORE the call. If the call fails, clear it immediately
         // so the caregiver isn't woken up for a call that never reached the patient.
         medicine.caregiverAlertTime = tenMinsFromNow();
@@ -176,4 +209,9 @@ cron.schedule('* * * * *', async () => {
   } catch (error) {
     console.error('❌ [Escalation Cron] Fatal error in tick:', error);
   }
-});
+}
+
+// Main cron — runs every minute
+const task = cron.schedule('* * * * *', () => runTick());
+
+module.exports = { runTick, task };
