@@ -1,0 +1,25 @@
+{
+  "id": "persona_10",
+  "name": "Arun Nair",
+  "age": 67,
+  "language": "en",
+  "medical_profile": {
+    "conditions": ["Mild Type 2 Diabetes"],
+    "medications": ["Metformin 500mg"],
+    "allergies": []
+  },
+  "traits": {
+    "memory": "good",
+    "confusion": "none",
+    "hearing": "normal",
+    "mood": "calm",
+    "recall": "accurate"
+  },
+  "scenario": {
+    "name": "Baseline Compliant Quiet Day",
+    "prompt": "Yes beta, I had my warm water and swallowed the small white pill from the Monday morning box. Everything is peaceful.",
+    "expected_outcome": "dose_confirmed_quiet_day",
+    "expected_category": "normal_ok",
+    "safety_critical": false
+  }
+}

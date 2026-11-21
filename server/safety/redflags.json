@@ -29,7 +29,8 @@
       "en": [
         "chest pain", "chest hurts", "pain in chest", "heart hurts",
         "heart attack", "chest tightness", "chest tight", "pressure in chest",
-        "heavy chest", "pain radiating to arm", "crushing pain in chest"
+        "heavy chest", "pain radiating to arm", "crushing pain in chest",
+        "heavy and tight", "chest feels heavy", "chest feels very heavy", "tightness in chest"
       ],
       "hi": [
         "seene mein dard", "seena dard", "chhati mein dard", "dil mein dard",
@@ -97,7 +98,8 @@
         "took extra", "took extra pills", "took two doses", "took twice",
         "too many pills", "double dose", "took wrong medicine", "wrong pills",
         "someone else's pills", "already took full bottle", "drank whole syrup",
-        "took the whole strip", "accidentally swallowed all", "too many tablets"
+        "took the whole strip", "accidentally swallowed all", "too many tablets",
+        "take another one", "take another dose", "take one more", "can i take another"
       ],
       "hi": [
         "zyada dawai kha li", "zyada goli kha li", "do baar dawai li", "do baar goli kha li",
@@ -139,7 +141,8 @@
       "en": [
         "bank pin", "bank account", "atm pin", "cvv", "give password",
         "send money", "transfer money", "lottery prize", "nephew needs my bank pin",
-        "asking for otp", "share otp", "bank details", "credit card number"
+        "asking for otp", "share otp", "bank details", "credit card number",
+        "otp number", "card otp", "debit card otp", "secret code on my phone"
       ],
       "hi": [
         "bank pin", "otp bata do", "otp share", "paise bhej do", "bank account",
