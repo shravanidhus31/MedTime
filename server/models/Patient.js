@@ -41,6 +41,20 @@ const patientSchema = new mongoose.Schema({
   elderlyMode: {
     type: Boolean,
     default: true
+  },
+  // ─── Agent Flags (Contract C2, C7, PRD) ──────────────────────────────────
+  dementiaMode: {
+    type: Boolean,
+    default: true
+  },
+  language: {
+    type: String,
+    enum: ['en', 'hi', 'mr'],
+    default: 'en'
+  },
+  familyClipsEnabled: {
+    type: Boolean,
+    default: true
   }
 }, { timestamps: true });
 
