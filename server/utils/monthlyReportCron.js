@@ -1,7 +1,9 @@
 const cron = require('node-cron');
 const PdfPrinter = require('pdfmake/js/Printer.js').default;
 const User = require('../models/User');
+const Patient = require('../models/Patient');   // #3: needed to look up Patient._id
 const Medicine = require('../models/Medicine');
+const Reminder = require('../models/Reminder'); // #9: count actual Reminder statuses
 const Vital = require('../models/Vital');
 const { sendDoctorReportEmail } = require('./emailClient');
 const { decrypt } = require('./encryptionUtil');
@@ -45,16 +47,22 @@ async function generateClinicalPDF(patient, medicines, vitals) {
       const dateRange = `${fmt(thirtyDaysAgo)} — ${fmt(now)}`;
 
       // ── Executive Summary computations ──────────────────────────────────────
-      // Adherence %: (taken doses / total scheduled doses) × 100
-      const totalScheduled = medicines.reduce((sum, m) => {
-        const freqMap = { once: 1, twice: 2, thrice: 3, custom: 1 };
-        return sum + (freqMap[m.frequency] || 1) * 30;
-      }, 0);
-
-      // We don't track per-dose history here, so use caregiverAlerted as a proxy
-      const missedMeds = medicines.filter(m => m.caregiverAlerted).length;
-      const overallAdherence = totalScheduled > 0
-        ? Math.max(0, Math.round(((totalScheduled - missedMeds * 30) / totalScheduled) * 100))
+      // #9: compute adherence from actual Reminder records (taken / (taken + missed + skipped))
+      const medicineIds = medicines.map(m => m._id);
+      const reminderCounts = await Reminder.aggregate([
+        { $match: {
+            medicine:      { $in: medicineIds },
+            scheduledTime: { $gte: thirtyDaysAgo, $lte: now }
+        }},
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]);
+      const counts = Object.fromEntries(reminderCounts.map(r => [r._id, r.count]));
+      const takenCount  = counts.taken  || 0;
+      const missedCount = counts.missed || 0;
+      const skippedCount = counts.skipped || 0;
+      const denominator = takenCount + missedCount + skippedCount;
+      const overallAdherence = denominator > 0
+        ? Math.round((takenCount / denominator) * 100)
         : 100;
 
       // Vitals summary
@@ -77,9 +85,28 @@ async function generateClinicalPDF(patient, medicines, vitals) {
       const statusColor   = overallStatus === 'Stable' ? '#27ae60' : '#e74c3c';
 
       // ── Adherence table rows ────────────────────────────────────────────────
+      // #9: use real Reminder data per medicine
+      const perMedCounts = await Reminder.aggregate([
+        { $match: {
+            medicine:      { $in: medicineIds },
+            scheduledTime: { $gte: thirtyDaysAgo, $lte: now }
+        }},
+        { $group: { _id: { medicine: '$medicine', status: '$status' }, count: { $sum: 1 } } },
+      ]);
+      // Build a map: medicineId -> { taken, missed, skipped }
+      const perMedMap = {};
+      for (const row of perMedCounts) {
+        const id = row._id.medicine.toString();
+        if (!perMedMap[id]) perMedMap[id] = { taken: 0, missed: 0, skipped: 0 };
+        if (['taken', 'missed', 'skipped'].includes(row._id.status)) {
+          perMedMap[id][row._id.status] = row.count;
+        }
+      }
       const adherenceRows = medicines.map(m => {
         const freqMap = { once: 'Once Daily', twice: 'Twice Daily', thrice: 'Three Times Daily', custom: 'Custom' };
-        const rate = m.caregiverAlerted ? '< 70%' : '≥ 90%'; // simplified bucketed estimate
+        const mc = perMedMap[m._id.toString()] || { taken: 0, missed: 0, skipped: 0 };
+        const denom = mc.taken + mc.missed + mc.skipped;
+        const rate = denom > 0 ? `${Math.round((mc.taken / denom) * 100)}%` : 'N/A';
         return [m.name, m.dosage, freqMap[m.frequency] || m.frequency, rate];
       });
 
@@ -206,7 +233,7 @@ async function generateClinicalPDF(patient, medicines, vitals) {
                     ...adherenceRows.map(row => row.map((cell, i) => ({
                       text: cell,
                       style: 'tableCell',
-                      color: i === 3 && cell === '< 70%' ? '#e74c3c' : undefined,
+                      color: i === 3 && cell !== 'N/A' && parseInt(cell) < 70 ? '#e74c3c' : undefined,
                       margin: [6, 5, 6, 5]
                     })))
                   ]
@@ -339,10 +366,17 @@ function startMonthlyReportCron() {
           continue;
         }
 
+        // ── #3 fix: look up the Patient profile; Medicine.patient stores Patient._id ──
+        const patientProfile = await Patient.findOne({ user: patient._id });
+        if (!patientProfile) {
+          console.warn(`⚠️ [monthlyReportCron] No Patient profile for user "${patient.name}". Skipping.`);
+          continue;
+        }
+
         // ── Fetch last 30 days of data ────────────────────────────────────
         const [medicines, vitals] = await Promise.all([
-          Medicine.find({ patient: patient._id, startDate: { $lte: now }, isActive: true }),
-          Vital.find({ patientId: patient._id, recordedAt: { $gte: thirtyDaysAgo, $lte: now } })
+          Medicine.find({ patient: patientProfile._id, startDate: { $lte: now }, isActive: true }),
+          Vital.find({ patientId: patientProfile._id, recordedAt: { $gte: thirtyDaysAgo, $lte: now } })
         ]);
 
         console.log(`   👤 ${patient.name}: ${medicines.length} meds, ${vitals.length} vitals readings.`);

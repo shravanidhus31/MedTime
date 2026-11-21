@@ -14,8 +14,9 @@ const app = express();
 const authRoutes = require('./routes/authRoutes');
 const medicineRoutes = require('./routes/medicineRoutes');
 const caregiverRoutes = require('./routes/caregiverRoutes');
-const { startReminderJob } = require('./jobs/reminderJob');
+const { startReminderJob }     = require('./jobs/reminderJob');
 const { startMonthlyReportCron } = require('./utils/monthlyReportCron');
+const { startReminderTopUpJob }  = require('./jobs/reminderTopUpJob');  // B1.4
 require('./jobs/missedDoseCron');
 // Middleware
 app.use(cors());
@@ -43,6 +44,7 @@ mongoose.connect(MONGO_URI)
     console.log('✅ Successfully connected to MongoDB Atlas');
     startReminderJob();
     startMonthlyReportCron();
+    startReminderTopUpJob();   // B1.4: nightly reminder top-up
     app.listen(PORT, () => {
       console.log(`🚀 Server is running on port ${PORT}`);
     });
