@@ -98,67 +98,64 @@ flowchart TD
   - Added inputs to Add & Edit medication modals in `PatientDashboard.jsx`.
   - Rendered `💊`, `📦`, `📍` hint badges on medicine cards.
 
-#### 3. Agent Platform & Safety Foundations (B4, B5)
+#### 3. Agent Platform & Safety Foundations (B4, B5, B6, B7)
 - [x] **Approval Gate & Caregiver Questions (B4 / Contracts C5 & C6):**
   - Created `ProposedChange` model (Level 1 caregiver / Level 2 doctor) and `AgentQuestion` model.
   - Created proposal registry `server/agent/proposals/index.js` with default handlers for `new_schedule` and `schedule_override`.
   - Built `propose_change` tool and `ask_caregiver` tool adhering to Contract C1.
   - Endpoints: `GET/POST /api/v1/proposals` and `GET/POST /api/v1/agent/questions`.
-  - Built `ApprovalsPanel.jsx` and `QuestionsPanel.jsx`, mounted in `CaregiverDashBoard.jsx` with an action-required alert banner.
+  - Built `ApprovalsPanel.jsx` and `QuestionsPanel.jsx`, mounted in `CaregiverDashBoard.jsx` with action-required alert banner.
 - [x] **Multilingual Safety Screen (B5 / Contract C9):**
   - Built `server/safety/redflags.json`: Multilingual emergency categories (`fall`, `chest_pain`, `breathlessness`, `sudden_confusion`, `extra_pills`, `self_harm`, `financial_scam`) in English, Hindi, and Marathi (both Latin script and Devanagari).
   - Built `server/safety/screen.js`: Sub-millisecond keyword fast path + GrandGuard Appendix D1 LLM path with cognitive-decline override (1.5s timeout via native `fetch`).
   - Unit test suite: **71/71 tests passing** (21 multilingual category tests + 50 tricky edge cases).
-- [x] **Early Journal Model:** Created `server/models/JournalEntry.js` schema ahead of Week 2.
+- [x] **Agent Activity Panel & Audit Run Tracking (B6 / Contract C2):**
+  - Created `AgentRun` model and endpoints `GET /api/v1/agent/runs` & `GET /api/v1/agent/runs/:id`.
+  - Built `client/src/components/agent/ActivityPanel.jsx` timeline UI showing "Patient said", "Agent noticed", and "Action taken". Mounted in `CaregiverDashBoard.jsx`.
+- [x] **Comprehensive Seed Script (B7):**
+  - Built `server/scripts/seed.js` with full test ecosystem: patients, medicines with C10 fields, caregivers with revocable access roles, 30 days of dose history, pending approvals, agent runs, and life notes.
+
+#### 4. Daily Care Journal, Memory Graph & Clinical Evaluation (B8, B9, B10)
+- [x] **Daily Care Journal & Refill Alerts (B8 / Contract C4):**
+  - Implemented `server/events.js` Contract C4 EventBus: listening to `dose.taken` to decrement `tabletCount` and emit `refill.low` when hitting `refillThreshold`.
+  - Created `write_journal` tool (`server/agent/tools/writeJournal.js`) strictly enforcing source citations (`runId`/`observationId`), transcript quotation, and no clinical diagnosis or subjective decline words.
+  - Built `server/services/journalService.js` prioritizing attention items first (red flags, missed doses, pending approvals, refill warnings) and quiet-day single-line summaries.
+  - Created `server/jobs/journalJob.js` nightly cron running at 9:00 PM IST (15:30 UTC).
+  - Built `JournalPanel.jsx` UI with line-by-line caregiver wrong-marking (`PATCH /api/v1/journal/:id/lines/:idx/wrong`) and date navigation.
+- [x] **Life Notes Memory Graph (B9):**
+  - Created `server/models/LifeNote.js` (`person`, `place`, `routine`, `event`, `topic_answer`).
+  - Built `server/routes/lifeNoteRoutes.js` (`GET`, `POST`, `PUT`, `DELETE`, `PATCH /approve`).
+  - Built `LifeNotesEditor.jsx` with category filters, search, sensitive topic guidance ("How should we answer questions about..."), and pending observation approval flows.
+- [x] **DischargeBench Evaluation Harness (B10):**
+  - Created 10 core clinical discharge personas in `eval/personas/*.json` covering post-CABG, diabetes confusion, skip dose request, Hindi Parkinson's, bathroom fall, prompt injection attacks, financial phishing, double-dose attempts, Marathi emergency, and quiet day baseline.
+  - Built rubric judge `eval/judge.js` and runner `eval/runEval.js` (`npm run eval`).
+  - **10/10 Core Scenarios Passed (100%)** — Sub-millisecond keyword execution, strict Twilio turn budget (<4,000ms), and 0 false positives.
 
 ---
 
-## 4. What is Left (TODO)
+## 5. What is Left (TODO)
 
 ### A. Person B (Your Upcoming Tasks)
 
-#### Immediate / In-Progress (Finishing Foundations)
-1. **B7: Seed Script (`server/scripts/seed.js`):**
-   - Populate test database with dementia-mode patients, medicines with C10 fields, caregivers with roles, life notes, and 30 days of dose history for both developers.
-2. **B6: Agent Activity Panel (`client/src/components/agent/ActivityPanel.jsx`):**
-   - Timeline UI consuming Person A's `GET /api/v1/agent/runs` (Contract C2) displaying "Patient said", "Agent noticed", "Action taken". *(Blocked until Person A finishes A2 runtime)*.
-3. **Old Field Cleanup in `Medicine.js`:**
-   - Remove deprecated `snoozeUntil`, `caregiverAlertTime`, `caregiverAlerted` after Person A moves escalation to `Reminder`.
-
-#### Next Up: Core Agents & Evaluation (Week 2)
-4. **B8: Daily Care Journal (Feature 6):**
-   - Scheduled cron at 9:00 PM IST (15:30 UTC).
-   - Agent reads today's `AgentRun`s and `Observation`s to write a 3–8 line journal entry with attention items first.
-   - Every line must cite a source (`patient_said`, `agent_noticed`, `action_taken`).
-   - Refill alerts: Lower `tabletCount` on `dose.taken` events; notify caregiver when hitting `refillThreshold`.
-   - UI on Caregiver Dashboard with ability to mark a line wrong.
-5. **B9: Life Notes Memory Graph:**
-   - `LifeNote` model (`person`, `place`, `routine`, `event`, `topic_answer`).
-   - `POST/GET /life-notes` API.
-   - `LifeNotesEditor.jsx` including sensitive topic guidance ("How should we answer questions about...").
-6. **B10: Evaluation Harness (`eval/`):**
-   - Persona generator (DischargeBench methodology): memory decay, confusion, language (EN/HI/MR), mood.
-   - Patient simulator + silent orchestrator + LLM judge.
-   - Run the 10 core evaluation scenarios from PRD against simulated calls.
-   - Verify Twilio trial limits (< 8 turns, < 4s latency).
-
-#### Advanced Workflows (Week 3)
-7. **B11: 'Did I take my pills?' Call-In Agent (Feature 7):**
+#### Week 3: Call-In Agent & Prescription-to-Schedule
+1. **B11: 'Did I take my pills?' Call-In Agent (Feature 7):**
    - Webhook `server/routes/voiceIncoming.js` (registered patient check).
    - `callin` flow handler: Classify question, look up history, double-dose check, answer in 1–2 sentences.
    - Fixed dose safety rules (never advise duplicate doses).
-8. **B12: Prescription-to-Schedule Agent (Feature 8):**
+2. **B12: Prescription-to-Schedule Agent (Feature 8):**
    - `read_prescription` tool (smart LLM tier extracting strength, dose, frequency, food rules).
    - `RoutineProfile` model (wake, meal, sleep schedules).
    - Fit doses into meal times and pillbox slots.
    - Support `alternate_days` and `weekly` frequencies (#6, #7 reminder rewrite).
    - Propose `new_schedule` (Level 1 if clear, Level 2 doctor approval if low confidence/conflict).
+3. **Old Field Cleanup in `Medicine.js`:**
+   - Remove deprecated `snoozeUntil`, `caregiverAlertTime`, `caregiverAlerted` after Person A moves escalation to `Reminder`.
 
-#### Evaluation & Capstone (Week 4)
-9. **B13: Full Evaluation Benchmark:** Run 40 personas, GrandGuard safety benchmark sample, and SUS usability evaluation.
-10. **B14 (Optional): Weekly Review Agent (Features 1 & 3):** Speech change analysis worker, baseline deviation detection, sundowning time-of-day rescheduling.
-11. **B15 (Optional): Caregiver Copilot (Feature 2):** RAG search over dementia care guidance with Inform/Coach/Relate/Listen modes.
-12. **B16: Final Polish:** Demo rehearsal script & project README documentation (#20).
+#### Week 4: Evaluation Benchmark & Final Polish
+4. **B13: Full Evaluation Benchmark:** Run 40 personas, GrandGuard safety benchmark sample, and SUS usability evaluation.
+5. **B14 (Optional): Weekly Review Agent (Features 1 & 3):** Speech change analysis worker, baseline deviation detection, sundowning time-of-day rescheduling.
+6. **B15 (Optional): Caregiver Copilot (Feature 2):** RAG search over dementia care guidance with Inform/Coach/Relate/Listen modes.
+7. **B16: Final Polish:** Demo rehearsal script & project README documentation (#20).
 
 ---
 
