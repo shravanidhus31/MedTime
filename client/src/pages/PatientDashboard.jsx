@@ -1,12 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import api from '../utils/api';
-import { useNavigate } from 'react-router-dom'; // Add this line
+import { useNavigate } from 'react-router-dom';
+import { logoutUser } from '../redux/authSlice';
 import DoctorSettings from '../components/DoctorSettings';
 
 
 export default function PatientDashboard() {
   const { user } = useSelector((state) => state.auth);
+  const dispatch = useDispatch();
   const navigate = useNavigate();
 
   
@@ -208,10 +210,27 @@ const handleFileUpload = async (e) => {
           >
             <span className="text-base">🩺</span> My Doctor
           </button>
+          <button
+            onClick={() => navigate('/caregiver/access')}
+            className="px-4 py-2 rounded-lg text-sm font-semibold text-textLight hover:bg-cream hover:text-textDark transition-colors flex items-center gap-1.5"
+          >
+            <span className="text-base">🤝</span> Caregivers
+          </button>
         </div>
-        <button className="flex items-center gap-2 bg-[#fff0ef] border-[1.5px] border-rose text-[#c0392b] rounded-lg px-4 py-2 font-bold transition-transform hover:scale-105">
-          <span className="w-2 h-2 rounded-full bg-rose animate-pulse"></span> SOS
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              dispatch(logoutUser());
+              navigate('/');
+            }}
+            className="text-xs font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-lg border border-red-200 transition-colors"
+          >
+            Sign Out
+          </button>
+          <button className="flex items-center gap-2 bg-[#fff0ef] border-[1.5px] border-rose text-[#c0392b] rounded-lg px-4 py-2 font-bold transition-transform hover:scale-105">
+            <span className="w-2 h-2 rounded-full bg-rose animate-pulse"></span> SOS
+          </button>
+        </div>
       </nav>
 
       {/* Hero Banner */}

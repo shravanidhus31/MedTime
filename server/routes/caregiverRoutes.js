@@ -13,13 +13,13 @@
  *         NOT 'due' which was never a valid Reminder status.
  */
 
-const express         = require('express');
+const express = require('express');
 const { verifyToken, requireRole } = require('../middleware/authMiddleware');
-const { canAccess }   = require('../middleware/access');
-const Patient         = require('../models/Patient');
-const User            = require('../models/User');
-const Medicine        = require('../models/Medicine');
-const Reminder        = require('../models/Reminder');
+const { canAccess } = require('../middleware/access');
+const Patient = require('../models/Patient');
+const User = require('../models/User');
+const Medicine = require('../models/Medicine');
+const Reminder = require('../models/Reminder');
 const CaregiverAccess = require('../models/CaregiverAccess');
 
 const router = express.Router();
@@ -51,7 +51,7 @@ router.post('/link', verifyToken, requireRole(['caregiver']), async (req, res) =
     // Check for an existing link (any status)
     const existing = await CaregiverAccess.findOne({
       patient: patientProfile._id,
-      user:    req.user.id,
+      user: req.user.id,
     });
 
     if (existing) {
@@ -67,11 +67,11 @@ router.post('/link', verifyToken, requireRole(['caregiver']), async (req, res) =
     }
 
     await CaregiverAccess.create({
-      patient:   patientProfile._id,
-      user:      req.user.id,
+      patient: patientProfile._id,
+      user: req.user.id,
       role,
       invitedBy: req.user.id,
-      status:    'pending',
+      status: 'pending',
     });
 
     res.status(201).json({
@@ -83,12 +83,37 @@ router.post('/link', verifyToken, requireRole(['caregiver']), async (req, res) =
   }
 });
 
+// ─── GET /api/v1/caregiver/my-requests ──────────────────────────────────────
+// Returns all access requests made by or linked to the logged-in caregiver.
+router.get('/my-requests', verifyToken, requireRole(['caregiver']), async (req, res) => {
+  try {
+    const requests = await CaregiverAccess.find({ user: req.user.id })
+      .populate({
+        path: 'patient',
+        populate: { path: 'user', select: 'name phone' }
+      })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.status(200).json(requests);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // ─── GET /api/v1/caregiver/access?patient=<patientId> ───────────────────────
 // List all access records for a patient (useful for the approval UI).
 // Requires: caller has at least 'view' access to that patient.
+// If patient query param is omitted and caller is a patient, uses their own patient profile.
 router.get('/access', verifyToken, async (req, res) => {
   try {
-    const { patient: patientId } = req.query;
+    let patientId = req.query.patient;
+    if (!patientId) {
+      const patientProfile = await Patient.findOne({ user: req.user.id });
+      if (patientProfile) {
+        patientId = patientProfile._id.toString();
+      }
+    }
     if (!patientId) return res.status(400).json({ message: 'patient query param required.' });
 
     const ok = await canAccess(req.user.id, patientId, 'view');
@@ -119,7 +144,7 @@ router.post('/access/:id/approve', verifyToken, async (req, res) => {
     const ok = await canAccess(req.user.id, link.patient.toString(), 'primary');
     if (!ok) return res.status(403).json({ message: 'Only the primary caregiver can approve.' });
 
-    link.status     = 'active';
+    link.status = 'active';
     link.approvedAt = new Date();
     await link.save();
 
@@ -142,7 +167,7 @@ router.post('/access/:id/revoke', verifyToken, async (req, res) => {
     const ok = await canAccess(req.user.id, link.patient.toString(), 'primary');
     if (!ok) return res.status(403).json({ message: 'Only the primary caregiver can revoke.' });
 
-    link.status    = 'revoked';
+    link.status = 'revoked';
     link.revokedAt = new Date();
     await link.save();
 
@@ -160,14 +185,14 @@ router.get('/dashboard', verifyToken, async (req, res) => {
   try {
     // Find all ACTIVE access records for this user
     const activeLinks = await CaregiverAccess.find({
-      user:   req.user.id,
+      user: req.user.id,
       status: 'active',
     }).lean();
 
     if (activeLinks.length === 0) return res.status(200).json([]);
 
     const patientIds = activeLinks.map(l => l.patient);
-    const patients   = await Patient.find({ _id: { $in: patientIds } })
+    const patients = await Patient.find({ _id: { $in: patientIds } })
       .populate('user', 'name phone')
       .lean();
 
@@ -177,12 +202,12 @@ router.get('/dashboard', verifyToken, async (req, res) => {
       const medicines = await Medicine.find({ patient: patient._id, isActive: true }).lean();
 
       let skippedCount = 0;
-      let missedCount  = 0;
+      let missedCount = 0;
       const actionRequired = [];
 
       for (const med of medicines) {
         const currentReminder = await Reminder.findOne({
-          medicine:      med._id,
+          medicine: med._id,
           scheduledTime: { $lte: now },
         }).sort({ scheduledTime: -1 });
 
@@ -204,8 +229,8 @@ router.get('/dashboard', verifyToken, async (req, res) => {
 
       return {
         patientId: patient._id,
-        name:      patient.user.name,
-        phone:     patient.user.phone,
+        name: patient.user.name,
+        phone: patient.user.phone,
         healthStatus,
         activePrescriptions: medicines.length,
         actionRequired,
@@ -234,7 +259,7 @@ router.get('/patients/:patientId/history', verifyToken, async (req, res) => {
     endOfToday.setHours(23, 59, 59, 999);
 
     const history = await Reminder.find({
-      patient:       req.params.patientId,
+      patient: req.params.patientId,
       scheduledTime: { $gte: startOfWeek, $lte: endOfToday },
     })
       .populate('medicine', 'name dosage mealTiming')

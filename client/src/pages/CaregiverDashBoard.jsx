@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
+import { Link, useNavigate } from 'react-router-dom';
+import { logoutUser } from '../redux/authSlice';
 import api from '../utils/api';
 
 export default function CaregiverDashboard() {
   const { user } = useSelector((state) => state.auth);
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
   
   // State
   const [patients, setPatients] = useState([]);
@@ -111,10 +115,31 @@ export default function CaregiverDashboard() {
             MedTime Care
           </span>
         </div>
-        <div className="flex gap-4">
-          <span className="text-[14px] font-bold text-[#8a7560] px-3 py-2">
-            Welcome, {user?.name || 'Caregiver'}
+        <div className="flex items-center gap-3">
+          <Link
+            to="/caregiver/link"
+            className="text-xs md:text-sm font-bold text-[#5c4535] bg-[#f5ede0] hover:bg-[#e8dcc8] px-3.5 py-2 rounded-xl transition-colors border border-[#e8dcc8]"
+          >
+            + Request Link
+          </Link>
+          <Link
+            to="/caregiver/access"
+            className="text-xs md:text-sm font-bold text-[#5c4535] bg-[#f5ede0] hover:bg-[#e8dcc8] px-3.5 py-2 rounded-xl transition-colors border border-[#e8dcc8]"
+          >
+            Manage Access
+          </Link>
+          <span className="hidden md:inline text-[14px] font-bold text-[#8a7560] px-2">
+            {user?.name || 'Caregiver'}
           </span>
+          <button
+            onClick={() => {
+              dispatch(logoutUser());
+              navigate('/');
+            }}
+            className="text-xs md:text-sm font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-xl border border-red-200 transition-colors"
+          >
+            Sign Out
+          </button>
         </div>
       </nav>
 
