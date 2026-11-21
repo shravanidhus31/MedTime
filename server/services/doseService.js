@@ -1,0 +1,71 @@
+// Dose service (contract C4). The one place a dose's status changes.
+//
+//   const { markDose } = require('./services/doseService');
+//   const r = await markDose(reminderId, 'taken', 'agent');
+//   // r = { ok: true, reminder, changed: true } | { ok: true, reminder, changed: false, alreadyRecorded: true }
+//   //   | { ok: false, error }
+//
+// status: 'taken' | 'skipped' | 'missed'
+// source: 'app' | 'sms' | 'ivr' | 'speech' | 'agent'
+//
+// Rules:
+// - A dose already recorded as taken is never changed: no double recording, no flip-flopping.
+//   The check is in the database write itself, so two calls at the same moment can't both win.
+// - Confirming (taken/skipped) clears the escalation, so no more calls or caregiver alerts fire
+//   for it. Basic version (A2.5): the escalation fields still live on Medicine, as the keypad
+//   webhook clears them today. A1.3 moves them onto each Reminder.
+// - Emits 'dose.taken' | 'dose.skipped' | 'dose.missed' on server/events.js.
+
+const mongoose = require('mongoose');
+const Reminder = require('../models/Reminder');
+const Medicine = require('../models/Medicine');
+const events = require('../events');
+
+const STATUSES = ['taken', 'skipped', 'missed'];
+const SOURCES = ['app', 'sms', 'ivr', 'speech', 'agent'];
+
+async function markDose(reminderId, status, source) {
+  if (!mongoose.isValidObjectId(reminderId)) return { ok: false, error: 'Not a valid reminder id' };
+  if (!STATUSES.includes(status)) return { ok: false, error: `status must be one of ${STATUSES.join(', ')}` };
+  if (!SOURCES.includes(source)) return { ok: false, error: `source must be one of ${SOURCES.join(', ')}` };
+
+  const now = new Date();
+  const set = { status };
+  if (status === 'taken' || status === 'skipped') {
+    set.confirmedAt = now;
+    set.confirmedBy = source;
+  }
+
+  // Only a dose that isn't already taken can change.
+  const updated = await Reminder.findOneAndUpdate(
+    { _id: reminderId, status: { $ne: 'taken' } },
+    { $set: set },
+    { returnDocument: 'after' },
+  );
+
+  if (!updated) {
+    const existing = await Reminder.findById(reminderId);
+    if (!existing) return { ok: false, error: 'Reminder not found' };
+    return { ok: true, reminder: existing, changed: false, alreadyRecorded: true };
+  }
+
+  if (status === 'taken' || status === 'skipped') {
+    await Medicine.updateOne(
+      { _id: updated.medicine },
+      { $set: { snoozeUntil: null, caregiverAlertTime: null, caregiverAlerted: false } },
+    );
+  }
+
+  events.emit(`dose.${status}`, {
+    reminderId: String(updated._id),
+    medicineId: String(updated.medicine),
+    patientId: String(updated.patient),
+    status,
+    source,
+    at: now,
+  });
+
+  return { ok: true, reminder: updated, changed: true };
+}
+
+module.exports = { markDose, STATUSES, SOURCES };

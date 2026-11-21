@@ -175,6 +175,41 @@ test('a failing onStep logger never breaks the run', async () => {
   assert.equal(result.outcome, 'done');
 });
 
+// ── claim check ─────────────────────────────────────────────────────────────
+
+test('a reply claiming "I\'ve logged it" with no mark_dose is sent back once, then the tool is called', async () => {
+  let marked = 0;
+  registerTool({ name: 'mark_dose', description: 'x', inputSchema: objectSchema, run: async () => { marked++; return { ok: true, data: { changed: true } }; } });
+  const chatFn = scripted(say('Got it. I’ve logged that you took your dose.'), callTool('mark_dose', { status: 'taken' }), say("I've recorded it."));
+  const result = await runLoop({ messages: [{ role: 'user', content: 'I took it' }], tools: ['mark_dose'], chatFn });
+  assert.equal(result.outcome, 'done');
+  assert.equal(marked, 1);
+  assert.equal(result.steps[0].tool, 'claim_check');
+  const note = result.messages.find((m) => m.role === 'user' && /MedTime system check/.test(m.content));
+  assert.match(note.content, /no mark_dose call succeeded/);
+});
+
+test('a reply that keeps claiming an action it never took ends in a fallback', async () => {
+  const result = await runLoop({
+    messages: [{ role: 'user', content: 'tell my daughter' }],
+    chatFn: scripted(say("I've called Priya."), say('I have informed your family.')),
+  });
+  assert.equal(result.outcome, 'fallback');
+  assert.equal(result.fallbackReason, 'unbacked_claim');
+});
+
+test('claims backed by a tool result pass: "already recorded" after check_double_dose, "I\'ve called" after notify', async () => {
+  const { unbackedClaims } = require('./guards');
+  const checkedTaken = [{ tool: 'check_double_dose', output: { ok: true, data: { alreadyTaken: true } } }];
+  assert.equal(unbackedClaims("Yes, I've noted it's already taken.", checkedTaken), null);
+  assert.equal(unbackedClaims('It has already been recorded as taken.', checkedTaken), null);
+  assert.match(unbackedClaims('Your evening dose is now logged.', []), /mark_dose/); // passive claims count too
+  assert.match(unbackedClaims('It has been recorded.', []), /mark_dose/);
+  assert.equal(unbackedClaims("I've called Priya.", [{ tool: 'notify_caregiver', output: { ok: true } }]), null);
+  assert.match(unbackedClaims("I've called Priya.", [{ tool: 'notify_caregiver', output: { ok: false } }]), /notify_caregiver/);
+  assert.equal(unbackedClaims('Please take your white tablet now.', []), null);
+});
+
 // ── prompts ─────────────────────────────────────────────────────────────────
 
 test('loadPrompt returns the text and its version', () => {

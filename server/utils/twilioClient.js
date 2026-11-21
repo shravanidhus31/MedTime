@@ -97,6 +97,31 @@ const makePatientCall = async (toPhone, medName, medicineId) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// makeAlertCall — phones a caregiver with a short spoken alert (A2.5).
+//   Twilio fetches the words from POST /api/v1/webhooks/voice/alert?alertId=...
+//   (a URL, because the trial rejects inline TwiML). Returns the call, or true in
+//   simulation mode.
+// ─────────────────────────────────────────────────────────────────────────────
+const makeAlertCall = async (toPhone, alertId) => {
+  const formattedTo = toPhone.startsWith('+') ? toPhone : `+91${toPhone}`;
+  const baseUrl = process.env.PUBLIC_BASE_URL || NGROK_URL;
+  const alertUrl = `${baseUrl}/api/v1/webhooks/voice/alert?alertId=${encodeURIComponent(alertId)}`;
+
+  if (!client) {
+    console.log(`[SIMULATION] Caregiver alert call → ${formattedTo} (alertId: ${alertId})`);
+    return true;
+  }
+
+  const call = await client.calls.create({
+    url: alertUrl,
+    to: formattedTo,
+    from: process.env.TWILIO_PHONE_NUMBER,
+  });
+  console.log(`📞 Caregiver alert call to ${formattedTo}. Call SID: ${call.sid}`);
+  return call;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // makeCall — LEGACY helper used by reminderJob.js (kept intact)
 // ─────────────────────────────────────────────────────────────────────────────
 const makeCall = async (to, medName, dosage, mealTiming) => {
@@ -133,4 +158,4 @@ const makeCall = async (to, medName, dosage, mealTiming) => {
   }
 };
 
-module.exports = { sendSMS, makeCall, sendCaregiverSMS, makePatientCall };
+module.exports = { sendSMS, makeCall, sendCaregiverSMS, makePatientCall, makeAlertCall };

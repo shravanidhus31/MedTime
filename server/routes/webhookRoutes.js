@@ -112,6 +112,31 @@ router.post('/voice/prompt', async (req, res) => {
   );
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/v1/webhooks/voice/alert?alertId=...
+// Twilio fetches this when a caregiver alert call connects (A2.5, notify_caregiver).
+// Says the alert twice, then hangs up.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/voice/alert', async (req, res) => {
+  const CaregiverAlert = require('../models/CaregiverAlert');
+  let message = 'This is Med Time. Please check on your family member as soon as you can.';
+  try {
+    const alert = req.query.alertId ? await CaregiverAlert.findById(req.query.alertId).lean() : null;
+    if (alert && alert.message) message = alert.message;
+  } catch (error) {
+    console.error('❌ [Voice Alert] Could not load alert:', error.message);
+  }
+  const said = escapeXml(message);
+  res.type('text/xml').send(
+    `<Response>` +
+      `<Say voice="alice">${said}</Say>` +
+      `<Pause length="1"/>` +
+      `<Say voice="alice">Again: ${said}</Say>` +
+      `<Hangup/>` +
+    `</Response>`
+  );
+});
+
 router.post('/voice', async (req, res) => {
   const digits     = req.body.Digits;           // '1' or '2'
   const medicineId = req.query.medicineId;      // Injected by makePatientCall()

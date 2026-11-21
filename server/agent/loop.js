@@ -18,6 +18,10 @@
 //   run's outcome becomes 'queued_for_approval'
 // - on overrun, LLM error or refusal the loop stops with outcome 'fallback' and a reason.
 //   The caller then uses the rule-based flow (the keypad menu during a call).
+// - claim check (A2.5): a final reply that says "I've recorded / called / queued ..." with no
+//   successful tool call behind it is sent back once with a note; if it still claims it, the
+//   run ends in a fallback ('unbacked_claim'). Pass `check: null` to turn it off, or your own
+//   check(text, steps) → note | null.
 //
 // Returns { outcome: 'done' | 'queued_for_approval' | 'fallback', text, fallbackReason?, error?,
 //           steps[], messages[], toolCalls, llmCalls, usage, promptVersion, model, ms }.
@@ -26,10 +30,12 @@
 const { chat } = require('./llm');
 const { listTools } = require('./tools');
 const { proposeChange } = require('./proposals');
+const { unbackedClaims } = require('./guards');
 
 const DEFAULT_MAX_TOOL_CALLS = 8;
 const DEFAULT_TIMEOUT_MS = 30000;
 const MIN_LLM_CALL_MS = 300;
+const MAX_CHECK_NUDGES = 1;
 
 async function runLoop({
   tier = 'fast',
@@ -41,6 +47,7 @@ async function runLoop({
   maxToolCalls = DEFAULT_MAX_TOOL_CALLS,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   onStep,
+  check = unbackedClaims,
   chatFn = chat, // swapped out in tests
 } = {}) {
   if (!Array.isArray(messages) || messages.length === 0) throw new Error('runLoop needs at least one message');
@@ -55,6 +62,7 @@ async function runLoop({
   let toolCalls = 0;
   let llmCalls = 0;
   let queued = false;
+  let nudges = 0;
   let model;
 
   const finish = (outcome, extra = {}) => ({
@@ -141,6 +149,15 @@ async function runLoop({
     if (reply.stopReason === 'refusal') return fallback('refusal');
     if (!reply.toolCalls || reply.toolCalls.length === 0) {
       if (reply.stopReason === 'max_tokens') return fallback('max_tokens');
+      const note = check ? check(reply.text || '', steps) : null;
+      if (note) {
+        await record({ tool: 'claim_check', input: { reply: reply.text || '' }, output: { ok: false, note }, ms: 0, at: new Date() });
+        if (nudges >= MAX_CHECK_NUDGES) return fallback('unbacked_claim');
+        nudges++;
+        convo.push({ role: 'assistant', content: reply.text || '' });
+        convo.push({ role: 'user', content: `[MedTime system check, not from the patient] ${note}` });
+        continue;
+      }
       return finish('done', { text: reply.text || '' });
     }
 

@@ -28,7 +28,7 @@ const reminderSchema = new mongoose.Schema({
   },
   confirmedBy: {
     type: String,
-    enum: ['app', 'sms', 'ivr'], // How did they confirm?
+    enum: ['app', 'sms', 'ivr', 'speech', 'agent'], // How did they confirm? (speech/agent: A2.5)
   },
   caregiverNotified: {
     type: Boolean,

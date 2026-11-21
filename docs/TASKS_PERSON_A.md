@@ -393,7 +393,7 @@ In order, top to bottom:
 - [x] A2.2 tool registry and loop
 - [x] A2.3 `AgentRun` model and endpoints
 - [x] A2.4 orchestrator and `/agent/turn`
-- [ ] A2.5 five core tools
+- [x] A2.5 five core tools
 - [ ] A2.6 cron hands over to the agent
 - [ ] A2.7 text simulate endpoints
 - [ ] A1.1 #4 webhook signatures
