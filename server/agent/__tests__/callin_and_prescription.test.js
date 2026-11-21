@@ -1,5 +1,7 @@
 const assert = require('assert');
-const { classifyQuestion } = require('../flows/callinFlow');
+const path = require('path');
+const fs = require('fs');
+const { classifyQuestion, checkThrottle, callThrottle } = require('../flows/callinFlow');
 const { getISTMidnightUTC } = require('../../jobs/reminderTopUpJob');
 
 /**
@@ -143,6 +145,50 @@ async function runTests() {
     assert.strictEqual(1 % interval === 0, false); // Day 1: skip
     assert.strictEqual(2 % interval === 0, true);  // Day 2: take
     assert.strictEqual(3 % interval === 0, false); // Day 3: skip
+  });
+
+  // ─── 6. B11 Repeat Call Throttling & Sundowning Detection ──────────────────
+  console.log('\n--- 6. B11 Repeat Call Throttling (>3 calls / hour) ---');
+  test('First 3 calls within 1 hour do not trigger throttling', () => {
+    callThrottle.clear();
+    const patientId = 'pt_test_123';
+    const reminderId = 'rem_test_456';
+
+    assert.strictEqual(checkThrottle(patientId, reminderId), false); // Call 1
+    assert.strictEqual(checkThrottle(patientId, reminderId), false); // Call 2
+    assert.strictEqual(checkThrottle(patientId, reminderId), false); // Call 3
+  });
+
+  test('4th call within 1 hour triggers repeat pattern throttling', () => {
+    const patientId = 'pt_test_123';
+    const reminderId = 'rem_test_456';
+    // 4th call
+    assert.strictEqual(checkThrottle(patientId, reminderId), true);
+  });
+
+  test('Different reminder or patient does not trigger throttle', () => {
+    const patientId = 'pt_test_123';
+    const differentReminderId = 'rem_test_789';
+    assert.strictEqual(checkThrottle(patientId, differentReminderId), false);
+  });
+
+  // ─── 7. B12 Synthetic Prescription Test Dataset Verification ───────────────
+  console.log('\n--- 7. B12 Synthetic Prescription Test Dataset ---');
+  test('Prescription benchmark dataset contains exactly 20 validated cases', () => {
+    const datasetPath = path.resolve(__dirname, '../../../eval/prescriptions/prescriptions.json');
+    assert.strictEqual(fs.existsSync(datasetPath), true, 'prescriptions.json exists');
+    const prescriptions = JSON.parse(fs.readFileSync(datasetPath, 'utf8'));
+    assert.strictEqual(prescriptions.length, 20, '20 prescriptions present');
+
+    const typedCount = prescriptions.filter(p => p.type === 'typed').length;
+    const ocrCount = prescriptions.filter(p => p.type === 'handwritten_ocr').length;
+    const conflictCount = prescriptions.filter(p => p.hasConflicts).length;
+    const lowConfCount = prescriptions.filter(p => p.hasLowConfidence).length;
+
+    assert.ok(typedCount >= 10, 'At least 10 clean typed prescriptions');
+    assert.ok(ocrCount >= 2, 'Handwritten OCR artifact prescriptions present');
+    assert.ok(conflictCount >= 2, 'Duplicate and strength change conflict cases present');
+    assert.ok(lowConfCount >= 2, 'Low confidence smudged/illegible cases present');
   });
 
   console.log('\n========================================');

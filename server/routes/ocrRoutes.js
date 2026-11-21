@@ -179,12 +179,31 @@ router.post('/parse', upload.single('prescription'), async (req, res) => {
   }
 });
 
+const { generateRemindersForMedicine } = require('../jobs/reminderTopUpJob');
+
 /**
- * POST /api/v1/ocr/proposals/:id/approve
- * Approve a prescription proposal → creates Medicine + Reminder records.
- * Respects existing proposal routes for Level 1 / Level 2 gating.
+ * GET /api/v1/ocr/proposals/:patientId
+ * Get pending prescription proposals for a patient.
  */
-router.post('/proposals/:id/approve', async (req, res) => {
+router.get('/proposals/:patientId', async (req, res) => {
+  try {
+    const proposals = await ProposedChange.find({
+      patient: req.params.patientId,
+      kind: 'new_schedule',
+      status: 'pending',
+    }).sort({ createdAt: -1 }).lean();
+
+    return res.status(200).json({ status: 'success', proposals });
+  } catch (err) {
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+/**
+ * Approve handler (shared by /proposals/:id/approve and /approve/:id)
+ * Creates Medicine + auto-generates 7-day Reminder records.
+ */
+async function handleApproveProposal(req, res) {
   try {
     const proposal = await ProposedChange.findById(req.params.id);
     if (!proposal) return res.status(404).json({ status: 'error', message: 'Proposal not found' });
@@ -192,7 +211,7 @@ router.post('/proposals/:id/approve', async (req, res) => {
       return res.status(400).json({ status: 'error', message: `Proposal is already ${proposal.status}` });
     }
 
-    const { medicines } = proposal.payload;
+    const medicines = proposal.payload?.medicines || [];
     const created = [];
 
     for (const med of medicines) {
@@ -201,11 +220,11 @@ router.post('/proposals/:id/approve', async (req, res) => {
       const medicine = await Medicine.create({
         patient: proposal.patient,
         name: med.name,
-        dosage: med.strength || 'As prescribed',
+        dosage: med.strength || med.dosage || 'As prescribed',
         type: 'tablet',
         frequency: med.frequency || 'once',
         scheduledTimes: med.scheduledTimes || ['08:00'],
-        mealTiming: med.foodRule || 'any',
+        mealTiming: med.foodRule || med.mealTiming || 'any',
         notificationType: 'sms',
         startDate: new Date(),
         tabletCount: 30,
@@ -216,12 +235,19 @@ router.post('/proposals/:id/approve', async (req, res) => {
         daysOfWeek: med.daysOfWeek || undefined,
       });
       created.push(medicine._id);
+
+      // Immediately generate 7-day reminders for the newly created medicine
+      try {
+        await generateRemindersForMedicine(medicine);
+      } catch (remErr) {
+        console.warn(`[OCR Approve] Warning: Failed to pre-seed reminders for ${medicine.name}:`, remErr.message);
+      }
     }
 
     proposal.status = 'approved';
     proposal.decidedBy = req.user.id;
     proposal.decidedAt = new Date();
-    proposal.reason = req.body.reason || 'Prescription approved by caregiver/doctor';
+    proposal.reason = req.body?.reason || 'Prescription approved by caregiver/doctor';
     await proposal.save();
 
     return res.status(200).json({
@@ -232,7 +258,37 @@ router.post('/proposals/:id/approve', async (req, res) => {
   } catch (err) {
     return res.status(500).json({ status: 'error', message: err.message });
   }
-});
+}
+
+router.post('/proposals/:id/approve', handleApproveProposal);
+router.post('/approve/:id', handleApproveProposal);
+
+/**
+ * Escalate handler (shared by /proposals/:id/escalate and /escalate/:id)
+ * Flags proposal for doctor review.
+ */
+async function handleEscalateProposal(req, res) {
+  try {
+    const proposal = await ProposedChange.findById(req.params.id);
+    if (!proposal) return res.status(404).json({ status: 'error', message: 'Proposal not found' });
+
+    proposal.status = 'escalated';
+    proposal.decidedBy = req.user.id;
+    proposal.decidedAt = new Date();
+    proposal.reason = req.body?.reason || 'Escalated to doctor for clinical confirmation';
+    await proposal.save();
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Prescription proposal escalated to doctor.',
+    });
+  } catch (err) {
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+}
+
+router.post('/proposals/:id/escalate', handleEscalateProposal);
+router.post('/escalate/:id', handleEscalateProposal);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

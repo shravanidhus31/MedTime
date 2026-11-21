@@ -175,13 +175,12 @@ async function handleCallinQuestion(ctx) {
     const isRepeating = checkThrottle(patientId.toString(), targetReminder._id.toString());
     if (isRepeating) {
       // Log pattern to journal (async, don't await in call path)
-      logRepeatPattern(patientId, targetReminder, runId).catch(() => {});
+      logRepeatPattern(patientId, targetReminder, runId).catch(() => { });
       return {
-        reply: `Yes, I already told you about this. ${
-          targetReminder.status === 'taken'
+        reply: `Yes, I already told you about this. ${targetReminder.status === 'taken'
             ? 'You\'ve taken this medicine.'
             : 'This dose hasn\'t been recorded yet.'
-        } If you\'re unsure, please ask your caregiver — I\'ve sent them a note.`,
+          } If you\'re unsure, please ask your caregiver — I\'ve sent them a note.`,
         done: true,
         action: 'notify_caregiver',
       };
@@ -315,4 +314,6 @@ module.exports = {
   handleCallinQuestion,
   classifyQuestion,
   getTodayReminders,
+  checkThrottle,
+  callThrottle,
 };
