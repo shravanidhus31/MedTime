@@ -1,209 +1,242 @@
 /**
- * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║        MedTime — Voice Call Reminder & Escalation Engine (Cron)             ║
- * ║                     Runs every minute: * * * * *                            ║
- * ╠══════════════════════════════════════════════════════════════════════════════╣
- * ║  Sole owner of ALL voice call reminders. reminderJob.js handles SMS only.  ║
- * ║                                                                             ║
- * ║  [C] INITIAL CALL   — scheduledTime matches HH:mm, clock not yet armed     ║
- * ║      → Call Patient. Arm caregiverAlertTime = now + 10 min.               ║
- * ║                                                                             ║
- * ║  Patient presses 1  → webhook marks Reminder 'taken', UI turns green.     ║
- * ║  Patient presses 2  → webhook sets snoozeUntil = now + 10 min.            ║
- * ║                                                                             ║
- * ║  [B] SNOOZE EXPIRED — snoozeUntil <= now                                   ║
- * ║      → Re-call patient. Re-arm caregiverAlertTime. Clear snoozeUntil.     ║
- * ║                                                                             ║
- * ║  [A] ESCALATION     — caregiverAlertTime <= now (no response after call)   ║
- * ║      → Mark Reminder 'missed'. Set caregiverAlerted=true. SMS caregivers.  ║
- * ╚══════════════════════════════════════════════════════════════════════════════╝
+ * MedTime — voice call reminders and escalation, per dose (cron, every minute).
+ *
+ * Sole owner of ALL voice call reminders; reminderJob.js handles SMS only.
+ * A1.3: every step works on one Reminder (one dose), not on the Medicine, so a
+ * medicine taken twice a day has two independent clocks.
+ *
+ *  [C] FIRST CALL     — dose due in the last 15 min, never called yet
+ *      → call the patient, arm caregiverAlertTime = now + 10 min.
+ *
+ *  Patient presses 1  → webhook → markDose(taken): the dose's clock is disarmed.
+ *  Patient presses 2  → webhook sets this dose's snoozeUntil = now + 10 min.
+ *
+ *  [B] SNOOZE OVER    — snoozeUntil <= now
+ *      → call again, re-arm caregiverAlertTime.
+ *
+ *  [A] ESCALATION     — caregiverAlertTime <= now and still not confirmed
+ *      → markDose(missed), then PHONE the caregivers (services/caregiverAlerts.js;
+ *        trial SMS can't carry custom text). If no call could be placed the dose
+ *        gets alertFailed and the next ticks retry, up to 3 tries in all.
+ *
+ * Patients with dementiaMode: [C] and [B] go through the agent (agent/doseDue.js),
+ * which checks the dose log before calling.
+ *
+ * Stand-in for Person B's nightly reminder top-up (ISSUES #5): if a call-type
+ * medicine is due this minute and has no Reminder for it, one is created first,
+ * so no dose goes uncalled because its record is missing.
  */
 
 const cron     = require('node-cron');
 const Medicine = require('../models/Medicine');
-const Patient  = require('../models/Patient');
 const Reminder = require('../models/Reminder');
-const { makePatientCall, sendCaregiverSMS } = require('../utils/twilioClient');
+const { makePatientCall } = require('../utils/twilioClient');
 const { handleDoseDue } = require('../agent/doseDue');
+const { markDose } = require('../services/doseService');
+const { notifyCaregivers } = require('../services/caregiverAlerts');
 
-// ── Helper: 10 minutes from now ───────────────────────────────────────────────
-const tenMinsFromNow = () => new Date(Date.now() + 10 * 60 * 1000);
+const MINUTE = 60 * 1000;
+const ESCALATE_AFTER_MS = 10 * MINUTE;  // unconfirmed this long after a call → caregiver
+const FIRST_CALL_WINDOW_MS = 15 * MINUTE; // a missed tick (restart) still calls within this
+const MAX_ALERT_ATTEMPTS = 3;
+const OPEN = ['pending', 'alerted'];      // not yet confirmed or missed
 
-// ── Helper: "HH:mm" string in IST (UTC+5:30) — Render servers run in UTC but
-//    medicine scheduledTimes are stored as IST strings (e.g. "15:55").
+// ── "HH:mm" in IST (UTC+5:30). Render runs in UTC; scheduledTimes are IST strings.
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 const toHHMM = (date) => {
-  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes
-  const istDate = new Date(date.getTime() + IST_OFFSET_MS);
-  return `${String(istDate.getUTCHours()).padStart(2, '0')}:${String(istDate.getUTCMinutes()).padStart(2, '0')}`;
+  const ist = new Date(date.getTime() + IST_OFFSET_MS);
+  return `${String(ist.getUTCHours()).padStart(2, '0')}:${String(ist.getUTCMinutes()).padStart(2, '0')}`;
 };
+// "8:05 PM", for the caregiver's spoken alert.
+const toSpokenTime = (date) => {
+  const ist = new Date(date.getTime() + IST_OFFSET_MS);
+  const h = ist.getUTCHours();
+  return `${h % 12 || 12}:${String(ist.getUTCMinutes()).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+};
+const startOfMinute = (date) => new Date(Math.floor(date.getTime() / MINUTE) * MINUTE);
 
-// ── Helper: arm the 10-minute escalation clock, then call. Disarms if the call fails,
-//    so the caregiver isn't alerted for a call that never reached the patient.
-const armAndCall = async (medicine, patientPhone) => {
-  medicine.caregiverAlertTime = tenMinsFromNow();
-  await medicine.save();
-  try {
-    await makePatientCall(patientPhone, medicine.name, medicine._id.toString());
-    return true;
-  } catch (callError) {
-    medicine.caregiverAlertTime = null;
-    await medicine.save();
-    throw callError;
+// ─────────────────────────────────────────────────────────────────────────────
+// Stand-in for the nightly top-up: make sure each call-type dose due this minute
+// has a Reminder. Upsert on (medicine, minute), so nothing is ever duplicated.
+// ─────────────────────────────────────────────────────────────────────────────
+async function ensureDueReminders(now) {
+  const slot = startOfMinute(now);
+  const due = await Medicine.find({ isActive: true, notificationType: 'call', scheduledTimes: toHHMM(now) })
+    .select('_id patient name').lean();
+  let created = 0;
+  for (const med of due) {
+    const r = await Reminder.updateOne(
+      { medicine: med._id, scheduledTime: { $gte: slot, $lt: new Date(slot.getTime() + MINUTE) } },
+      { $setOnInsert: { medicine: med._id, patient: med.patient, scheduledTime: slot, status: 'pending' } },
+      { upsert: true },
+    );
+    if (r.upsertedCount) {
+      created += 1;
+      console.log(`   🧾 No reminder record for ${med.name} at ${toHHMM(now)}; created one.`);
+    }
   }
-};
+  return created;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Call the patient about one dose: count the attempt, arm the 10-minute clock,
+// then call. If the call can't be placed the clock is disarmed again, so the
+// caregiver isn't alerted about a call that never reached the patient.
+// ─────────────────────────────────────────────────────────────────────────────
+async function callPatient(reminder, patientPhone, medName, now) {
+  await Reminder.updateOne(
+    { _id: reminder._id },
+    { $set: { caregiverAlertTime: new Date(now.getTime() + ESCALATE_AFTER_MS), lastCallAt: now, callError: null }, $inc: { attempts: 1 } },
+  );
+  try {
+    await makePatientCall(patientPhone, medName, String(reminder.medicine._id || reminder.medicine), String(reminder._id));
+  } catch (err) {
+    await Reminder.updateOne({ _id: reminder._id }, { $set: { caregiverAlertTime: null, callError: err.message } });
+    throw err;
+  }
+  await Reminder.updateOne({ _id: reminder._id, status: 'pending' }, { $set: { status: 'alerted', alertedAt: now } });
+  return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phone the caregivers about a missed dose. Success → caregiverAlerted (red badge).
+// No call placed → alertFailed; retried on the next ticks up to MAX_ALERT_ATTEMPTS.
+// ─────────────────────────────────────────────────────────────────────────────
+async function alertCaregivers(reminder, patient, medName, now) {
+  const patientName = patient.user?.name || 'the patient';
+  const result = await notifyCaregivers({
+    patientId: patient._id,
+    reason: 'missed_dose',
+    message: `${patientName} has not confirmed taking their ${medName}, due at ${toSpokenTime(reminder.scheduledTime)}. Ten minutes have passed since the reminder call.`,
+  }).catch((err) => ({ ok: false, error: err.message }));
+
+  const tries = (reminder.alertAttempts || 0) + 1;
+  if (result.ok) {
+    await Reminder.updateOne({ _id: reminder._id }, {
+      $set: { caregiverAlerted: true, caregiverNotified: true, caregiverNotifiedAt: now, alertFailed: false, alertError: null },
+      $inc: { alertAttempts: 1 },
+    });
+    console.log(`      📞 Caregiver alerted about ${medName} (${result.data.sent} call(s)).`);
+    return true;
+  }
+
+  await Reminder.updateOne({ _id: reminder._id }, {
+    $set: { alertFailed: true, alertError: result.error },
+    $inc: { alertAttempts: 1 },
+  });
+  if (tries >= MAX_ALERT_ATTEMPTS) {
+    console.error(`      ❌ Caregiver alert for ${medName} failed ${tries} times; giving up: ${result.error}`);
+  } else {
+    console.error(`      ❌ Caregiver alert for ${medName} failed (try ${tries} of ${MAX_ALERT_ATTEMPTS}); retrying next tick: ${result.error}`);
+  }
+  return false;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // One tick of the cron. Exported so checks can run a tick directly.
-// Patients with dementiaMode: the first call [C] and re-call [B] are handed to the
-// agent (agent/doseDue.js), which checks the dose log first. Everyone else: unchanged.
 // ─────────────────────────────────────────────────────────────────────────────
 async function runTick(now = new Date()) {
   const nowHHMM = toHHMM(now);
-
   console.log(`\n⏱️  [Escalation Cron] Tick at ${now.toLocaleTimeString()} (${nowHHMM})`);
 
   try {
-    // ── Only process call-type medicines — SMS is handled by reminderJob.js ──
-    const candidates = await Medicine.find({
-      isActive: true,
-      notificationType: 'call',  // ← KEY: this cron owns calls only
+    await ensureDueReminders(now);
+
+    const candidates = await Reminder.find({
       $or: [
-        // [A] Escalation clock expired → alert caregiver
-        { caregiverAlertTime: { $lte: now, $ne: null } },
-
-        // [B] Snooze expired → re-call patient
-        { snoozeUntil: { $lte: now, $ne: null } },
-
-        // [C] Initial reminder — scheduled HH:mm matches, clock not yet armed
-        { scheduledTimes: nowHHMM, caregiverAlertTime: null, snoozeUntil: null },
+        // [A] escalation clock expired → caregiver
+        { status: { $in: OPEN }, caregiverAlertTime: { $lte: now, $ne: null } },
+        // [A] retry a caregiver alert that couldn't be placed
+        { status: 'missed', alertFailed: true, alertAttempts: { $lt: MAX_ALERT_ATTEMPTS } },
+        // [B] snooze over → call again
+        { status: { $in: OPEN }, snoozeUntil: { $lte: now, $ne: null } },
+        // [C] due in the last 15 minutes and never called
+        {
+          status: 'pending',
+          scheduledTime: { $gt: new Date(now.getTime() - FIRST_CALL_WINDOW_MS), $lte: now },
+          attempts: { $not: { $gt: 0 } },
+          snoozeUntil: null,
+          caregiverAlertTime: null,
+        },
       ],
-    }).populate({
-      path: 'patient',
-      populate: { path: 'user caregivers.user', model: 'User' },
-    });
+    })
+      .sort({ scheduledTime: 1 })
+      .populate('medicine')
+      .populate({ path: 'patient', populate: { path: 'user caregivers.user', model: 'User' } });
 
-    if (candidates.length === 0) {
+    // Only call-type medicines: SMS reminders are reminderJob.js's.
+    const doses = candidates.filter((r) => r.medicine && r.medicine.isActive && r.medicine.notificationType === 'call');
+    if (doses.length === 0) {
       console.log('   → No call reminders need attention this tick.');
       return;
     }
+    console.log(`   → ${doses.length} dose(s) to process.`);
 
-    console.log(`   → ${candidates.length} medicine(s) to process.`);
-
-    for (const medicine of candidates) {
-      const patient = medicine.patient;
-
+    for (const reminder of doses) {
+      const patient = reminder.patient;
+      const medicine = reminder.medicine;
       if (!patient || !patient.user) {
-        console.warn(`   ⚠️  Medicine ${medicine._id} has no linked patient — skipping.`);
+        console.warn(`   ⚠️  Reminder ${reminder._id} has no linked patient — skipping.`);
         continue;
       }
-
       const patientPhone = patient.user.phone;
       const patientName  = patient.user.name;
       const medName      = medicine.name;
+      const doseLabel    = `${medName} (${toHHMM(reminder.scheduledTime)})`;
 
-      // ── [A] ESCALATION EXPIRED — highest priority ──────────────────────────
-      if (medicine.caregiverAlertTime && medicine.caregiverAlertTime <= now) {
-
-        console.log(`   🚨 [A] ESCALATION: ${patientName} did not respond to ${medName} in time.`);
-
-        // 1. Disarm clock + mark as alerted so UI card turns red
-        medicine.caregiverAlertTime = null;
-        medicine.caregiverAlerted   = true;
-        await medicine.save();
-
-        // 2. Mark the Reminder as 'missed' in the DB
-        const pendingReminder = await Reminder.findOne({
-          medicine: medicine._id,
-          status: { $in: ['pending', 'alerted'] },
-        }).sort({ scheduledTime: -1 });
-
-        if (pendingReminder) {
-          pendingReminder.status               = 'missed';
-          pendingReminder.caregiverNotified    = true;
-          pendingReminder.caregiverNotifiedAt  = new Date();
-          await pendingReminder.save();
-          console.log(`      📝 Reminder marked as MISSED in DB.`);
-        }
-
-        // 3. SMS every linked caregiver
-        const caregivers = patient.caregivers || [];
-        if (caregivers.length === 0) {
-          console.warn(`   ⚠️  No caregivers linked to ${patientName} — cannot escalate.`);
+      try {
+        // ── [A] ESCALATION ──────────────────────────────────────────────────
+        if (OPEN.includes(reminder.status) && reminder.caregiverAlertTime && reminder.caregiverAlertTime <= now) {
+          // Claim it first, so the alert goes out once even if ticks overlap.
+          const claimed = await Reminder.findOneAndUpdate(
+            { _id: reminder._id, status: { $in: OPEN }, caregiverAlertTime: { $lte: now } },
+            { $set: { caregiverAlertTime: null, snoozeUntil: null } },
+            { returnDocument: 'after' },
+          );
+          if (!claimed) continue;
+          console.log(`   🚨 [A] ESCALATION: ${patientName} did not confirm ${doseLabel} in time.`);
+          await markDose(reminder._id, 'missed', 'scheduler');
+          await alertCaregivers(claimed, patient, medName, now);
           continue;
         }
 
-        const alertMsg = `🚨 MedTime Alert: ${patientName} did NOT confirm taking their ${medName}. The 10-minute window has expired. Please check on them immediately.`;
+        if (reminder.status === 'missed' && reminder.alertFailed) {
+          console.log(`   🔁 [A] Retrying the caregiver alert for ${patientName}'s ${doseLabel}.`);
+          await alertCaregivers(reminder, patient, medName, now);
+          continue;
+        }
 
-        for (const cg of caregivers) {
-          if (cg.user?.phone) {
-            console.log(`      📱 Alerting caregiver: ${cg.user.name} (${cg.user.phone})`);
-            await sendCaregiverSMS(cg.user.phone, alertMsg);
+        // ── [B] SNOOZE OVER — call again ────────────────────────────────────
+        if (reminder.snoozeUntil && reminder.snoozeUntil <= now) {
+          const claimed = await Reminder.findOneAndUpdate(
+            { _id: reminder._id, status: { $in: OPEN }, snoozeUntil: { $lte: now } },
+            { $set: { snoozeUntil: null } },
+          );
+          if (!claimed) continue;
+          console.log(`   ⏰ [B] SNOOZE OVER: calling ${patientName} again for ${doseLabel}.`);
+          if (patient.dementiaMode) {
+            const r = await handleDoseDue({ medicine, patient, reminder, attempt: 'retry', now, placeCall: () => callPatient(reminder, patientPhone, medName, now) });
+            console.log(`      🤖 Agent handover (re-call): ${r.called ? 'called' : 'no call'} — ${r.reason} (run ${r.runId}).`);
+          } else {
+            await callPatient(reminder, patientPhone, medName, now);
+            console.log(`      📞 Re-call placed to ${patientName}.`);
           }
-        }
-
-        continue; // Done — move to next medicine
-      }
-
-      // ── [B] SNOOZE EXPIRED — re-call patient ──────────────────────────────
-      if (medicine.snoozeUntil && medicine.snoozeUntil <= now) {
-
-        console.log(`   ⏰ [B] SNOOZE EXPIRED: Re-calling ${patientName} for ${medName}.`);
-
-        // Dementia mode: the agent checks the dose log before re-calling (A2.6)
-        if (patient.dementiaMode) {
-          medicine.snoozeUntil = null;
-          await medicine.save();
-          const r = await handleDoseDue({ medicine, patient, attempt: 'retry', now, placeCall: () => armAndCall(medicine, patientPhone) });
-          console.log(`      🤖 Agent handover (re-call): ${r.called ? 'called' : 'no call'} — ${r.reason} (run ${r.runId}).`);
           continue;
         }
 
-        // Clear snooze, arm a fresh 10-minute escalation window
-        medicine.snoozeUntil        = null;
-        medicine.caregiverAlertTime = tenMinsFromNow();
-        await medicine.save();
-
-        try {
-          await makePatientCall(patientPhone, medName, medicine._id.toString());
-          console.log(`      📞 Re-call placed to ${patientName}.`);
-        } catch (callError) {
-          console.error(`      ❌ Re-call failed for ${patientName}:`, callError.message);
-          // Disarm clock — call never delivered, don't false-alarm caregiver
-          medicine.caregiverAlertTime = null;
-          await medicine.save();
-        }
-
-        continue;
-      }
-
-      // ── [C] INITIAL CALL — first contact for this scheduled dose ──────────
-      if (
-        medicine.scheduledTimes.includes(nowHHMM) &&
-        !medicine.snoozeUntil &&
-        !medicine.caregiverAlertTime
-      ) {
-        console.log(`   🔔 [C] INITIAL CALL: Calling ${patientName} for ${medName} at ${nowHHMM}.`);
-
-        // Dementia mode: the agent checks the dose log, then calls (A2.6)
+        // ── [C] FIRST CALL ──────────────────────────────────────────────────
+        console.log(`   🔔 [C] FIRST CALL: calling ${patientName} for ${doseLabel}.`);
         if (patient.dementiaMode) {
-          const r = await handleDoseDue({ medicine, patient, attempt: 'initial', now, placeCall: () => armAndCall(medicine, patientPhone) });
+          const r = await handleDoseDue({ medicine, patient, reminder, attempt: 'initial', now, placeCall: () => callPatient(reminder, patientPhone, medName, now) });
+          // "already taken" (confirmed in the app since this tick started) means no call;
+          // the dose is no longer 'pending', so it isn't picked up again.
           console.log(`      🤖 Agent handover: ${r.called ? 'called' : 'no call'} — ${r.reason} (run ${r.runId}).`);
-          continue;
+        } else {
+          await callPatient(reminder, patientPhone, medName, now);
+          console.log(`      📞 First call placed to ${patientName}.`);
         }
-
-        // Arm the clock BEFORE the call. If the call fails, clear it immediately
-        // so the caregiver isn't woken up for a call that never reached the patient.
-        medicine.caregiverAlertTime = tenMinsFromNow();
-        await medicine.save();
-
-        try {
-          await makePatientCall(patientPhone, medName, medicine._id.toString());
-          console.log(`      📞 Initial call placed to ${patientName}.`);
-        } catch (callError) {
-          console.error(`      ❌ Initial call failed for ${patientName}:`, callError.message);
-          medicine.caregiverAlertTime = null;
-          await medicine.save();
-        }
+      } catch (err) {
+        console.error(`   ❌ Could not process ${doseLabel} for ${patientName}:`, err.message);
       }
     }
   } catch (error) {
@@ -214,4 +247,4 @@ async function runTick(now = new Date()) {
 // Main cron — runs every minute
 const task = cron.schedule('* * * * *', () => runTick());
 
-module.exports = { runTick, task };
+module.exports = { runTick, task, ensureDueReminders, toHHMM, toSpokenTime, MAX_ALERT_ATTEMPTS };

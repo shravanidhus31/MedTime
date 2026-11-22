@@ -6,23 +6,23 @@
 //   //   | { ok: false, error }
 //
 // status: 'taken' | 'skipped' | 'missed'
-// source: 'app' | 'sms' | 'ivr' | 'speech' | 'agent'
+// source: 'app' | 'sms' | 'ivr' | 'speech' | 'agent' | 'scheduler'
+//         ('scheduler' = the escalation cron marking a dose missed, A1.3)
 //
 // Rules:
 // - A dose already recorded as taken is never changed: no double recording, no flip-flopping.
 //   The check is in the database write itself, so two calls at the same moment can't both win.
-// - Confirming (taken/skipped) clears the escalation, so no more calls or caregiver alerts fire
-//   for it. Basic version (A2.5): the escalation fields still live on Medicine, as the keypad
-//   webhook clears them today. A1.3 moves them onto each Reminder.
+// - Confirming (taken/skipped) clears that dose's escalation in the same write (A1.3: the
+//   fields live on each Reminder), so no more calls or caregiver alerts fire for it. Other
+//   doses of the same medicine are not touched.
 // - Emits 'dose.taken' | 'dose.skipped' | 'dose.missed' on server/events.js.
 
 const mongoose = require('mongoose');
 const Reminder = require('../models/Reminder');
-const Medicine = require('../models/Medicine');
 const events = require('../events');
 
 const STATUSES = ['taken', 'skipped', 'missed'];
-const SOURCES = ['app', 'sms', 'ivr', 'speech', 'agent'];
+const SOURCES = ['app', 'sms', 'ivr', 'speech', 'agent', 'scheduler'];
 
 async function markDose(reminderId, status, source) {
   if (!mongoose.isValidObjectId(reminderId)) return { ok: false, error: 'Not a valid reminder id' };
@@ -34,6 +34,10 @@ async function markDose(reminderId, status, source) {
   if (status === 'taken' || status === 'skipped') {
     set.confirmedAt = now;
     set.confirmedBy = source;
+    // Disarm this dose's escalation: no re-call, no caregiver alert, no red badge.
+    set.snoozeUntil = null;
+    set.caregiverAlertTime = null;
+    set.caregiverAlerted = false;
   }
 
   // Only a dose that isn't already taken can change.
@@ -47,13 +51,6 @@ async function markDose(reminderId, status, source) {
     const existing = await Reminder.findById(reminderId);
     if (!existing) return { ok: false, error: 'Reminder not found' };
     return { ok: true, reminder: existing, changed: false, alreadyRecorded: true };
-  }
-
-  if (status === 'taken' || status === 'skipped') {
-    await Medicine.updateOne(
-      { _id: updated.medicine },
-      { $set: { snoozeUntil: null, caregiverAlertTime: null, caregiverAlerted: false } },
-    );
   }
 
   events.emit(`dose.${status}`, {

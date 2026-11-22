@@ -80,7 +80,6 @@ const tool = (name) => getTool(name);
     const med = await Medicine.create({
       patient: patient._id, name: 'Amlodipine', dosage: '5mg', type: 'tablet', frequency: 'twice',
       scheduledTimes: ['08:00', '20:00'], notificationType: 'call', startDate: new Date(),
-      caregiverAlertTime: new Date(Date.now() + 10 * 60000), // an armed escalation clock
     });
     const otherMed = await Medicine.create({
       patient: otherPatient._id, name: 'Metformin', dosage: '500mg', type: 'tablet', frequency: 'once',
@@ -91,7 +90,9 @@ const tool = (name) => getTool(name);
     const today = istDayStart(new Date());
     const at = (day, h) => new Date(day.getTime() + h * 3600000);
     const yesterday = new Date(today.getTime() - 24 * 3600000);
-    const morning = await Reminder.create({ medicine: med._id, patient: patient._id, scheduledTime: at(today, 8), status: 'alerted' });
+    // The morning dose has an armed escalation clock (A1.3: it lives on the Reminder).
+    const morning = await Reminder.create({ medicine: med._id, patient: patient._id, scheduledTime: at(today, 8), status: 'alerted',
+      caregiverAlertTime: new Date(Date.now() + 10 * 60000), snoozeUntil: new Date(Date.now() + 5 * 60000) });
     const evening = await Reminder.create({ medicine: med._id, patient: patient._id, scheduledTime: at(today, 20), status: 'pending' });
     await Reminder.create({ medicine: med._id, patient: patient._id, scheduledTime: at(yesterday, 8), status: 'taken', confirmedBy: 'ivr', confirmedAt: at(yesterday, 8.1) });
     const othersDose = await Reminder.create({ medicine: otherMed._id, patient: otherPatient._id, scheduledTime: at(today, 9), status: 'pending' });
@@ -123,9 +124,10 @@ const tool = (name) => getTool(name);
     events.on('dose.taken', listener);
     const m1 = await tool('mark_dose').run({ reminderId: String(morning._id), status: 'taken' }, ctx);
     const afterMark = await Reminder.findById(morning._id).lean();
-    const medAfter = await Medicine.findById(med._id).lean();
+    const eveningAfter = await Reminder.findById(evening._id).lean();
     check('mark_dose: recorded as taken by the agent', m1.ok && m1.data.changed && afterMark.status === 'taken' && afterMark.confirmedBy === 'agent');
-    check('mark_dose: escalation cleared (no more calls for it)', medAfter.caregiverAlertTime === null && medAfter.caregiverAlerted === false);
+    check("mark_dose: this dose's escalation cleared (no more calls for it)", afterMark.caregiverAlertTime === null && afterMark.snoozeUntil === null && afterMark.caregiverAlerted === false);
+    check('mark_dose: the other dose of the same medicine is untouched', eveningAfter.status === 'pending' && eveningAfter.confirmedAt === undefined);
     check('mark_dose: dose.taken event emitted', seen.length === 1 && seen[0].source === 'agent' && seen[0].reminderId === String(morning._id));
     const m2 = await tool('mark_dose').run({ reminderId: String(morning._id), status: 'taken' }, ctx);
     check('mark_dose: second time changes nothing', m2.ok && m2.data.alreadyRecorded && !m2.data.changed && seen.length === 1);

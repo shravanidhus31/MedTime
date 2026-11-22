@@ -11,7 +11,7 @@
 const mongoose = require('mongoose');
 const Patient = require('../models/Patient');
 const CaregiverAlert = require('../models/CaregiverAlert');
-const { makeAlertCall } = require('../utils/twilioClient');
+const twilio = require('../utils/twilioClient'); // module object, so checks can stub makeAlertCall
 
 const REASONS = ['red_flag', 'missed_dose', 'unsure_dose', 'handover', 'other'];
 const MAX_MESSAGE_CHARS = 300;
@@ -58,7 +58,7 @@ async function notifyCaregivers({ patientId, reason, message, runId }) {
       run: mongoose.isValidObjectId(runId) ? runId : undefined,
     });
     try {
-      const call = await makeAlertCall(r.phone, String(alert._id));
+      const call = await twilio.makeAlertCall(r.phone, String(alert._id));
       if (call === true) alert.status = 'simulated';
       else {
         alert.status = 'calling';

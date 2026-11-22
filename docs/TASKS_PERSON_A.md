@@ -65,7 +65,7 @@ Phase 0 is lower priority than the agent, so **A does it after the runtime (A2)*
 | C1 | **Tool interface:** `{ name, description, inputSchema, approvalLevel, run(input, ctx) → { ok, data } \| { ok:false, error } }`. `ctx` = `{ patientId, runId, flow, now }`. Tools register through `registerTool(tool)` in `server/agent/tools/index.js`. Each owner writes their tools in their own file | A | Both |
 | C2 | **`AgentRun` schema** (`trigger, patient, reminder, flow, steps[{tool, input, output, ms, at}], outcome, status, promptVersion, model, approver`) and `GET /api/v1/agent/runs?patient=&from=&to=`, `GET /api/v1/agent/runs/:id` | A | B (Activity panel, journal, evaluation) |
 | C3 | **Access helper:** `requirePatientAccess(minRole)` middleware plus `canAccess(userId, patientId, minRole)` function. Roles: `view < approve < primary`; `doctor` is separate | B | A (dose, recordings and agent routes) |
-| C4 | **Dose service:** `markDose(reminderId, status, source)`. `source` is one of `app \| sms \| ivr \| speech \| agent`. It clears escalation, and emits `dose.taken`, `dose.skipped` or `dose.missed` on `server/events.js` (a Node EventEmitter) | A | B (refill alerts, journal), A (`mark_dose`) |
+| C4 | **Dose service:** `markDose(reminderId, status, source)`. `source` is one of `app \| sms \| ivr \| speech \| agent \| scheduler` (`scheduler` = the escalation cron marking a dose missed; added in A1.3). It clears escalation, and emits `dose.taken`, `dose.skipped` or `dose.missed` on `server/events.js` (a Node EventEmitter) | A | B (refill alerts, journal), A (`mark_dose`) |
 | C5 | **Proposals:** `ProposedChange` schema, `propose_change` tool, and `registerProposalKind(kind, { level, apply(payload) })`, so each owner applies their own approved changes | B | A (Planner) |
 | C6 | **Caregiver questions:** `ask_caregiver` tool and the `AgentQuestion` model; the answer resumes the run | B | A (rarely), B |
 | C7 | **Phrase bank:** `voice/phrasebank/catalogue.json` (line IDs, text, slots, tone, language), plus `resolveLine(lineId, slots, patientId) → { audioUrl } \| { neutralText }` | A | B (call-in lines, journal wording check) |
@@ -399,7 +399,7 @@ In order, top to bottom:
 - [x] A2.7 text simulate endpoints (with a basic dose flow; A4.1 replaces it)
 - [x] A1.1 #4 webhook signatures
 - [x] A1.2 #10 `PUBLIC_BASE_URL` and `TWILIO_ENABLED`
-- [ ] A1.3 #13 per-dose escalation and `doseService`
+- [x] A1.3 #13 per-dose escalation and `doseService`
 - [ ] A1.4 #14 dose endpoint and dashboard update
 - [ ] A3.1–A3.4 voice pipeline, browser call screen, emergency reflex (Media Streams only after an upgrade)
 - [ ] A3.5 Twilio phone adapter (turn by turn, trial-compatible)

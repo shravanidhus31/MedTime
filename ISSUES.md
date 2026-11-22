@@ -35,6 +35,7 @@ Priority: **High** = security or data-correctness problem, **Medium** = function
 - **Where:** [server/routes/medicineRoutes.js](server/routes/medicineRoutes.js)
 - Reminders are created once when a medicine is added and nothing regenerates them. SMS reminders stop after a week. Voice calls match on `scheduledTimes`, so they are unaffected.
 - **Fix:** add a daily job that tops up reminders for active medicines.
+- **Note (A1.3):** voice calls now work per `Reminder`. Until the top-up exists, the escalation cron creates the Reminder for a call-type dose that is due this minute and has none (upsert on medicine + minute, so it never duplicates). The top-up should also upsert, not insert blindly, so the two never create two records for one dose.
 
 ### 6. Editing a medicine doesn't regenerate reminders
 - **Where:** [server/routes/medicineRoutes.js](server/routes/medicineRoutes.js) (`PUT /:id`)
@@ -74,6 +75,7 @@ Priority: **High** = security or data-correctness problem, **Medium** = function
 - Escalation state lives on `Medicine`, not per `Reminder`. Medicines with more than one scheduled time share one `caregiverAlertTime`, so a second dose can be skipped while the first is still armed.
 - `caregiverAlerted` is only reset when the patient presses 1. It is not reset at the next scheduled dose, so the card can stay red.
 - A caregiver SMS failure inside the loop is swallowed, so the `missed` state is recorded even if no one was notified.
+- **Status:** ✅ fixed in A1.3 (branch `feat/a-phase0-fixes`): escalation fields live on each `Reminder`; confirming clears only that dose; the missed-dose alert is a phone call, and a failed one is marked `alertFailed` and retried up to 3 times. The dashboard badges switch to the per-dose fields in A1.4 (#14).
 
 ### 14. Take/Skip from the web app does not clear escalation state
 - **Where:** [server/routes/medicineRoutes.js](server/routes/medicineRoutes.js) (`POST /:id/status`)

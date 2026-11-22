@@ -18,7 +18,7 @@ A running record of what's done, what's in progress and what's next. **It's upda
 | Twilio | ✅ New trial account works end to end for keypad calls driven by our server |
 | Agent code | ✅ Phase 1 agent platform done on `feat/a-agent-runtime` (A2.1–A2.7). Phase 1 gate met on Person A's side: a simulated dose call runs end to end in text and every step shows through `GET /agent/runs/:id`; the Activity panel itself is Person B's. Next: A1 Phase 0 fixes |
 | Person B | 🟡 Working on a feature branch; Day-1 items (#2, #3, #1/#19 and soft delete, #5 top-up) |
-| Phase 0 security fixes | 🟡 In progress on `feat/a-phase0-fixes`. A1.1 webhook signatures and A1.2 `PUBLIC_BASE_URL` / `TWILIO_ENABLED` done; A1.3–A1.4 next |
+| Phase 0 security fixes | 🟡 In progress on `feat/a-phase0-fixes`. A1.1 webhook signatures, A1.2 `PUBLIC_BASE_URL` / `TWILIO_ENABLED` and A1.3 per-dose escalation done (PRD gate passes in `cron:check`); A1.4 next |
 | Person B onboarding | 🟡 Docs pushed; access and secrets still to be sent privately |
 
 ## In progress / next up
@@ -29,11 +29,13 @@ A running record of what's done, what's in progress and what's next. **It's upda
    - `.env` values, sent privately. Each person makes their own free Groq key
    - the research papers
    - their phone number added to Twilio
-3. **Person A, now: A1 Phase 0 fixes.** A1.1 webhook signatures ✅, A1.2 `PUBLIC_BASE_URL` and `TWILIO_ENABLED` ✅. Next: A1.3 per-dose escalation (missed-dose alerts as phone calls), then A1.4 dose endpoint. Then Phase 2 (A3 voice pipeline, A4 dose agent).
+3. **Person A, now: A1 Phase 0 fixes.** A1.1 ✅, A1.2 ✅, A1.3 per-dose escalation ✅. Next: A1.4 dose endpoint and dashboard (its own small PR; it edits Person B's `medicineRoutes.js` and `PatientDashboard.jsx`, rule 0.2). Then Phase 2 (A3 voice pipeline, A4 dose agent).
+   - **Merge A1.3 and A1.4 to `main` together.** After A1.3 the escalation state is on each Reminder, but the dashboard badges still read the old Medicine fields until A1.4, so on their own the red "missed" and amber "snoozed" badges would stop showing.
    - **Before merging to `main`, check Render → Environment:** `PUBLIC_BASE_URL` must be set to exactly the Render service URL (no trailing slash), and `TWILIO_AUTH_TOKEN` must be the trial account's token. Without `PUBLIC_BASE_URL` the server now **refuses to start**; with a wrong value Twilio's webhooks get 403 and real calls fail. `NGROK_URL` is no longer read, so if Render only has `NGROK_URL`, copy its value into `PUBLIC_BASE_URL`.
 4. **Person A, after A2 and A1:** A3.5 Twilio phone adapter (turn by turn, trial-compatible) and the Core dose agent.
 
 ## Open questions
+- **Tell Person B (A1.3):** (1) contract C4 gained a `source` value, `scheduler` (the cron marking a dose missed); `dose.missed` events now really fire. (2) `reportRoutes.js` and `monthlyReportCron.js` still read `Medicine.caregiverAlerted`, which is no longer updated; they should read the per-dose `Reminder` fields (`status`, `caregiverAlerted`). (3) The nightly reminder top-up (#5) should upsert on medicine + time, because the cron now creates a missing call-type Reminder itself.
 - **Submission deadline?** It decides whether Phases 7 and 8 (weekly review, copilot) are in.
 - **Upgrade Twilio near the end?** That would add live streaming, caregiver SMS, call-in on our own number, and timing measures from phone calls.
 - **Does the trial route incoming calls to our server?** Test it via Try out Voice → Receive a call. This matters for Feature 7 on the phone.
@@ -67,7 +69,16 @@ A running record of what's done, what's in progress and what's next. **It's upda
 ## Change log
 
 ### 22 Nov 2026
-- **A1.2 `PUBLIC_BASE_URL` only, `TWILIO_ENABLED`, quieter SMS job (PRD #10, #19 twilioClient part)** (branch `feat/a-phase0-fixes`, not committed yet).
+- **A1.3 per-dose escalation (PRD #13)** (branch `feat/a-phase0-fixes`, not committed yet).
+  - `Reminder` now holds the escalation for its own dose: `snoozeUntil`, `caregiverAlertTime`, `caregiverAlerted`, plus `attempts`, `lastCallAt`, `callError`, and for the caregiver alert `alertAttempts`, `alertFailed`, `alertError`. The old `Medicine` fields stay in the schema, unused.
+  - `jobs/missedDoseCron.js` rewritten to loop over **due Reminders**: [C] first call for a dose due in the last 15 minutes and never called (a dose from longer ago isn't called late, so a deploy can't set off a burst of old calls); [B] call again when the snooze is over; [A] after 10 unconfirmed minutes, `markDose(missed, 'scheduler')`, then **phone the caregivers** through `services/caregiverAlerts.js` (decision of 22 Nov). An alert that couldn't be placed sets `alertFailed` and is retried on the next ticks, 3 tries in all; `caregiverNotified`/`caregiverAlerted` are set only when a call was placed. Each step "claims" the dose in the database first, so an overlapping tick can't double-call.
+  - **Stand-in for Person B's top-up (#5):** if a call-type medicine is due this minute and has no Reminder, the cron creates one (upsert on medicine + minute). Without it, calls would have stopped 7 days after a medicine was added.
+  - `services/doseService.js` (C4, now full): confirming clears that one dose's fields in the same database write; other doses of the medicine aren't touched. New source `scheduler`.
+  - Keypad calls carry `reminderId` (`makePatientCall(..., reminderId)`), so 1/2 change exactly that dose. Calls placed before the deploy (medicineId only) fall back to the medicine's latest open dose. Keypad 1 now goes through `markDose(..., 'ivr')`; keypad 2 on an already-taken dose says so and doesn't snooze. The SMS reply webhook also goes through `markDose(..., 'sms')`.
+  - Agent hand-off (`agent/doseDue.js`): the cron passes the due Reminder itself.
+  - Docs: C4 in both task files, ISSUES #5 note and #13 marked fixed.
+  - **Checks:** `npm run cron:check` rewritten, **20/20** on the dev database. It includes the **PRD gate** (a twice-a-day medicine: the 1st dose escalates and the caregiver is phoned, while the 2nd stays untouched and later gets its own call), snooze through the real keypad webhook, an old-style call, a failed caregiver call retried 3 times, and "a confirmed dose stops all calls" (app and keypad). `tools:check` 23/23 (new: confirming one dose leaves the other dose alone). `simulate:check` 11/11 (agent calls unchanged). 58/58 offline tests.
+- **A1.2 `PUBLIC_BASE_URL` only, `TWILIO_ENABLED`, quieter SMS job (PRD #10, #19 twilioClient part)** (branch `feat/a-phase0-fixes`, committed in `0070f8b`).
   - `PUBLIC_BASE_URL` is the only callback setting. The hard-coded ngrok tunnel and `NGROK_URL` are gone. Twilio on with no URL → the call fails with a clear error instead of pointing at a dead tunnel.
   - **Startup check** (`utils/publicUrl.js` `checkPublicBaseUrl()`, first thing in `server/index.js`): in production the server exits with a clear message if `PUBLIC_BASE_URL` is missing or isn't an http(s) URL. On Render the message names the right value (from Render's `RENDER_EXTERNAL_URL`), and it says when an old `NGROK_URL` is set. Locally it's only a warning, and only if Twilio is on.
   - "Production" (`utils/runtime.js`) = `NODE_ENV=production` or `RENDER=true`. Checked against Render's docs: Render sets `NODE_ENV=production` for Node services at runtime, and `RENDER=true` on every service.
@@ -77,7 +88,7 @@ A running record of what's done, what's in progress and what's next. **It's upda
   - Docs: `.env.example` (`TWILIO_ENABLED`, `PUBLIC_BASE_URL` required on Render, `NGROK_URL` removed), START_HERE_PERSON_B step 4, ISSUES.md #4, #10, #19 and #20 marked fixed.
   - Tests: 14 new offline tests (`utils/publicUrl.test.js`, `jobs/reminderJob.test.js`, one more in `twilioSignature.test.js`), including starting the real `index.js` with `NODE_ENV=production` and no URL → exits with code 1 before connecting to MongoDB. `npm test` now also runs `utils/` and `jobs/`: **58/58 pass**. `cron:check` 9/9 and `tools:check` 22/22 still pass.
 - **Two decisions:** Phase 0 work moves to a new branch `feat/a-phase0-fixes` (from `feat/a-agent-runtime`), and missed-dose alerts become phone calls instead of SMS. A1.3 in TASKS_PERSON_A.md updated to match. Found while re-reading the plan: on the trial the old escalation SMS always failed silently.
-- **A1.1 Twilio webhook signatures checked (PRD #4)** (branch `feat/a-phase0-fixes`).
+- **A1.1 Twilio webhook signatures checked (PRD #4)** (branch `feat/a-phase0-fixes`, committed in `1b288ad`).
   - New `middleware/twilioSignature.js`, mounted on the whole webhooks router, so `/sms`, `/voice`, `/voice/prompt` and `/voice/alert` all need a valid `X-Twilio-Signature`; otherwise 403. The URL checked is `PUBLIC_BASE_URL` + `req.originalUrl` (not `req.protocol`/host, which Render's proxy changes).
   - No `TWILIO_AUTH_TOKEN` (local simulation mode): the check is skipped. In production (`NODE_ENV=production`) a missing token or a missing `PUBLIC_BASE_URL` rejects every webhook instead of leaving them open.
   - New `utils/publicUrl.js`: one base URL for the callback URLs we give Twilio and the URL we verify, so they can't drift apart. It still falls back to `NGROK_URL` until A1.2.
@@ -207,5 +218,5 @@ A running record of what's done, what's in progress and what's next. **It's upda
 ---
 
 ## Not yet committed (local only)
-- A1.2: `server/utils/runtime.js`, `server/utils/publicUrl.js`, `server/utils/twilioClient.js`, `server/index.js`, `server/models/Reminder.js`, `server/jobs/reminderJob.js`, `server/middleware/twilioSignature.js`, the new tests, `server/package.json`, `server/.env.example`, `ISSUES.md`, `docs/START_HERE_PERSON_B.md`, `docs/TASKS_PERSON_A.md` and this log.
-- Neither branch is pushed yet: `feat/a-agent-runtime` (A2.1–A2.7) and `feat/a-phase0-fixes` (A1.1 committed in `1b288ad`, on top of it).
+- A1.3: `server/models/Reminder.js`, `server/jobs/missedDoseCron.js`, `server/services/doseService.js`, `server/services/caregiverAlerts.js`, `server/agent/doseDue.js`, `server/routes/webhookRoutes.js`, `server/utils/twilioClient.js`, `server/scripts/cron-check.js`, `server/scripts/tools-check.js`, `ISSUES.md`, both task files and this log.
+- Neither branch is pushed yet: `feat/a-agent-runtime` (A2.1–A2.7) and `feat/a-phase0-fixes` (A1.1 `1b288ad`, A1.2 `0070f8b`, on top of it).

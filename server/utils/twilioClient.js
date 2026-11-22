@@ -91,18 +91,22 @@ const sendCaregiverSMS = async (toPhone, messageBody) => {
 // makePatientCall — calls the patient with a voice IVR menu.
 //   toPhone    : patient phone (with or without +91)
 //   medName    : medicine name to read aloud
-//   medicineId : MongoDB _id of the Medicine document — embedded in the
-//                webhook action URL so /voice knows which medicine to update.
+//   medicineId : MongoDB _id of the Medicine document
+//   reminderId : MongoDB _id of the Reminder (the dose) this call is about (A1.3).
+//                Both go into the webhook URLs, so a key press changes exactly
+//                this dose; medicineId alone is the old form, still understood.
 // Twilio fetches the call's TwiML from our server: trial accounts reject the
 // inline `twiml` parameter but accept a `url` pointing at our own server.
 // ─────────────────────────────────────────────────────────────────────────────
-const makePatientCall = async (toPhone, medName, medicineId) => {
+const makePatientCall = async (toPhone, medName, medicineId, reminderId) => {
   const formattedTo = withCountryCode(toPhone);
-  const path = `/api/v1/webhooks/voice/prompt?medicineId=${encodeURIComponent(medicineId)}`;
+  const query = new URLSearchParams({ medicineId: String(medicineId) });
+  if (reminderId) query.set('reminderId', String(reminderId));
+  const path = `/api/v1/webhooks/voice/prompt?${query}`;
   const client = getClient();
 
   if (!client) {
-    console.log(`[SIMULATION] Voice Call → ${formattedTo} for "${medName}" (medicineId: ${medicineId})`);
+    console.log(`[SIMULATION] Voice Call → ${formattedTo} for "${medName}" (medicineId: ${medicineId}, reminderId: ${reminderId || '-'})`);
     return true;
   }
 

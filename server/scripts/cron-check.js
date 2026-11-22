@@ -1,11 +1,14 @@
-// Live check of A2.6: the scheduler hands dose calls to the agent for dementiaMode patients.
-// Runs scheduler ticks directly on your dev database. Twilio is forced into simulation mode and the
-// every-minute timer is stopped, so nothing runs on its own. No Groq requests: the hand-over is rules.
+// Live check of the escalation cron: per-dose escalation (A1.3) and the agent hand-off (A2.6).
+// Runs scheduler ticks directly on your dev database, at chosen times. Twilio is forced into
+// simulation mode and the every-minute timer is stopped, so nothing runs on its own. Key presses
+// go through the real keypad webhook over HTTP. No Groq requests: the hand-off is rules.
 // Creates test data and deletes it afterwards.
 // Run from server/:  npm run cron:check
 
 require('dotenv').config({ quiet: true });
-for (const v of ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN']) delete process.env[v];
+for (const v of ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'RENDER']) delete process.env[v];
+process.env.TWILIO_ENABLED = 'false';
+if (process.env.NODE_ENV === 'production') process.env.NODE_ENV = 'development';
 
 const dbName = (() => {
   try {
@@ -20,7 +23,8 @@ if (!dbName || !/dev|test/i.test(dbName)) {
 }
 
 const mongoose = require('mongoose');
-const { runTick, task } = require('../jobs/missedDoseCron');
+const express = require('express');
+const { runTick, task, MAX_ALERT_ATTEMPTS } = require('../jobs/missedDoseCron');
 task.stop(); // only the ticks this script runs
 
 const User = require('../models/User');
@@ -28,9 +32,12 @@ const Patient = require('../models/Patient');
 const Medicine = require('../models/Medicine');
 const Reminder = require('../models/Reminder');
 const AgentRun = require('../models/AgentRun');
+const CaregiverAlert = require('../models/CaregiverAlert');
+const twilio = require('../utils/twilioClient');
 const { markDose } = require('../services/doseService');
 
 const TAG = `cron-check-${Date.now()}`;
+const MIN = 60000;
 const results = [];
 const check = (name, passed, detail = '') => {
   results.push(!!passed);
@@ -41,90 +48,186 @@ const toHHMM = (date) => {
   return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
 };
 const quiet = async (fn) => {
-  const log = console.log;
-  console.log = () => {};
+  const saved = { log: console.log, warn: console.warn, error: console.error };
+  console.log = console.warn = console.error = () => {};
   try {
     return await fn();
   } finally {
-    console.log = log;
+    Object.assign(console, saved);
   }
 };
+const tick = (at) => quiet(() => runTick(at));
 const runsFor = (patientId) => AgentRun.find({ patient: patientId }).sort({ startedAt: 1 }).lean();
 const tools = (run) => (run ? run.steps.map((s) => s.tool).join(' → ') : '(no run)');
+const dose = (id) => Reminder.findById(id).lean();
+const alertsFor = (patientId) => CaregiverAlert.find({ patient: patientId }).lean();
 
 (async () => {
   await mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 10000 });
   console.log(`Connected to ${mongoose.connection.name} (Twilio in simulation mode, cron timer stopped)\n`);
   const made = { users: [], patients: [], medicines: [] };
 
+  // The real keypad webhook (signature check is skipped: Twilio is off locally).
+  const app = express();
+  app.use(express.urlencoded({ extended: true }));
+  app.use('/api/v1/webhooks', require('../routes/webhookRoutes'));
+  const server = app.listen(0);
+  const press = async (query, digit) => {
+    const res = await quiet(() => fetch(`http://127.0.0.1:${server.address().port}/api/v1/webhooks/voice?${new URLSearchParams(query)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ Digits: digit }),
+    }));
+    return { status: res.status, text: await res.text() };
+  };
+
+  const realAlertCall = twilio.makeAlertCall;
+
   try {
-    const now = new Date();
-    const hhmm = toHHMM(now);
+    const now = new Date(Math.floor(Date.now() / MIN) * MIN); // on the minute, like a real tick
+    const later = (mins) => new Date(now.getTime() + mins * MIN);
     let n = 0;
-    const mkPatient = async (label, dementiaMode) => {
+    const mkPatient = async (label, { dementiaMode = false, times = [toHHMM(now)], emergencyContact } = {}) => {
       const u = await User.create({ name: `${label} ${TAG}`, phone: `+9198${String(Date.now()).slice(-6)}${n++}`, passwordHash: 'x', role: 'patient' });
       made.users.push(u._id);
-      const p = await Patient.create({ user: u._id, emergencyContact: '+910000000003', dementiaMode });
+      const p = await Patient.create({ user: u._id, emergencyContact: emergencyContact || `+91000000${String(n).padStart(4, '0')}`, dementiaMode });
       made.patients.push(p._id);
       const m = await Medicine.create({
-        patient: p._id, name: `Med-${label}`, dosage: '5mg', type: 'tablet', frequency: 'once',
-        scheduledTimes: [hhmm], notificationType: 'call', startDate: now,
+        patient: p._id, name: `Med-${label}`, dosage: '5mg', type: 'tablet', frequency: times.length === 2 ? 'twice' : 'once',
+        scheduledTimes: times, notificationType: 'call', startDate: now,
       });
       made.medicines.push(m._id);
       return { patient: p, medicine: m };
     };
+    const mkDose = (who, at, extra = {}) => Reminder.create({ medicine: who.medicine._id, patient: who.patient._id, scheduledTime: at, status: 'pending', ...extra });
 
-    const a = await mkPatient('DementiaDue', true); // due, not taken → agent checks, then calls
-    const b = await mkPatient('Regular', false); // keypad flow, unchanged
-    const c = await mkPatient('DementiaTaken', true); // already confirmed in the app → no call
-    const d = await mkPatient('DementiaNoRecord', true); // no Reminder record → calls anyway
-    const remA = await Reminder.create({ medicine: a.medicine._id, patient: a.patient._id, scheduledTime: now, status: 'pending' });
-    await Reminder.create({ medicine: b.medicine._id, patient: b.patient._id, scheduledTime: now, status: 'pending' });
-    await Reminder.create({ medicine: c.medicine._id, patient: c.patient._id, scheduledTime: now, status: 'taken', confirmedBy: 'app', confirmedAt: now });
+    const a = await mkPatient('DementiaDue', { dementiaMode: true }); // agent checks, then calls; snoozes; confirms
+    const b = await mkPatient('Regular'); // keypad flow; never answers → caregiver called
+    const c = await mkPatient('DementiaTaken', { dementiaMode: true }); // already confirmed in the app
+    const d = await mkPatient('DementiaNoRecord', { dementiaMode: true }); // no Reminder record yet
+    const e = await mkPatient('TwiceADay', { times: [toHHMM(now), toHHMM(later(30))] }); // the PRD gate
+    const f = await mkPatient('AlertFails', { emergencyContact: '+910000009999' }); // caregiver call can't be placed
+    const g = await mkPatient('OldCall'); // call placed before A1.3: webhook URL has medicineId only
+    const h = await mkPatient('LongAgo'); // a dose due an hour ago that was never called
 
-    const dflt = await Patient.findById(b.patient._id).lean();
-    check('new patient settings default to off / English', dflt.dementiaMode === false && dflt.language === 'en' && dflt.familyClipsEnabled === false);
+    const remA = await mkDose(a, now);
+    const remB = await mkDose(b, now);
+    const remC = await mkDose(c, now, { status: 'taken', confirmedBy: 'app', confirmedAt: now });
+    const remE1 = await mkDose(e, now);
+    const remE2 = await mkDose(e, later(30));
+    const remF = await mkDose(f, now);
+    const remG = await mkDose(g, now);
+    const remH = await mkDose(h, later(-60));
 
-    // ── tick 1: first call ──
-    await quiet(() => runTick(now));
+    // Every caregiver alert call to f's number fails, as if Twilio refused it.
+    twilio.makeAlertCall = async (phone, alertId) => {
+      if (String(phone).includes('0000009999')) throw new Error('simulated Twilio failure');
+      return realAlertCall(phone, alertId);
+    };
+
+    // ── tick at the dose time: first calls ──────────────────────────────────
+    await tick(now);
 
     const [runA] = await runsFor(a.patient._id);
-    const medA = await Medicine.findById(a.medicine._id).lean();
+    const a1 = await dose(remA._id);
     check('dementia patient, dose due: agent run checks the log, then calls',
-      runA && runA.trigger === 'dose_due' && tools(runA) === 'check_double_dose → place_call' && runA.steps[1].output.ok && runA.reminder && String(runA.reminder) === String(remA._id),
+      runA && runA.trigger === 'dose_due' && tools(runA) === 'check_double_dose → place_call' && runA.steps[1].output.ok && String(runA.reminder) === String(remA._id),
       tools(runA));
-    check('…and the escalation clock is armed as before', !!medA.caregiverAlertTime);
-    check('…run finished with a readable summary', runA && runA.status === 'finished' && /Called the patient/.test(runA.text), runA && runA.text);
+    check('…this dose is armed: 1 call, clock set, status alerted', a1.attempts === 1 && !!a1.caregiverAlertTime && a1.status === 'alerted' && !!a1.lastCallAt);
 
-    const runsB = await runsFor(b.patient._id);
-    const medB = await Medicine.findById(b.medicine._id).lean();
-    check('regular patient: no agent run, keypad call as today', runsB.length === 0 && !!medB.caregiverAlertTime);
+    const b1 = await dose(remB._id);
+    check('regular patient: no agent run, keypad call, this dose armed',
+      (await runsFor(b.patient._id)).length === 0 && b1.attempts === 1 && !!b1.caregiverAlertTime);
 
-    const [runC] = await runsFor(c.patient._id);
-    const medC = await Medicine.findById(c.medicine._id).lean();
-    check('dementia patient, already taken in the app: no call', runC && tools(runC) === 'check_double_dose' && !medC.caregiverAlertTime, runC && runC.text);
+    const c1 = await dose(remC._id);
+    check('already taken in the app: no call, nothing armed', (await runsFor(c.patient._id)).length === 0 && !c1.attempts && !c1.caregiverAlertTime);
 
+    const dDoses = await Reminder.find({ medicine: d.medicine._id }).lean();
     const [runD] = await runsFor(d.patient._id);
-    check('dementia patient, no reminder record: calls anyway (never unreminded)', runD && tools(runD) === 'place_call' && !!(await Medicine.findById(d.medicine._id).lean()).caregiverAlertTime);
+    check('no reminder record: one is created for this minute, then the agent checks and calls',
+      dDoses.length === 1 && dDoses[0].scheduledTime.getTime() === now.getTime() && dDoses[0].attempts === 1 && tools(runD) === 'check_double_dose → place_call',
+      `${dDoses.length} record(s), ${tools(runD)}`);
+    await tick(now); // same minute again (e.g. two ticks): still one record, no second call
+    check('…a second tick in the same minute creates no duplicate and calls no one twice',
+      (await Reminder.countDocuments({ medicine: d.medicine._id })) === 1 && (await dose(dDoses[0]._id)).attempts === 1 && (await dose(remB._id)).attempts === 1);
 
-    // ── tick 2: re-call after a snooze, dose still not taken ──
-    await Medicine.updateOne({ _id: a.medicine._id }, { $set: { snoozeUntil: new Date(now.getTime() - 60000), caregiverAlertTime: null } });
-    const later = new Date(now.getTime() + 11 * 60000);
-    await quiet(() => runTick(later));
+    const e1a = await dose(remE1._id);
+    const e2a = await dose(remE2._id);
+    check('twice a day: the 1st dose is called; the 2nd (due later) is untouched', e1a.attempts === 1 && !!e1a.caregiverAlertTime && !e2a.attempts && !e2a.caregiverAlertTime);
+
+    check('a dose due an hour ago and never called is not called now (no burst of calls after a deploy)', !(await dose(remH._id)).attempts);
+
+    // ── key presses through the webhook ─────────────────────────────────────
+    const snooze = await press({ reminderId: String(remA._id), medicineId: String(a.medicine._id) }, '2');
+    const a2 = await dose(remA._id);
+    check('keypad 2 snoozes exactly this dose: re-call in 10 min, caregiver clock paused',
+      snooze.status === 200 && /10 minutes/.test(snooze.text) && !!a2.snoozeUntil && !a2.caregiverAlertTime && a2.status === 'alerted');
+
+    const old = await press({ medicineId: String(g.medicine._id) }, '1');
+    const g1 = await dose(remG._id);
+    check('a call placed before A1.3 (medicineId only) still records its dose', old.status === 200 && g1.status === 'taken' && g1.confirmedBy === 'ivr' && !g1.caregiverAlertTime);
+
+    // ── 11 minutes later: escalation for the doses nobody confirmed ──────────
+    await tick(later(11));
+
+    const b2 = await dose(remB._id);
+    const bAlerts = await alertsFor(b.patient._id);
+    check('no answer for 10 min: dose marked missed by the scheduler, caregiver PHONED (not SMS)',
+      b2.status === 'missed' && b2.caregiverAlerted && b2.caregiverNotified && !b2.caregiverAlertTime && bAlerts.length === 1 && bAlerts[0].reason === 'missed_dose' && bAlerts[0].channel === 'call',
+      bAlerts[0] && bAlerts[0].message);
+
+    const e1b = await dose(remE1._id);
+    const e2b = await dose(remE2._id);
+    check('PRD gate: the 1st dose escalates while the 2nd dose of the same medicine stays untouched',
+      e1b.status === 'missed' && e1b.caregiverAlerted && e2b.status === 'pending' && !e2b.attempts && !e2b.caregiverAlerted && !e2b.caregiverAlertTime);
+
     const runsA2 = await runsFor(a.patient._id);
-    check('re-call after snooze: agent checks again, then calls', runsA2.length === 2 && tools(runsA2[1]) === 'check_double_dose → place_call' && runsA2[1].steps[1].input.attempt === 'retry');
+    const a3 = await dose(remA._id);
+    check('snoozed dose is NOT escalated; it is called again through the agent instead',
+      a3.status === 'alerted' && !a3.caregiverAlerted && a3.attempts === 2 && !a3.snoozeUntil && !!a3.caregiverAlertTime
+        && runsA2.length === 2 && tools(runsA2[1]) === 'check_double_dose → place_call' && runsA2[1].steps[1].input.attempt === 'retry');
 
-    // ── tick 3: re-call due, but she confirmed in the meantime ──
+    const f1 = await dose(remF._id);
+    check('caregiver call could not be placed: not swallowed; alertFailed, try 1 recorded',
+      f1.status === 'missed' && f1.alertFailed && f1.alertAttempts === 1 && !f1.caregiverAlerted && /simulated Twilio failure|Every alert call failed/.test(f1.alertError || ''),
+      f1.alertError);
+
+    // ── retries of the failed alert, one per tick, at most 3 in all ──────────
+    for (const m of [12, 13, 14, 15]) await tick(later(m));
+    const f2 = await dose(remF._id);
+    const fAlerts = await alertsFor(f.patient._id);
+    check(`failed caregiver alert retried on the next ticks, then given up after ${MAX_ALERT_ATTEMPTS} tries`,
+      f2.alertAttempts === MAX_ALERT_ATTEMPTS && f2.alertFailed && fAlerts.length === MAX_ALERT_ATTEMPTS, `${f2.alertAttempts} tries, ${fAlerts.length} alert records`);
+
+    // She confirms the re-called dementia dose in the app (its clock would run out at minute 21).
     await markDose(remA._id, 'taken', 'app');
-    await Medicine.updateOne({ _id: a.medicine._id }, { $set: { snoozeUntil: new Date(later.getTime() - 60000), caregiverAlertTime: null } });
-    await quiet(() => runTick(new Date(later.getTime() + 60000)));
-    const runsA3 = await runsFor(a.patient._id);
-    const medA3 = await Medicine.findById(a.medicine._id).lean();
-    check('re-call due but confirmed meanwhile: no call, snooze cleared', runsA3.length === 3 && tools(runsA3[2]) === 'check_double_dose' && !medA3.caregiverAlertTime && !medA3.snoozeUntil,
-      runsA3[2] && runsA3[2].text);
+
+    // ── the 2nd dose of the twice-a-day medicine comes due ───────────────────
+    await tick(later(30));
+    const e1c = await dose(remE1._id);
+    const e2c = await dose(remE2._id);
+    check('the 2nd dose gets its own first call; the 1st is not called again',
+      e2c.attempts === 1 && !!e2c.caregiverAlertTime && e2c.status === 'alerted' && e1c.attempts === 1 && (await Reminder.countDocuments({ medicine: e.medicine._id })) === 2);
+
+    // Keypad 1 for the 2nd dose.
+    const took = await press({ reminderId: String(remE2._id), medicineId: String(e.medicine._id) }, '1');
+    const e2d = await dose(remE2._id);
+    check('keypad 1 records exactly this dose and disarms its clock', took.status === 200 && e2d.status === 'taken' && e2d.confirmedBy === 'ivr' && !e2d.caregiverAlertTime);
+    check('keypad 1 did not touch the 1st dose (still missed, caregiver alerted)', (await dose(remE1._id)).status === 'missed');
+
+    // ── well past both clocks: confirmed doses must not escalate ─────────────
+    await tick(later(45));
+    const a4 = await dose(remA._id);
+    const e2e = await dose(remE2._id);
+    check('a confirmed dose stops everything: no escalation, no caregiver call (app and keypad)',
+      a4.status === 'taken' && !a4.caregiverAlerted && (await alertsFor(a.patient._id)).length === 0
+        && e2e.status === 'taken' && (await alertsFor(e.patient._id)).length === 1,
+      `${(await alertsFor(e.patient._id)).length} alert(s) for the twice-a-day patient (expected 1, for the 1st dose)`);
+    check('keypad 2 on an already-taken dose does not snooze it', /already recorded as taken/.test((await press({ reminderId: String(remE2._id) }, '2')).text) && !(await dose(remE2._id)).snoozeUntil);
   } catch (err) {
     check('check ran without crashing', false, err.stack);
   } finally {
+    twilio.makeAlertCall = realAlertCall;
+    server.close();
+    await CaregiverAlert.deleteMany({ patient: { $in: made.patients } });
     await AgentRun.deleteMany({ patient: { $in: made.patients } });
     await Reminder.deleteMany({ patient: { $in: made.patients } });
     await Medicine.deleteMany({ _id: { $in: made.medicines } });

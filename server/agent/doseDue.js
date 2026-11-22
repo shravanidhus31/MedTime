@@ -39,7 +39,9 @@ async function timed(fn) {
   return { output, at, ms: Date.now() - t0 };
 }
 
-async function handleDoseDue({ medicine, patient, attempt = 'initial', placeCall, now = new Date() }) {
+// `reminder` (A1.3): the scheduler now works per dose and passes the due Reminder itself.
+// Without it, the latest due one for the medicine is looked up, as before.
+async function handleDoseDue({ medicine, patient, reminder: givenReminder, attempt = 'initial', placeCall, now = new Date() }) {
   require('./index').initAgent(); // make sure the core tools are registered (no-op after the first time)
   const started = Date.now();
   let runId = null;
@@ -69,7 +71,7 @@ async function handleDoseDue({ medicine, patient, attempt = 'initial', placeCall
   };
 
   try {
-    const reminder = await findDueReminder(medicine, attempt, now);
+    const reminder = givenReminder || (await findDueReminder(medicine, attempt, now));
     runId = await startRun({ trigger: 'dose_due', patientId: patient._id, reminderId: reminder && reminder._id, flow: 'dose' }).catch((err) => {
       console.error('[agent:doseDue] could not start run:', err.message);
       return null;
