@@ -72,6 +72,9 @@ const medicineSchema = new mongoose.Schema({
   // ─── Soft-delete fields (B1.3) ──────────────────────────────────────────────
   // isActive=false means soft-deleted; past Reminders are kept for history,
   // future Reminders are deleted so reminderJob doesn't fire for dead medicines.
+  // Call this many minutes before the dose time (an approved "earlier evening call", Feature 3).
+  // The dose time itself is unchanged.
+  callOffsetMinutes: { type: Number, default: 0, min: -60, max: 0 },
   deletedAt: {
     type: Date,
     default: null

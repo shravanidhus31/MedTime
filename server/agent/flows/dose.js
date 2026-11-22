@@ -32,6 +32,7 @@ const policy = require('./dosePolicy');
 const FollowUp = require('../../models/FollowUp');
 const { classifyAnswer, CONCERN_WORDS } = require('./followups');
 const { planFollowUps } = require('../planner');
+const { logCallObservations } = require('../observations');
 const MAX_FOLLOWUP_ASKS = 3;
 const FOLLOWUP_REASK_MS = 20 * 3600 * 1000; // not better: asked again on a later day
 
@@ -310,6 +311,8 @@ const doseFlow = {
       if (r.ok) await noteCaregiverInformed(s.reminderId).catch(() => {});
       s.ending = { outcome: 'done', fallbackReason: 'turn_limit' };
     }
+    // Measures for the weekly review (fix 8), in the background.
+    logCallObservations(session, 'dose');
     // The Planner: concerns she mentioned become follow-ups for a later call (background).
     if (s.planLines && s.planLines.length) {
       planFollowUps({ patientId: session.patientId, runId: session.runId, lines: s.planLines })

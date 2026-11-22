@@ -69,6 +69,13 @@ router.post('/:id/answer', verifyToken, async (req, res) => {
     question.status = 'answered';
     await question.save();
 
+    // The weekly review asked this before flagging a change (fix 8): run it again with the answer,
+    // so the change is either explained or marked worth mentioning to the doctor.
+    const { QUESTION_PREFIX, generateWeeklyReview } = require('../services/weeklyReviewService');
+    if (String(question.question || '').startsWith(QUESTION_PREFIX)) {
+      generateWeeklyReview(question.patient).catch((err) => console.error('[AgentQuestion] weekly review re-run failed:', err.message));
+    }
+
     res.status(200).json({
       message: 'Answer recorded successfully.',
       question,

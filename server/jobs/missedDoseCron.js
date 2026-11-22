@@ -167,7 +167,8 @@ async function runTick(now = new Date()) {
         // [C] due in the last 15 minutes and never called
         {
           status: 'pending',
-          scheduledTime: { $gt: new Date(now.getTime() - FIRST_CALL_WINDOW_MS), $lte: now },
+          // up to an hour ahead: a medicine with an earlier call (callOffsetMinutes, Feature 3)
+          scheduledTime: { $gt: new Date(now.getTime() - FIRST_CALL_WINDOW_MS), $lte: new Date(now.getTime() + 60 * MINUTE) },
           attempts: { $not: { $gt: 0 } },
           snoozeUntil: null,
           caregiverAlertTime: null,
@@ -179,7 +180,9 @@ async function runTick(now = new Date()) {
       .populate({ path: 'patient', populate: { path: 'user', model: 'User' } });
 
     // Only call-type medicines: SMS reminders are reminderJob.js's.
-    const doses = candidates.filter((r) => r.medicine && r.medicine.isActive && r.medicine.notificationType === 'call');
+    // A dose whose (possibly earlier) call time hasn't come yet waits for a later tick.
+    const doses = candidates.filter((r) => r.medicine && r.medicine.isActive && r.medicine.notificationType === 'call')
+      .filter((r) => !(r.scheduledTime > now && r.scheduledTime.getTime() + (Number(r.medicine.callOffsetMinutes) || 0) * MINUTE > now.getTime()));
     if (doses.length === 0) {
       console.log('   → No call reminders need attention this tick.');
       return;
@@ -249,7 +252,10 @@ async function runTick(now = new Date()) {
         }
 
         // ── [C] FIRST CALL ──────────────────────────────────────────────────
-        console.log(`   🔔 [C] FIRST CALL: calling ${patientName} for ${doseLabel}.`);
+        // At the dose time, or earlier if the caregiver approved an earlier call (Feature 3).
+        const callAt = reminder.scheduledTime.getTime() + (Number(medicine.callOffsetMinutes) || 0) * MINUTE;
+        if (callAt > now.getTime()) continue;
+        console.log(`   🔔 [C] FIRST CALL: calling ${patientName} for ${doseLabel}${medicine.callOffsetMinutes ? ` (${-medicine.callOffsetMinutes} min early, as approved)` : ''}.`);
         if (patient.dementiaMode) {
           const r = await handleDoseDue({ medicine, patient, reminder, attempt: 'initial', now, placeCall: () => callPatient(reminder, patientPhone, medName, now, { agent: true }) });
           // "already taken" (confirmed in the app since this tick started) means no call;

@@ -3,7 +3,7 @@ const router = express.Router();
 const WeeklyReview = require('../models/WeeklyReview');
 // verifyToken is the auth check; the module exports { verifyToken, requireRole } (fixed at integration).
 const { verifyToken: authMiddleware } = require('../middleware/authMiddleware');
-const { requirePatientAccess } = require('../middleware/access');
+const { requirePatientAccess, canAccess } = require('../middleware/access');
 const { generateWeeklyReview } = require('../services/weeklyReviewService');
 
 router.use(authMiddleware);
@@ -44,9 +44,15 @@ router.post('/generate/:patientId', requirePatientAccess('approve'), async (req,
  */
 router.post('/:id/feedback', async (req, res) => {
   try {
-    const { markedAccurate, caregiverNotes, adjustedMarginPercent } = req.body;
+    const { markedAccurate, caregiverNotes } = req.body;
+    let { adjustedMarginPercent } = req.body;
+    if (!require('mongoose').isValidObjectId(req.params.id)) return res.status(400).json({ status: 'error', message: 'Not a valid id' });
     const review = await WeeklyReview.findById(req.params.id);
     if (!review) return res.status(404).json({ status: 'error', message: 'Review not found' });
+    // (22 Nov: anyone logged in could change any patient's review)
+    if (!(await canAccess(req.user.id, String(review.patient), 'approve'))) return res.status(403).json({ status: 'error', message: 'Forbidden: insufficient access.' });
+    // "Not accurate" with no margin given: the next review needs a bigger change before it speaks up
+    if (markedAccurate === false && adjustedMarginPercent === undefined) adjustedMarginPercent = Math.min(60, (review.marginPercent || 25) + 10);
 
     review.caregiverFeedback = {
       markedAccurate: markedAccurate ?? review.caregiverFeedback?.markedAccurate,

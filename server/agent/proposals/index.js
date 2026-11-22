@@ -65,6 +65,19 @@ registerProposalKind('new_schedule', {
   },
 });
 
+// Feature 3 (weekly review, fix 8): call earlier in the evening. Level 1, the caregiver approves
+// ("earlier evening call" in the plan's approval table). Only the CALL moves; the dose time stays.
+registerProposalKind('call_time_change', {
+  level: 1,
+  describe: (p) => `Call ${Math.abs(p.shiftMinutes || 30)} minutes earlier for ${(p.medicines || []).map((m) => m.name).join(', ')}`,
+  apply: async (payload, proposalDoc) => {
+    const shift = Math.max(-60, Math.min(0, Number(payload.shiftMinutes) || -30));
+    const ids = (payload.medicines || []).map((m) => m.medicineId).filter(Boolean);
+    await Medicine.updateMany({ _id: { $in: ids }, patient: proposalDoc.patient }, { $set: { callOffsetMinutes: shift } });
+    return { updated: ids.length, shiftMinutes: shift };
+  },
+});
+
 registerProposalKind('schedule_override', {
   level: 1,
   describe: (payload) => `Temporary override for ${payload.medicineName || 'medicine'}: ${payload.reason || ''}`,

@@ -52,12 +52,29 @@ const WeeklyReviewSchema = new mongoose.Schema({
       explanation: String,      // e.g. "Likely side effect of Metoprolol dose increase on Nov 10"
       hasAlternativeCause: Boolean,
       quotes: [String],         // Quotes only, no invented differences
+      // fix 8: which part of the day, the numbers, and where the check stands
+      timeBlock: String,
+      status: { type: String, enum: ['flagged', 'explained', 'checking_with_caregiver'] },
+      baseline: Number,
+      weekBefore: Number,
+      lastWeek: Number,
     },
   ],
+  // fix 8: every comparison made, the explanations checked, and the caregiver's plain-language lines
+  comparisons: { type: [mongoose.Schema.Types.Mixed], default: [] },
+  blocks: { type: mongoose.Schema.Types.Mixed, default: {} },
+  explanationsChecked: { type: [mongoose.Schema.Types.Mixed], default: [] },
+  caregiverQuestion: { type: mongoose.Schema.Types.ObjectId, ref: 'AgentQuestion' },
+  languageNotes: { type: [mongoose.Schema.Types.Mixed], default: [] },
+  summaryLines: [{ kind: String, text: String, _id: false }],
+  marginPercent: { type: Number, default: 25 },
+  seeded: { type: Boolean, default: false },
+  run: { type: mongoose.Schema.Types.ObjectId, ref: 'AgentRun' },
   sundowning: {
     detected: { type: Boolean, default: false },
     eveningEventCount: { type: Number, default: 0 },
     weeksObserved: { type: Number, default: 0 },
+    daytimeEventCount: { type: Number, default: 0 },
     suggestedIntervention: {
       type: String,
       enum: ['none', 'call_time_change', 'calming_clip_first'],

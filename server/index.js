@@ -36,6 +36,7 @@ const { startReminderJob }     = require('./jobs/reminderJob');
 const { startMonthlyReportCron } = require('./utils/monthlyReportCron');
 const { startReminderTopUpJob }  = require('./jobs/reminderTopUpJob');  // B1.4
 const { startJournalJob }        = require('./jobs/journalJob');        // B8
+const { startWeeklyReviewJob }   = require('./jobs/weeklyReviewJob');   // fix 8: Sunday weekly review
 require('./jobs/missedDoseCron');
 require('./events'); // Contract C4 event bus & refill listeners
 // Middleware
@@ -84,6 +85,7 @@ mongoose.connect(MONGO_URI)
       .then((r) => console.log(`✅ [reminderTopUp] Start-up top-up: ${r.created} reminder(s) created.`))
       .catch((err) => console.error('❌ [reminderTopUp] Start-up top-up failed:', err.message));
     startJournalJob();         // B8: nightly 9:00 PM IST daily care journal
+    startWeeklyReviewJob();    // fix 8: Sundays 8:00 PM IST weekly review
     app.listen(PORT, () => {
       console.log(`🚀 Server is running on port ${PORT}`);
     });

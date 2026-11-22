@@ -41,6 +41,13 @@ const ObservationSchema = new mongoose.Schema({
       'repeatedPhrasesCount',   // Back-to-back repeated phrases
       'sundowningAnxietyCount', // Evening confusion/anxiety indications
       'sentimentScore',         // Optional sentiment polarity
+      // Measured from every call's transcript (fix 8, agent/observations.js)
+      'clarificationCount',     // "What?", "say that again", "क्या?" — needed things repeated
+      'unclearTurns',           // answers the agent could not follow
+      'turnsToConfirm',         // her answers until the dose was confirmed
+      'checkFails',             // could not say which tablet when asked
+      'silentTurns',            // no answer to a question
+      'asrConfidence',          // speech recognition confidence (call quality), 0-1
     ],
   },
   value: {

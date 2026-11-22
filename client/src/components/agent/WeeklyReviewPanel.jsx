@@ -39,7 +39,7 @@ export default function WeeklyReviewPanel({ patientId }) {
       setMsg({ type: 'success', text: 'New weekly review generated successfully.' });
       fetchReviews();
     } catch (err) {
-      setMsg({ type: 'error', text: err?.response?.data?.error || 'Failed to generate review.' });
+      setMsg({ type: 'error', text: err?.response?.data?.message || err?.response?.data?.error || 'Failed to generate review.' });
     } finally {
       setGenerating(false);
     }
@@ -65,7 +65,7 @@ export default function WeeklyReviewPanel({ patientId }) {
         <div>
           <h2 className="text-lg font-bold text-[#2d2418]">📊 Weekly Cognitive & Behavioral Review</h2>
           <p className="text-xs text-[#8a7560] mt-0.5">
-            Tracks speech rate, response latency, and evening sundowning trends against baseline
+            Changes in how her calls go, compared with her own first 4 weeks; harder evenings (sundowning)
           </p>
         </div>
         <button
@@ -91,86 +91,59 @@ export default function WeeklyReviewPanel({ patientId }) {
         <div className="text-center py-8 bg-[#fdf8f0] rounded-xl border border-[#e8dcc8]">
           <p className="text-sm font-semibold text-[#2d2418]">No weekly reviews yet</p>
           <p className="text-xs text-[#8a7560] mt-1 max-w-sm mx-auto">
-            Click "Run Weekly Analysis" or wait for the automatic Sunday review to see speech latency and sundowning patterns.
+            Click "Run Weekly Analysis", or wait for the automatic review on Sunday evening.
           </p>
         </div>
       ) : (
         reviews.map(review => {
-          const { baselineMetrics, currentWeekMetrics, deltas, findings, sundowning } = review;
+          const { findings = [], summaryLines = [] } = review;
+          // fix 8: the review's own plain-language lines (her baseline, 2 weeks running, checks done)
+          const STYLE = {
+            flag: 'bg-amber-50 border-amber-300 text-amber-900',
+            checking: 'bg-sky-50 border-sky-200 text-sky-900',
+            explained: 'bg-blue-50 border-blue-200 text-blue-900',
+            sundowning: 'bg-orange-50 border-orange-300 text-orange-900',
+            watch: 'bg-white border-[#e8dcc8] text-[#5c4535]',
+            ok: 'bg-emerald-50 border-emerald-200 text-emerald-900',
+            info: 'bg-white border-[#e8dcc8] text-[#8a7560]',
+          };
+          const ICON = { flag: '⚠️', checking: '❓', explained: 'ℹ️', sundowning: '🌅', watch: '👀', ok: '✓', info: '·' };
           return (
-            <div key={review._id} className="border border-[#e8dcc8] rounded-xl p-5 space-y-5 bg-[#faf6f0]">
-              <div className="flex items-center justify-between">
+            <div key={review._id} className="border border-[#e8dcc8] rounded-xl p-5 space-y-4 bg-[#faf6f0]">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <span className="text-xs font-bold text-[#5c4535] bg-[#f5ede0] px-3 py-1 rounded-full">
-                  Week of {new Date(review.weekStartDate).toLocaleDateString()} – {new Date(review.weekEndDate).toLocaleDateString()}
+                  Week of {new Date(review.weekStartDate).toLocaleDateString('en-IN')} – {new Date(review.weekEndDate).toLocaleDateString('en-IN')}
                 </span>
-                <span className="text-xs text-[#8a7560]">Status: Published</span>
+                <span className="text-[11px] text-[#8a7560]">Compared with her own first 4 weeks · margin {review.marginPercent || 25}%</span>
               </div>
 
-              {/* Metrics Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="bg-white p-3 rounded-lg border border-[#e8dcc8]">
-                  <div className="text-xs text-[#8a7560]">Response Latency</div>
-                  <div className="text-lg font-bold text-[#2d2418]">{currentWeekMetrics?.latencyMs || 0} ms</div>
-                  <div className={`text-[11px] font-semibold mt-1 ${
-                    (deltas?.latencyPercent || 0) > 25 ? 'text-amber-700' : 'text-emerald-700'
-                  }`}>
-                    {deltas?.latencyPercent >= 0 ? '+' : ''}{deltas?.latencyPercent || 0}% vs. baseline ({baselineMetrics?.latencyMs || 0}ms)
+              <div className="space-y-2">
+                {summaryLines.map((l, i) => (
+                  <div key={i} className={`p-3 rounded-lg border text-xs leading-relaxed ${STYLE[l.kind] || STYLE.info}`}>
+                    <span className="mr-1">{ICON[l.kind] || ''}</span>{l.text}
                   </div>
-                </div>
-
-                <div className="bg-white p-3 rounded-lg border border-[#e8dcc8]">
-                  <div className="text-xs text-[#8a7560]">Speech Rate</div>
-                  <div className="text-lg font-bold text-[#2d2418]">{currentWeekMetrics?.speechRateWpm || 0} WPM</div>
-                  <div className={`text-[11px] font-semibold mt-1 ${
-                    Math.abs(deltas?.speechRatePercent || 0) > 25 ? 'text-amber-700' : 'text-emerald-700'
-                  }`}>
-                    {deltas?.speechRatePercent >= 0 ? '+' : ''}{deltas?.speechRatePercent || 0}% vs. baseline ({baselineMetrics?.speechRateWpm || 0} WPM)
-                  </div>
-                </div>
-
-                <div className="bg-white p-3 rounded-lg border border-[#e8dcc8]">
-                  <div className="text-xs text-[#8a7560]">Phrase Repetition</div>
-                  <div className="text-lg font-bold text-[#2d2418]">{currentWeekMetrics?.repeatedPhrasesAvg || 0} / turn</div>
-                  <div className="text-[11px] font-semibold text-emerald-700 mt-1">
-                    Baseline: {baselineMetrics?.repeatedPhrasesAvg || 0}
-                  </div>
-                </div>
+                ))}
               </div>
 
-              {/* Sundowning Alert (Feature 3) */}
-              {sundowning?.detected && (
-                <div className="bg-amber-50 border border-amber-300 p-4 rounded-xl flex items-start gap-3">
-                  <span className="text-2xl">🌅</span>
-                  <div>
-                    <h4 className="text-xs font-bold text-amber-900">Sundowning Pattern Detected (Feature 3)</h4>
-                    <p className="text-xs text-amber-800 mt-1">
-                      {sundowning.eveningEventCount} evening disorientation events recorded across the past {sundowning.weeksObserved} weeks.
-                      The agent recommends moving the evening call 30 minutes earlier before twilight to reduce anxiety.
-                    </p>
-                    {sundowning.proposalId && (
-                      <span className="inline-block mt-2 text-[11px] font-semibold bg-amber-200 text-amber-900 px-2 py-0.5 rounded">
-                        Proposed Schedule Shift (Pending Caregiver Approval in Approvals Panel)
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Findings & Alternative Explanations */}
-              {findings && findings.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-[#5c4535]">Clinical Observations</h4>
-                  {findings.map((f, i) => (
-                    <div key={i} className={`p-3 rounded-lg border text-xs ${
-                      f.hasAlternativeCause ? 'bg-blue-50 border-blue-200 text-blue-900' : 'bg-amber-50 border-amber-200 text-amber-900'
-                    }`}>
-                      <div className="font-semibold">{f.observedChange}</div>
-                      <div className="mt-1 text-[11px] opacity-90">
-                        {f.hasAlternativeCause ? `ℹ️ Explained: ${f.explanation}` : `⚠️ Alert: ${f.explanation}`}
-                      </div>
-                    </div>
+              {/* Her own words from those calls (never invented) */}
+              {findings.some((f) => f.quotes && f.quotes.length) && (
+                <div className="text-xs text-[#5c4535]">
+                  <div className="font-semibold mb-1">Her words on those calls</div>
+                  {findings.flatMap((f) => f.quotes || []).slice(0, 4).map((q, i) => (
+                    <div key={i} className="italic text-[#8a7560]">“{q}”</div>
                   ))}
                 </div>
+              )}
+              {review.languageNotes && review.languageNotes.length > 0 && (
+                <div className="text-xs text-[#5c4535]">
+                  <div className="font-semibold mb-1">Noticed in how she spoke</div>
+                  {review.languageNotes.map((n, i) => (
+                    <div key={i}>• {n.difference} <span className="italic text-[#8a7560]">“{n.quote}”</span></div>
+                  ))}
+                </div>
+              )}
+              {review.sundowning?.proposalId && (
+                <div className="text-[11px] text-orange-900">The earlier evening call is waiting for approval in <b>Proposals</b>.</div>
               )}
 
               {/* Doctor Report Summary */}
