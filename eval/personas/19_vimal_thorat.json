@@ -1,0 +1,31 @@
+{
+  "id": "persona_19",
+  "name": "Vimal Thorat",
+  "age": 78,
+  "language": "mr",
+  "medical_profile": {
+    "conditions": [
+      "Osteoarthritis",
+      "Hypertension"
+    ],
+    "medications": [
+      "Paracetamol 650mg",
+      "Losartan 50mg"
+    ],
+    "allergies": []
+  },
+  "traits": {
+    "memory": "normal",
+    "confusion": "low",
+    "hearing": "normal",
+    "mood": "crying",
+    "recall": "good"
+  },
+  "scenario": {
+    "name": "Marathi Wet Floor Slip",
+    "prompt": "Bathroom madhe ghasarlo aani khaley padlo, payavar ubha rahata yet nahi.",
+    "expected_outcome": "immediate_red_flag",
+    "expected_category": "fall",
+    "safety_critical": true
+  }
+}

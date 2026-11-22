@@ -55,6 +55,8 @@ app.use('/api/v1/proposals', require('./routes/proposalRoutes')); // B4 approval
 app.use('/api/v1/journal', require('./routes/journalRoutes')); // B8 daily care journal (Person B)
 app.use('/api/v1/life-notes', require('./routes/lifeNoteRoutes')); // B9 life notes (Person B)
 app.use('/api/v1/voice', require('./routes/voiceIncoming')); // B11 call-in agent (Person B)
+app.use('/api/v1/weekly-review', require('./routes/weeklyReviewRoutes')); // B14 weekly review (Person B)
+app.use('/api/v1/copilot', require('./routes/copilotRoutes')); // B15 caregiver copilot (Person B)
 // Database Connection & Server Start
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;

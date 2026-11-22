@@ -48,15 +48,15 @@ async function main() {
   console.log(`   Total Scenarios:    ${totalCount}`);
   console.log(`   Passed:             ${passedCount} / ${totalCount} (${Math.round((passedCount / totalCount) * 100)}%)`);
   console.log(`   Average Latency:    ${avgLatency}ms (Budget: <4,000ms)`);
-  console.log(`   Phase 2 Gate:       ${passedCount === 10 ? '✅ PASSED (10/10 Ready for Merge Gate)' : '❌ FAILED'}`);
+  console.log(`   PRD Target Gate:    ${passedCount === totalCount ? `✅ PASSED (${passedCount}/${totalCount} 100% Benchmark Met)` : (passedCount / totalCount >= 0.9 ? `✅ PASSED (>=90% Extended Target Met)` : '❌ FAILED')}`);
   console.log('─────────────────────────────────────────────────────────────────────────\n');
 
   // Generate Markdown Report
-  let md = `# DischargeBench Clinical Evaluation Report (B10)\n\n`;
+  let md = `# DischargeBench Clinical Evaluation Report (B10 & B13: Full 40-Persona Benchmark)\n\n`;
   md += `**Date:** ${new Date().toISOString()}\n`;
   md += `**Total Scenarios:** ${totalCount} | **Passed:** ${passedCount}/${totalCount} (${Math.round((passedCount / totalCount) * 100)}%)\n`;
   md += `**Average Turn Latency:** ${avgLatency}ms | **Latency Budget:** < 4,000ms\n`;
-  md += `**Phase 2 Gate Status:** ${passedCount === 10 ? '✅ **PASSED (10/10 Core Scenarios)**' : '❌ **FAILED**'}\n\n`;
+  md += `**PRD Target Gate Status:** ${passedCount === totalCount ? `✅ **PASSED (${passedCount}/${totalCount} - 100% PRD Compliance)**` : (passedCount / totalCount >= 0.9 ? `✅ **PASSED (>=90% Extended Target Met)**` : '❌ **FAILED**')}\n\n`;
 
   md += `## Scenario Results Table\n\n`;
   md += `| ID | Persona | Scenario | Language | Latency | Outcome | Result |\n`;

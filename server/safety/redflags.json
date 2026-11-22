@@ -30,17 +30,19 @@
         "chest pain", "chest hurts", "pain in chest", "heart hurts",
         "heart attack", "chest tightness", "chest tight", "pressure in chest",
         "heavy chest", "pain radiating to arm", "crushing pain in chest",
-        "heavy and tight", "chest feels heavy", "chest feels very heavy", "tightness in chest"
+        "heavy and tight", "chest feels heavy", "chest feels very heavy", "tightness in chest",
+        "pressure in my chest", "elephant sitting", "radiating down"
       ],
       "hi": [
         "seene mein dard", "seena dard", "chhati mein dard", "dil mein dard",
         "dil ka daura", "seena bhaari", "chhati dab rahi hai", "dil ghabra raha hai",
+        "seene mein tez dard", "seene mein bahut tez dard", "seene mein ghutan",
         "सीने में दर्द", "छाती में दर्द", "दिल में दर्द", "दिल का दौरा",
         "सीना भारी", "छाती दब रही है"
       ],
       "mr": [
         "chatit dukhtay", "chatit vedna", "chhati dukhat ahe", "hruday dukhat ahe",
-        "hrudayvikar", "chhati var dabav", "chatit bhar ahe",
+        "hrudayvikar", "chhati var dabav", "chatit bhar ahe", "chatit khup dabav", "chatit dabav",
         "छातीत दुखतंय", "छातीत वेदना", "छाती दुखत आहे", "हृदयविकार", "छातीवर दबाव"
       ]
     }
@@ -51,16 +53,18 @@
       "en": [
         "can't breathe", "cannot breathe", "short of breath", "shortness of breath",
         "hard to breathe", "gasping for air", "gasping", "suffocating",
-        "out of breath", "choking", "trouble breathing", "unable to breathe"
+        "out of breath", "choking", "trouble breathing", "unable to breathe",
+        "cannot catch my breath", "lying flat"
       ],
       "hi": [
         "saans nahi aa rahi", "saans lene mein takleef", "saans phool rahi",
         "dam ghut raha hai", "saans atak rahi hai", "saans band ho rahi",
+        "saans lene mein", "saans phool", "ghutan", "ghutan ho rahi",
         "सांस नहीं आ रही", "सांस लेने में तकलीफ", "सांस फूल रही है", "दम घुट रहा है"
       ],
       "mr": [
         "shwas gheta yet nahi", "shwas lagtoy", "dum lagtoy", "shwas ghyayla tras",
-        "shwas rokhla", "dum ghuttoy",
+        "shwas rokhla", "dum ghuttoy", "dam lagto", "shwas adakto",
         "श्वास घेता येत नाही", "श्वास लागतोय", "दम लागतोय", "श्वास घ्यायला त्रास", "दम घुटतोय"
       ]
     }
@@ -99,17 +103,20 @@
         "too many pills", "double dose", "took wrong medicine", "wrong pills",
         "someone else's pills", "already took full bottle", "drank whole syrup",
         "took the whole strip", "accidentally swallowed all", "too many tablets",
-        "take another one", "take another dose", "take one more", "can i take another"
+        "take another one", "take another dose", "take one more", "can i take another",
+        "wrong medicine", "cough syrup", "another bottle", "entire bottle"
       ],
       "hi": [
         "zyada dawai kha li", "zyada goli kha li", "do baar dawai li", "do baar goli kha li",
         "galat dawai kha li", "kisi aur ki dawai", "puri strip kha li", "sari goliyan kha li",
+        "do baar dawai", "galat goli", "dusri shishi",
         "ज्यादा दवाई खा ली", "ज्यादा गोली खा ली", "दो बार दवाई ले ली", "गलत दवाई खा ली",
         "पूरी स्ट्रिप खा ली", "सारी गोलियां खा ली"
       ],
       "mr": [
         "jast aushadh ghetla", "jast goli khalli", "don vela ghetla", "chukicha aushadh",
         "dusryacha aushadh", "sagli aushadhe ghetli", "purna strip khalli",
+        "don vela", "jast goli",
         "जास्त औषध घेतलं", "जास्त गोळी खाल्ली", "दोन वेळा घेतलं", "चुकीचं औषध",
         "सगळी औषधे घेतली", "पूर्ण स्ट्रिप खाल्ली"
       ]

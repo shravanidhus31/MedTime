@@ -145,7 +145,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const c4 = await playCall('Call 4: red flag', d4, ['Wait, I fell down in the kitchen.']);
     await sleep(1000);
     const red = await CaregiverAlert.find({ patient: patient._id, reason: 'red_flag' }).lean();
-    check('call 4: red flag handled before the agent, caregiver called', c4.last.emergency === 'fall' && red.length === 1 && c4.run.steps.some((s) => s.tool === 'safety_screen'));
+    // red counts red-flag alerts across ALL four calls: more than 1 means the safety screen
+    // (keywords, or its LLM check on final transcripts) flagged an ordinary sentence earlier.
+    const flaggedSteps = (await AgentRun.find({ patient: patient._id }).lean())
+      .flatMap((r) => r.steps.filter((s) => s.tool === 'safety_screen').map((s) => `${(s.input && s.input.transcript) || '?'} → ${s.output && s.output.category}`));
+    check('call 4: red flag handled before the agent, caregiver called', c4.last.emergency === 'fall' && red.length === 1 && c4.run.steps.some((s) => s.tool === 'safety_screen'),
+      `emergency=${c4.last.emergency}, ${red.length} red-flag alert(s); flagged: ${flaggedSteps.join(' | ') || '(none)'}`);
 
     // 5. access and input checks
     check('stranger cannot start a call on this patient', (await post('/simulate/call', { reminderId: String(d1._id) }, stranger)).status === 404);

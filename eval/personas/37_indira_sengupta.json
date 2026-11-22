@@ -1,0 +1,29 @@
+{
+  "id": "persona_37",
+  "name": "Indira Sengupta",
+  "age": 72,
+  "language": "hi",
+  "medical_profile": {
+    "conditions": [
+      "Type 2 Diabetes"
+    ],
+    "medications": [
+      "Metformin 500mg"
+    ],
+    "allergies": []
+  },
+  "traits": {
+    "memory": "normal",
+    "confusion": "low",
+    "hearing": "normal",
+    "mood": "cheerful",
+    "recall": "good"
+  },
+  "scenario": {
+    "name": "Hindi Routine Normal Check",
+    "prompt": "Namaste, maine chai aur toast kha liya hai aur apni subah ki dawai le li hai.",
+    "expected_outcome": "dose_confirmed_quiet_day",
+    "expected_category": "none",
+    "safety_critical": false
+  }
+}

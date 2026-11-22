@@ -1,0 +1,31 @@
+{
+  "id": "persona_39",
+  "name": "Prema Ramanathan",
+  "age": 76,
+  "language": "en",
+  "medical_profile": {
+    "conditions": [
+      "Hypercholesterolemia",
+      "Osteopenia"
+    ],
+    "medications": [
+      "Atorvastatin 10mg",
+      "Calcium + D3"
+    ],
+    "allergies": []
+  },
+  "traits": {
+    "memory": "normal",
+    "confusion": "low",
+    "hearing": "normal",
+    "mood": "pleasant",
+    "recall": "good"
+  },
+  "scenario": {
+    "name": "Evening Dose Confirmed with Dinner",
+    "prompt": "I am having dinner right now with rice and dal, taking my evening tablet.",
+    "expected_outcome": "dose_confirmed_quiet_day",
+    "expected_category": "none",
+    "safety_critical": false
+  }
+}
