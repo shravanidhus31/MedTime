@@ -5,16 +5,24 @@ const User = require('../models/User');
 const Patient = require('../models/Patient');
 const Reminder = require('../models/Reminder');
 const Medicine = require('../models/Medicine');
+const { verifyTwilioSignature } = require('../middleware/twilioSignature');
+const { publicBaseUrl } = require('../utils/publicUrl');
 
 const MessagingResponse = twilio.twiml.MessagingResponse;
+
+// A1.1: every route below is called by Twilio, so each request must carry a
+// valid X-Twilio-Signature. Forged requests get 403 before any handler runs.
+router.use(verifyTwilioSignature);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/v1/webhooks/sms
 // Handles inbound SMS replies from the patient (legacy Reminder-based flow).
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/sms', async (req, res) => {
-  const incomingMsg = req.body.Body.trim().toLowerCase();
-  let fromNumber = req.body.From; // e.g., '+919876543210'
+  const body = req.body || {};
+  // A1.1 guards: Body or From can be missing (e.g. an MMS with no text).
+  const incomingMsg = String(body.Body || '').trim().toLowerCase();
+  let fromNumber = String(body.From || ''); // e.g., '+919876543210'
 
   // Strip +91 to match the DB format
   if (fromNumber.startsWith('+91')) {
@@ -22,15 +30,21 @@ router.post('/sms', async (req, res) => {
   }
 
   const twiml = new MessagingResponse();
+  const reply = (text) => {
+    twiml.message(text);
+    return res.type('text/xml').send(twiml.toString());
+  };
 
   try {
-    const user = await User.findOne({ phone: fromNumber });
+    const user = fromNumber ? await User.findOne({ phone: fromNumber }) : null;
     if (!user) {
-      twiml.message("Sorry, we couldn't find a MedTime account linked to this number.");
-      return res.type('text/xml').send(twiml.toString());
+      return reply("Sorry, we couldn't find a MedTime account linked to this number.");
     }
 
     const patient = await Patient.findOne({ user: user._id });
+    if (!patient) {
+      return reply("Sorry, there's no patient profile linked to this number yet.");
+    }
     const recentReminder = await Reminder.findOne({
       patient: patient._id,
       status: 'alerted'
@@ -87,7 +101,7 @@ const escapeXml = (s) => String(s)
 
 router.post('/voice/prompt', async (req, res) => {
   const medicineId = req.query.medicineId;
-  const baseUrl = process.env.PUBLIC_BASE_URL || process.env.NGROK_URL || '';
+  const baseUrl = publicBaseUrl();
 
   let medName = 'medicine';
   try {

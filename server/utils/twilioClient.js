@@ -11,7 +11,10 @@ if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
 
 // ── Base ngrok URL for webhook callbacks ─────────────────────────────────────
 // Keep this in sync with your active ngrok tunnel.
-const NGROK_URL = process.env.NGROK_URL || 'https://cardiac-gallstone-quartet.ngrok-free.dev';
+// A1.1: the same base the webhook signature check uses (utils/publicUrl.js), so
+// the URL Twilio calls and the URL we verify against always match. The old
+// hard-coded tunnel is only a last resort until A1.2 removes it.
+const NGROK_URL = require('./publicUrl').publicBaseUrl() || 'https://cardiac-gallstone-quartet.ngrok-free.dev';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // sendSMS — sends an SMS to the patient (e.g. for initial dose reminders)
@@ -104,7 +107,7 @@ const makePatientCall = async (toPhone, medName, medicineId) => {
 // ─────────────────────────────────────────────────────────────────────────────
 const makeAlertCall = async (toPhone, alertId) => {
   const formattedTo = toPhone.startsWith('+') ? toPhone : `+91${toPhone}`;
-  const baseUrl = process.env.PUBLIC_BASE_URL || NGROK_URL;
+  const baseUrl = NGROK_URL;
   const alertUrl = `${baseUrl}/api/v1/webhooks/voice/alert?alertId=${encodeURIComponent(alertId)}`;
 
   if (!client) {

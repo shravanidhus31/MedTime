@@ -194,7 +194,8 @@ Folder: `server/agent/`
 **A1.3 · #13 Escalation per dose** (`Reminder.js`, `missedDoseCron.js`)
 - Move `snoozeUntil`, `caregiverAlertTime`, `caregiverAlerted` from `Medicine` to `Reminder`. Add `attempts` and `lastCallAt`.
 - `missedDoseCron` loops over **due `Reminder` documents**, not medicines. Each dose is armed, snoozed and alerted on its own.
-- A failed caregiver SMS is not swallowed. Mark the reminder `alertFailed: true`, log it, and retry on the next tick, up to 3 times.
+- **The missed-dose alert is a phone call** (decided 22 Nov), made through A2.5's `services/caregiverAlerts.js`, because trial SMS only allows Twilio's templates and every custom SMS fails. SMS can be added back after an upgrade.
+- A failed alert is not swallowed. If no call could be placed, mark the reminder `alertFailed: true`, log it, and retry on the next tick, up to 3 times. `caregiverNotified` is set only once a call was actually placed. (Whether the caregiver answered needs Twilio status callbacks, which aren't part of this task.)
 - Leave the old `Medicine` fields in the schema for now, unused. B removes them later with a migration note.
 - Write `server/services/doseService.js` with `markDose(reminderId, status, source)` (contract C4). It sets the status and `confirmedAt`/`confirmedBy`, clears the escalation fields, and emits the event.
 - **Test:** a medicine with two times a day escalates each dose separately (PRD gate); a confirmed dose stops all calls for that dose.
@@ -396,7 +397,7 @@ In order, top to bottom:
 - [x] A2.5 five core tools
 - [x] A2.6 cron hands over to the agent
 - [x] A2.7 text simulate endpoints (with a basic dose flow; A4.1 replaces it)
-- [ ] A1.1 #4 webhook signatures
+- [x] A1.1 #4 webhook signatures
 - [ ] A1.2 #10 `PUBLIC_BASE_URL` and `TWILIO_ENABLED`
 - [ ] A1.3 #13 per-dose escalation and `doseService`
 - [ ] A1.4 #14 dose endpoint and dashboard update

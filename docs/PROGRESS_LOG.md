@@ -18,7 +18,7 @@ A running record of what's done, what's in progress and what's next. **It's upda
 | Twilio | ✅ New trial account works end to end for keypad calls driven by our server |
 | Agent code | ✅ Phase 1 agent platform done on `feat/a-agent-runtime` (A2.1–A2.7). Phase 1 gate met on Person A's side: a simulated dose call runs end to end in text and every step shows through `GET /agent/runs/:id`; the Activity panel itself is Person B's. Next: A1 Phase 0 fixes |
 | Person B | 🟡 Working on a feature branch; Day-1 items (#2, #3, #1/#19 and soft delete, #5 top-up) |
-| Phase 0 security fixes | ⏳ Not started. Comes after Phase 1 (low priority) |
+| Phase 0 security fixes | 🟡 In progress on `feat/a-phase0-fixes`. A1.1 webhook signatures done; A1.2–A1.4 next |
 | Person B onboarding | 🟡 Docs pushed; access and secrets still to be sent privately |
 
 ## In progress / next up
@@ -29,7 +29,8 @@ A running record of what's done, what's in progress and what's next. **It's upda
    - `.env` values, sent privately. Each person makes their own free Groq key
    - the research papers
    - their phone number added to Twilio
-3. **Person A, next task: A1 Phase 0 fixes** (webhook signatures, `PUBLIC_BASE_URL`, per-dose escalation, dose endpoint), then Phase 2 (A3 voice pipeline, A4 dose agent).
+3. **Person A, now: A1 Phase 0 fixes.** A1.1 webhook signatures ✅. Next: A1.2 `PUBLIC_BASE_URL` and `TWILIO_ENABLED`, A1.3 per-dose escalation, A1.4 dose endpoint. Then Phase 2 (A3 voice pipeline, A4 dose agent).
+   - **Before merging to `main`:** on Render, `PUBLIC_BASE_URL` must be exactly the Render service URL and `TWILIO_AUTH_TOKEN` the trial account's token. Otherwise Twilio's own webhooks get 403 and real calls fail.
 4. **Person A, after A2 and A1:** A3.5 Twilio phone adapter (turn by turn, trial-compatible) and the Core dose agent.
 
 ## Open questions
@@ -58,26 +59,37 @@ A running record of what's done, what's in progress and what's next. **It's upda
 | 21 Nov | **Two ways of listening, one agent:** browser mode (streaming, the primary path for development and the demo), and phone via a Twilio `<Gather>` turn-by-turn adapter (works on the trial) | The Twilio trial blocks `<Stream>`, `<Record>` and custom SMS |
 | 21 Nov | **LLM provider is a setting; develop on Groq (free)**, with Claude optional for the final runs | Free for development; switching is a one-line env change; Claude scored safest in GrandGuard |
 | 21 Nov | On the trial, caregiver alerts are **phone calls**, and journal and approval notices go to the **dashboard** | Trial SMS only allows Twilio's templates |
+| 22 Nov | **Phase 0 fixes go on their own branch, `feat/a-phase0-fixes`, started from `feat/a-agent-runtime`.** PRs in order: agent platform → Phase 0 (A1.1–A1.3) → A1.4 as its own small PR (it edits Person B's files, rule 0.2) | Smaller PRs for Person B to review (rule 0.4); A1 builds on A2 code; a broken real call on Render points at one change |
+| 22 Nov | **Missed-dose alerts are phone calls** (A2.5's `caregiverAlerts`), not SMS. A failed call is marked `alertFailed` and retried up to 3 times; "caregiver notified" is set only when a call was placed | Every custom SMS fails on the trial, and the old code swallowed the error, so no one heard about missed doses while the database said they had |
 
 ---
 
 ## Change log
 
 ### 22 Nov 2026
-- **A2.7 text simulate endpoints done; Phase 1 complete on Person A's side** (branch `feat/a-agent-runtime`, not committed yet).
+- **Two decisions:** Phase 0 work moves to a new branch `feat/a-phase0-fixes` (from `feat/a-agent-runtime`), and missed-dose alerts become phone calls instead of SMS. A1.3 in TASKS_PERSON_A.md updated to match. Found while re-reading the plan: on the trial the old escalation SMS always failed silently.
+- **A1.1 Twilio webhook signatures checked (PRD #4)** (branch `feat/a-phase0-fixes`).
+  - New `middleware/twilioSignature.js`, mounted on the whole webhooks router, so `/sms`, `/voice`, `/voice/prompt` and `/voice/alert` all need a valid `X-Twilio-Signature`; otherwise 403. The URL checked is `PUBLIC_BASE_URL` + `req.originalUrl` (not `req.protocol`/host, which Render's proxy changes).
+  - No `TWILIO_AUTH_TOKEN` (local simulation mode): the check is skipped. In production (`NODE_ENV=production`) a missing token or a missing `PUBLIC_BASE_URL` rejects every webhook instead of leaving them open.
+  - New `utils/publicUrl.js`: one base URL for the callback URLs we give Twilio and the URL we verify, so they can't drift apart. It still falls back to `NGROK_URL` until A1.2.
+  - `/sms` guards: a missing `Body` or `From`, and a user with no `Patient` profile, now get a polite reply instead of a crash.
+  - `middleware/twilioSignature.test.js`: 7 offline tests on the real router (forged `/voice` with `Digits=1` → 403; made-up signature → 403 on all four routes; correctly signed → 200; changed params or wrong host → 403; trailing slash OK; no token → skipped locally, 403 in production). `npm test` now also runs `middleware/**/*.test.js`: 44/44 pass.
+  - **Still to check on Render after merging:** a real call still works (the signed-request half of the PRD test).
+- Commits on `feat/a-agent-runtime` so far: `0210cc1` (A2.1–A2.3), `8ebf9d0` (A2.4), `db0c635` (A2.5), `426e0e0` (A2.6), `872766c` (A2.7). The branch isn't pushed yet.
+- **A2.7 text simulate endpoints done; Phase 1 complete on Person A's side** (branch `feat/a-agent-runtime`, committed in `872766c`).
   - `POST /api/v1/simulate/call { reminderId }` → `{ callId, runId, actions, ended }`; `POST /api/v1/simulate/call/:callId/say { text | dtmf }`. Login and access to the patient required; off in production unless `SIMULATE_ENABLED=true`, because a simulated call records real doses.
   - `agent/flows/dose.js` + prompt `dose@2`: a **basic** dose flow (A4.1 replaces it). One `AgentRun` per call with `patient_said` / `agent_said` steps between the tool calls. New `end_call` tool.
   - Orchestrator: `startSession({ init })`, `onEnd(session)` hook (runs once on hang-up, fallback, turn limit or expiry); a fallback now also ends the session.
   - **Found in the live check and fixed in code:** (1) offered every tool on the opening turn, the model recorded the dose as taken before the patient had said anything. `mark_dose` and `notify_caregiver` now only exist after she has spoken. (2) The model often said "Goodbye" without `end_call`, so calls stayed open and the family was called twice. The call now ends by itself once the dose is settled (recorded, family contacted, or already taken at the start).
   - **Known gaps for A4.1:** the agent sometimes records on "I am taking it now" without the check question; on an already-taken dose it doesn't always say "don't take another one". A4.1 should enforce the check question in code and use fixed phrase-bank lines for these moments.
   - `npm run simulate:check`: 11/11 (4 calls: takes it → recorded; already taken → nothing recorded; "I already took it" with no record → not recorded, family asked to check; "I fell" → emergency). Paced a minute apart for Groq's free-plan limit (`CHECK_PACE_MS=0` to turn off). 37 offline tests pass; `cron:check` 9/9 and `runs:check` 14/14 still pass.
-- **A2.6 the scheduler hands dose calls to the agent** (branch `feat/a-agent-runtime`, not committed yet).
+- **A2.6 the scheduler hands dose calls to the agent** (branch `feat/a-agent-runtime`, committed in `426e0e0`).
   - `Patient.js`: `dementiaMode` (default false), `language` (`en|hi|mr`, default `en`), `familyClipsEnabled` (default false).
   - `agent/doseDue.js` `handleDoseDue()`: starts an `AgentRun` (`trigger: 'dose_due'`), runs `check_double_dose` on the due Reminder; already taken → no call; otherwise places the call and logs it as a `place_call` step. If anything fails, it calls anyway.
   - `jobs/missedDoseCron.js`: for dementiaMode patients the first call [C] and the re-call after a snooze [B] go through `handleDoseDue()`; everyone else is unchanged; escalation [A] is unchanged. The tick is now an exported `runTick(now)`, with the timer exported as `task`.
   - The call is still today's keypad call. The phone adapter (A3.5) and dose flow (A4.1) replace it at this point. The decision is a rule in code, not an LLM call (it would add nothing yet and cost a request per dose).
   - `npm run cron:check`: 9/9 (dev database, Twilio simulated, timer stopped, no Groq requests): due → check → call; regular patient untouched; already taken in the app → no call; no reminder record → calls anyway; re-call after snooze checks again; confirmed meanwhile → no re-call.
-- **A2.5 five core tools done** (branch `feat/a-agent-runtime`, not committed yet).
+- **A2.5 five core tools done** (branch `feat/a-agent-runtime`, committed in `db0c635`).
   - `agent/tools/core.js`: `get_patient_context` (no phone numbers given to the model), `get_dose_history` (IST times), `check_double_dose`, `mark_dose`, `notify_caregiver`. Every tool works only on the run's own patient; another patient's reminder id is refused.
   - `services/doseService.js` (contract C4): `markDose(reminderId, status, source)`. A dose already taken is never changed (checked inside the database write, so two confirmations at once record it once); confirming clears the escalation on `Medicine` (A1.3 moves it per dose); emits `dose.taken|skipped|missed` on `server/events.js`. `Reminder.confirmedBy` gains `speech` and `agent`.
   - `services/caregiverAlerts.js` + `CaregiverAlert` model + `POST /webhooks/voice/alert`: a caregiver alert is a phone call (trial), primary caregivers first, doctors skipped, `emergencyContact` if no caregiver. Twilio fetches the spoken words from our URL.
@@ -86,28 +98,28 @@ A running record of what's done, what's in progress and what's next. **It's upda
   - Tests: 35 offline pass; `npm run tools:check` 22/22 (dev database, Twilio forced to simulation, deletes its test data); `loop:check` 3/3 and `runs:check` 14/14 still pass.
 
 ### 21 Nov 2026
-- **A2.4 orchestrator and `POST /api/v1/agent/turn` done** (contract C8; not committed yet).
+- **A2.4 orchestrator and `POST /api/v1/agent/turn` done** (contract C8; committed in `8ebf9d0`).
   - `agent/orchestrator.js`: `registerFlow()`, `startSession()`, `handleTurn()`. Order per turn: keypad 9 or a red flag in any transcript (partial or final) → fixed neutral-voice reply, caregiver alert, keep listening (the flow and LLM are skipped) → partial transcripts stop there → the flow runs inside a 4 s budget (too slow → "Let me check that for you" + `wait`, the next empty turn collects it) → crash or bad actions → `fallback` (keypad) → after 8 turns, hand over and hang up.
   - **C8 extended** (both task files): new action types `wait` and `fallback`; red-flag replies carry `emergency: <category>`.
   - `agent/safety.js`: stand-in keyword screen for C9 (fall, chest pain, breathing, extra pills, self-harm with Tele-MANAS 14416, scam/OTP), English plus common Hindi. B swaps in the real one with `setSafetyScreen()`. If that screen ever throws, the keyword list still runs. "took two"/"took both" are deliberately not red flags (a normal dose can be two pills).
   - Caregiver alert is a logging stand-in until A2.5 (`setEmergencyHandler()`); red flags are saved as `safety_screen` steps on the run.
   - `/agent/turn` has no login: the caller is the voice pipeline; the session id is a random UUID valid for one live call.
   - Tests: 32 offline pass (12 new).
-- **A2.3 `AgentRun` model and endpoints done** (branch `feat/a-agent-runtime`, not committed yet). Contract C2 is ready for Person B's Activity panel.
+- **A2.3 `AgentRun` model and endpoints done** (branch `feat/a-agent-runtime`, committed in `0210cc1`). Contract C2 is ready for Person B's Activity panel.
   - `server/models/AgentRun.js`: trigger, patient, reminder, flow, status, outcome, fallbackReason, error, text, steps `{ tool, input, output, ms, at, approvalLevel, proposalId }`, stepCount, promptVersion, model, llmCalls, usage, approver, startedAt/endedAt/ms.
   - `agent/runs.js`: `runRecorded()` wraps `runLoop()`; each step is saved as it happens. A database failure is logged and never stops the call.
   - `GET /api/v1/agent/runs?patient=&from=&to=&limit=` (newest first, without steps) and `GET /api/v1/agent/runs/:id` (with steps). Login required; 403 on the list, 404 on a run, for users without access to that patient.
   - `agent/access.js`: stand-in for B's C3 `canAccess` (patient, linked caregivers, admin). B swaps it with `setAccessChecker()`.
   - `MONGO_URI` in `server/.env` now points to the dev database `medtime_dev_a`.
   - `npm run runs:check`: 14/14 pass (a real Groq run saved, endpoints, access, bad input). It refuses to run unless the database name contains "dev" or "test", and deletes its test data afterwards.
-- **A2.2 tool registry and loop done** (branch `feat/a-agent-runtime`, not committed yet).
+- **A2.2 tool registry and loop done** (branch `feat/a-agent-runtime`, committed in `0210cc1`).
   - `agent/tools/index.js`: `registerTool`, `getTool`, `listTools` (contract C1 shape checked on register).
   - `agent/loop.js`: `runLoop()`. At most 8 tool calls, 30 s per run by default; tools with `approvalLevel > 0` are never run, they go to `proposeChange()` and the outcome is `queued_for_approval`; LLM error, refusal, timeout or overrun → outcome `fallback` with a reason. Each step `{ tool, input, output, ms, at }` goes to an `onStep` callback (A2.3 will save it).
   - `agent/proposals.js`: stand-in for B's C5. B plugs the real one in with `setProposalHandler()`.
   - `agent/prompts/`: versioned prompts (`loadPrompt('base')` → `base@2`).
   - **Found in the live check:** with prompt v1 the model *said* "I've queued the request" without calling the tool. Prompt v2 adds "never say something was done or queued unless a tool result says so"; after that, 3/3 passed in 3 runs in a row.
   - Tests: 20 offline (`npm test`) pass; `npm run loop:check` (3 live scenarios on Groq) passes.
-- **A2.1 LLM adapter done** (branch `feat/a-agent-runtime`, not committed yet).
+- **A2.1 LLM adapter done** (branch `feat/a-agent-runtime`, committed in `0210cc1`).
   - **Live check passed 5/5 on Groq:** plain reply (fast 549 ms, smart 1188 ms), `mark_dose` tool call (537 ms), structured turn label (444 ms), safety verdict flagged a fall as a red flag (490 ms). All within the 4-second turn budget.
   - Groq key is in `server/.env` (gitignored); `.env.example` stays blank.
   - `server/agent/llm/`: `index.js` (`chat({ tier, ... })`), `groq.js`, `anthropic.js` (placeholder that throws until a Claude key is added), `config.js` (tier → model), `errors.js` (`LlmError` with `kind` and `retryable`), `validate.js` (ajv schema check).
@@ -186,4 +198,4 @@ A running record of what's done, what's in progress and what's next. **It's upda
 ---
 
 ## Not yet committed (local only)
-- Nothing. Everything is pushed as of 21 Nov.
+- Nothing uncommitted. Neither branch is pushed yet: `feat/a-agent-runtime` (A2.1–A2.7) and `feat/a-phase0-fixes` (A1.1, on top of it).
