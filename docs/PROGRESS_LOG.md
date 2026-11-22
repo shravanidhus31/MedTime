@@ -80,6 +80,8 @@ A running record of what's done, what's in progress and what's next. **It's upda
 ## Change log
 
 ### 22 Nov 2026
+- **PR #1 approved by Person B and merged into `main`** (merge commit `e319ac4`): Person A's A2 + A1.1–A1.3 and Person B's B1–B16 are now one codebase. Render and Vercel redeploy from `main`. Still to do after the merge: Person B runs `scripts/migrate-caregivers.js` on the live database; one real call to check the webhook signatures; then delete `NGROK_URL` on Render.
+- **`feat/a-dose-flow` pushed for PR #2** (A4.1 + A3.1–A3.2 + emergency mode; 2 commits on top of `main`).
 - **Emergency mode (A3.4), found in the user's live voice test.** After "I have fallen down" the agent alerted the family and said the neutral emergency line, but her next words ("Okay, bye.") went back to the dose flow and got "Well done. Which tablet did you take?". Against plan 6.1 (the emergency branch ends the dose call) and A3.4 (stay on the line, keep listening). Now: after a red flag the orchestrator keeps the call in emergency mode: every turn gets a fixed neutral reassurance ("I'm still here with you, and your family has been told. Please stay on the line.") and the flow never runs again; the family is phoned once per kind of emergency (same red flag again → reassured, not re-alerted; a new one, e.g. chest pain after a fall → alerted); the run ends with outcome `red_flag` (what Person B's journal looks for); no turn-limit hand-over call on top. 2 new/updated orchestrator tests (84/84).
 - **A simulated or browser call no longer triggers a scheduler call for the same dose.** The call screen creates a dose "due now"; a minute later the scheduler would have placed its own reminder call for it (on Render: a real phone call). The simulate route now counts the call as an attempt. New check in `simulate:check` (20/20).
 - Still open from the guidelines review: a bare "Okay, bye" in the normal flow is read as "yes" (then the check question verifies, so nothing is recorded wrongly); "I'll call you again in ten minutes" after a simulated call does lead to a real scheduler re-call on Render; no silence detection after a red flag (all caregivers are alerted at once, so "escalate if silent" adds nothing yet).
@@ -265,5 +267,5 @@ A running record of what's done, what's in progress and what's next. **It's upda
 ---
 
 ## Not yet committed (local only)
-- Nothing uncommitted. `feat/a-dose-flow` (A4.1 `17faf8f`, then A3.1–A3.2 with emergency mode) is local only: it goes to GitHub as its own PR after PR #1 is merged.
-- **PR #1 is open:** https://github.com/shravanidhus31/MedTime/pull/1 (`feat/a-integrate-b` → `main`, Person B reviewing). A4.1 goes in a separate PR after it.
+- Nothing. `feat/a-dose-flow` is pushed; PR #2 to be opened and reviewed by Person B.
+- (done) **PR #1:** https://github.com/shravanidhus31/MedTime/pull/1 (`feat/a-integrate-b` → `main`, Person B reviewing). A4.1 goes in a separate PR after it.
