@@ -24,6 +24,7 @@ const { verifyToken } = require('../middleware/authMiddleware');
 const { canAccess } = require('../agent/access');
 const { startDoseCall, doseLineTexts } = require('../agent/flows/dose');
 const { startCallinCall, callinLineTexts } = require('../agent/flows/callin');
+const { startChatCall, chatLineTexts } = require('../agent/flows/chat');
 const { handleTurn, getSession, TurnError, HOLD_TEXT, TURN_LIMIT_TEXT, STAY_TEXT } = require('../agent/orchestrator');
 const { LINES, render } = require('../agent/flows/doseLines');
 const { RESPONSES } = require('../agent/safety');
@@ -99,6 +100,9 @@ router.get('/doses', verifyToken, async (req, res) => {
       patient: { id: String(patient._id), firstName, language: patient.language || 'en' },
       medicines,
       callinLines,
+      // the weekly chat call's lines (Feature 1), plus the emergency lines it may need
+      chatLines: [...new Set([...chatLineTexts({ name: firstName, lang: patient.language === 'hi' ? 'hi' : 'en' }), ...COMMON_LINES()])],
+      weeklyChat: !!patient.weeklyChatEnabled,
     });
   } catch (err) {
     console.error('[simulateRoutes] doses failed:', err.message);
@@ -167,6 +171,28 @@ router.post('/callin', verifyToken, async (req, res) => {
     if (err.status) return res.status(err.status).json({ message: err.message });
     console.error('[simulateRoutes] call-in failed:', err.message);
     return res.status(500).json({ message: 'Could not start the call-in.' });
+  }
+});
+
+// The weekly chat call (Feature 1), text or voice: the same open question each week; ≥ 50 words
+// are measured the way the speech-screening paper does. Works whether or not the weekly schedule is on.
+router.post('/chat', verifyToken, async (req, res) => {
+  try {
+    if (req.body && req.body.patient) req.query.patient = String(req.body.patient);
+    const patient = await resolvePatient(req);
+    if (!patient || !(await canAccess(req.user, patient._id, 'primary'))) return res.status(404).json({ message: 'Patient not found.' });
+    const channel = req.body && req.body.channel === 'voice' ? 'voice' : 'text';
+    const call = await startChatCall({ patientId: patient._id, trigger: 'weekly_chat', channel, turnBudgetMs: channel === 'text' ? TEXT_TURN_BUDGET_MS : undefined });
+    const lines = new Set([...chatLineTexts({ name: call.name, lang: call.lang }), ...COMMON_LINES()]);
+    return res.status(201).json({
+      callId: call.sessionId, runId: call.runId, actions: call.actions, ended: isEnded(call.actions),
+      hints: [call.name], language: patient.language || 'en',
+      lines: channel === 'voice' ? [...lines] : undefined,
+    });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ message: err.message });
+    console.error('[simulateRoutes] chat failed:', err.message);
+    return res.status(500).json({ message: 'Could not start the chat call.' });
   }
 });
 

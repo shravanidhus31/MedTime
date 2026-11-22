@@ -25,7 +25,7 @@ const MAX_LIMIT = 200;
 const MAX_TRANSCRIPT_CHARS = 2000;
 
 router.post('/turn', async (req, res) => {
-  const { sessionId, flow, transcript, isFinal, asrConfidence, dtmf } = req.body || {};
+  const { sessionId, flow, transcript, isFinal, asrConfidence, dtmf, timing } = req.body || {};
   if (typeof sessionId !== 'string' || !sessionId) {
     return res.status(400).json({ message: '"sessionId" is required.' });
   }
@@ -39,7 +39,7 @@ router.post('/turn', async (req, res) => {
     return res.status(400).json({ message: '"dtmf" must be a single keypad key.' });
   }
   try {
-    const result = await handleTurn({ sessionId, flow, transcript, isFinal, asrConfidence, dtmf });
+    const result = await handleTurn({ sessionId, flow, transcript, isFinal, asrConfidence, dtmf, timing });
     return res.json(result);
   } catch (err) {
     if (err instanceof TurnError) return res.status(err.status).json({ message: err.message });

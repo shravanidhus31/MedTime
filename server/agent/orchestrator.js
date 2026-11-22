@@ -160,7 +160,7 @@ class TurnError extends Error {
   }
 }
 
-async function handleTurn({ sessionId, flow, transcript, isFinal = true, asrConfidence, dtmf } = {}) {
+async function handleTurn({ sessionId, flow, transcript, isFinal = true, asrConfidence, dtmf, timing } = {}) {
   const session = sessions.get(sessionId);
   if (!session || session.ended) throw new TurnError(404, 'No active session with that id');
   if (flow && flow !== session.flow) throw new TurnError(400, `Session is a "${session.flow}" call, not "${flow}"`);
@@ -204,7 +204,8 @@ async function handleTurn({ sessionId, flow, transcript, isFinal = true, asrConf
 
   // 3. the flow
   const handler = flows.get(session.flow);
-  const input = { transcript: text, isFinal, asrConfidence, dtmf: key || undefined, safety: verdict };
+  // timing: { latencyMs, speechMs } from the browser voice pipeline (word timings; phones have none)
+  const input = { transcript: text, isFinal, asrConfidence, dtmf: key || undefined, safety: verdict, timing: cleanTiming(timing) };
   const work = runHandler(session, () => handler.turn(session, input));
   const actions = await withinBudget(work, session.turnBudgetMs);
   if (actions) return finishActions(session, actions);
@@ -286,6 +287,15 @@ async function runHandler(session, fn) {
     console.error(`[agent:orchestrator] flow "${session.flow}" failed:`, err.message);
     return [{ type: 'fallback', reason: 'flow_error' }];
   }
+}
+
+function cleanTiming(t) {
+  if (!t || typeof t !== 'object') return undefined;
+  const ok = (x) => Number.isFinite(Number(x)) && Number(x) >= 0 && Number(x) < 600000;
+  const out = {};
+  if (ok(t.latencyMs)) out.latencyMs = Math.round(Number(t.latencyMs));
+  if (ok(t.speechMs)) out.speechMs = Math.round(Number(t.speechMs));
+  return Object.keys(out).length ? out : undefined;
 }
 
 function isValidActions(actions) {

@@ -60,6 +60,23 @@ export default function CareSettings({ patientId }) {
               </span>
             </span>
           </label>
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-1 h-5 w-5 accent-[#5c4535]"
+              checked={!!settings.weeklyChat}
+              disabled={saving}
+              onChange={(e) => save({ weeklyChat: e.target.checked })}
+            />
+            <span>
+              <span className="block text-sm font-semibold text-[#2d2418]">Weekly chat call (speech check)</span>
+              <span className="block text-xs text-[#8a7560]">
+                Every Sunday at 11 am, a short friendly call asks the same question (how she makes her morning tea). With at
+                least 50 words, MedTime measures vocabulary, repetitions and word-finding the way the speech-screening research does,
+                and compares them only with her own earlier weeks. Off by default; never a diagnosis.
+              </span>
+            </span>
+          </label>
           <label className="block">
             <span className="block text-sm font-semibold text-[#2d2418] mb-1">Language on calls</span>
             <select

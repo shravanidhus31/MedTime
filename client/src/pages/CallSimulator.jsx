@@ -67,7 +67,7 @@ export default function CallSimulator() {
   // instant after that), checking progress every 2 seconds.
   useEffect(() => {
     const med = doses?.medicines.find((m) => m.medicineId === medicineId);
-    const lines = mode === 'callin' ? doses?.callinLines : med?.lines;
+    const lines = mode === 'callin' ? doses?.callinLines : mode === 'chat' ? doses?.chatLines : med?.lines;
     if (!lines?.length) { setPrep(null); return undefined; }
     let stopped = false;
     let timer;
@@ -108,7 +108,9 @@ export default function CallSimulator() {
       // 1. the agent's opening turn, from the API
       const { data: call } = mode === 'callin'
         ? await api.post('/simulate/callin', { patient: doses?.patient?.id, channel: 'voice' })
-        : await api.post('/simulate/call', { medicineId, channel: 'voice' });
+        : mode === 'chat'
+          ? await api.post('/simulate/chat', { patient: doses?.patient?.id, channel: 'voice' })
+          : await api.post('/simulate/call', { medicineId, channel: 'voice' });
       add({ who: 'system', text: `Call started (run ${call.runId || '-'}).` });
 
       // 2. the voice connection to this laptop's voice server
@@ -165,7 +167,7 @@ export default function CallSimulator() {
         </p>
 
         <div className="mt-5 inline-flex rounded-xl border-[1.5px] border-[#e8dcc8] bg-white p-1 text-sm font-bold">
-          {[['dose', '📞 MedTime calls the patient'], ['callin', '☎️ Patient calls MedTime']].map(([m, label]) => (
+          {[['dose', '📞 MedTime calls the patient'], ['callin', '☎️ Patient calls MedTime'], ['chat', '💬 Weekly chat']].map(([m, label]) => (
             <button key={m} disabled={busy} onClick={() => setMode(m)}
               className={`px-4 py-2 rounded-lg ${mode === m ? 'bg-[#f5ede0] text-[#5c4535]' : 'text-[#8a7560]'} disabled:opacity-60`}>
               {label}
@@ -196,6 +198,13 @@ export default function CallSimulator() {
               ))}
             </select>
           </label>}
+          {mode === 'chat' && (
+            <p className="text-xs text-[#8a7560] max-w-[300px]">
+              The weekly chat call: MedTime asks how {doses?.patient?.firstName || 'she'} makes her morning tea and listens. With 50+ words it
+              measures vocabulary, repetitions and word-finding (the speech-screening research), plus speech rate and time before answering
+              on this browser call. {doses?.weeklyChat ? 'The Sunday call is on.' : 'The Sunday call is off (Settings).'}
+            </p>
+          )}
           {mode === 'callin' && (
             <p className="text-xs text-[#8a7560] max-w-[260px]">
               {doses?.patient?.firstName || 'The patient'} calls and asks, for example, "Did I take my morning pills?"

@@ -257,7 +257,7 @@ const doseFlow = {
     const s = session.state;
     const said = input.transcript || (input.dtmf ? `(pressed key ${input.dtmf})` : '');
     s.transcript.push({ who: 'patient', text: said });
-    await log(session, { tool: 'patient_said', input: { text: said, asrConfidence: input.asrConfidence }, output: { ok: true }, ms: 0, at: new Date(), label: 'patient_said', summaryText: said });
+    await log(session, { tool: 'patient_said', input: { text: said, asrConfidence: input.asrConfidence, timing: input.timing }, output: { ok: true }, ms: 0, at: new Date(), label: 'patient_said', summaryText: said });
 
     // Her answer to the follow-up question (A4.3): recorded, never advised on, then goodbye.
     if (s.policy.phase === 'followup') return answerFollowUp(session, said);

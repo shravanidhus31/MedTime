@@ -65,6 +65,9 @@ function computeCallMeasures({ patientLines = [], steps = [] } = {}) {
   const markIdx = steps.findIndex((s) => s.tool === 'mark_dose' && s.input && s.input.status === 'taken');
   if (markIdx >= 0) add('turnsToConfirm', steps.slice(0, markIdx).filter((s) => s.tool === 'patient_said').length);
 
+  // browser calls: time before answering, from the voice pipeline's timings (phones have none)
+  const lat = steps.filter((s) => s.tool === 'patient_said' && s.input && s.input.timing && Number.isFinite(s.input.timing.latencyMs)).map((s) => s.input.timing.latencyMs);
+  if (lat.length) add('latencyMs', lat.reduce((a, b) => a + b, 0) / lat.length);
   const conf = steps.filter((s) => s.tool === 'patient_said' && s.input && typeof s.input.asrConfidence === 'number').map((s) => s.input.asrConfidence);
   if (conf.length) add('asrConfidence', conf.reduce((a, b) => a + b, 0) / conf.length);
   return out.map((o) => ({ ...o, wordCount: totalWords }));

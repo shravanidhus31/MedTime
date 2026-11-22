@@ -78,10 +78,17 @@ async function generateWeeklyReview(patientId, referenceDate = new Date(), { use
   await step('gather_observations', { since: calls.length ? calls[0].at : null }, { calls: calls.length, missedDoses: missed.length, seeded }, `Read ${calls.length} measured call(s) and ${missed.length} missed dose(s)${seeded ? ' (includes seeded demo data)' : ''}.`);
 
   // 2. compare
-  const cmp = L.compareWithBaseline(calls, { ref, margin: marginPct / 100 });
-  const twoWeeks = cmp.results.filter((r) => r.change === 'two_weeks');
-  const oneWeek = cmp.results.filter((r) => r.change === 'one_week');
-  const enoughBlocks = Object.entries(cmp.blocks).filter(([, b]) => b.enough).map(([b]) => b);
+  // reminder calls by part of the day; the weekly chat on its own (the paper's measures)
+  const chats = calls.filter((c) => c.callType === 'chat');
+  const cmp = L.compareWithBaseline(calls.filter((c) => c.callType !== 'chat'), { ref, margin: marginPct / 100 });
+  const chatCmp = L.compareChat(chats, { ref, margin: marginPct / 100 });
+  const allResults = [...cmp.results, ...chatCmp.results];
+  const twoWeeks = allResults.filter((r) => r.change === 'two_weeks');
+  const oneWeek = allResults.filter((r) => r.change === 'one_week');
+  const enoughBlocks = [...Object.entries(cmp.blocks).filter(([, b]) => b.enough).map(([b]) => b), ...(chatCmp.enough ? ['weekly chat'] : [])];
+  const DEFS = (r) => (r.block === 'chat' ? L.CHAT_METRICS : L.METRICS);
+  const where = (r) => (r.block === 'chat' ? 'In the weekly chat' : `On ${r.block} calls`);
+  const groupOf = (block) => (block === 'chat' ? { list: chats, firstAt: chatCmp.firstAt } : { list: calls.filter((c) => c.callType !== 'chat' && c.block === block), firstAt: cmp.firstAt });
   await step('compare_baseline', { marginPercent: marginPct }, { blocksCompared: enoughBlocks, twoWeeks: twoWeeks.length, oneWeek: oneWeek.length },
     enoughBlocks.length ? `Compared ${enoughBlocks.join(', ')} calls with her first 4 weeks: ${twoWeeks.length} change(s) 2 weeks running, ${oneWeek.length} for 1 week.` : 'Not enough calls yet to compare with her usual pattern.');
 
@@ -96,15 +103,16 @@ async function generateWeeklyReview(patientId, referenceDate = new Date(), { use
     const changedMeds = (await Medicine.find({ patient: patient._id, $or: [{ startDate: changeWindow }, { deletedAt: changeWindow }] }).select('name createdAt deletedAt startDate').lean());
     if (changedMeds.length) explanations.push({ kind: 'medicine_change', text: `medicines changed just before (${changedMeds.map((m) => (m.deletedAt ? `${m.name} stopped` : `${m.name} started`)).join(', ')})` });
     for (const block of new Set(twoWeeks.map((r) => r.block))) {
-      const inBlock = calls.filter((c) => c.block === block);
-      const recent = inBlock.filter((c) => ['week0', 'week1'].includes(L.windowOf(c.at, ref, cmp.firstAt)));
-      const base = inBlock.filter((c) => L.windowOf(c.at, ref, cmp.firstAt) === 'base');
+      const { list: inBlock, firstAt } = groupOf(block);
+      const recent = inBlock.filter((c) => ['week0', 'week1'].includes(L.windowOf(c.at, ref, firstAt)));
+      const base = inBlock.filter((c) => L.windowOf(c.at, ref, firstAt) === 'base');
+      const label = block === 'chat' ? 'weekly chat' : block;
       const confR = L.mean(recent.map((c) => c.m.asrConfidence).filter((v) => typeof v === 'number'));
       const confB = L.mean(base.map((c) => c.m.asrConfidence).filter((v) => typeof v === 'number'));
-      if (confR !== null && ((confB !== null && confR < confB - 0.08) || confR < 0.6)) explanations.push({ kind: 'call_quality', block, text: `the ${block} calls were harder to hear (speech recognition confidence ${L.round(confR, 2)}${confB !== null ? `, usually ${L.round(confB, 2)}` : ''})` });
+      if (confR !== null && ((confB !== null && confR < confB - 0.08) || confR < 0.6)) explanations.push({ kind: 'call_quality', block, text: `the ${label} calls were harder to hear (speech recognition confidence ${L.round(confR, 2)}${confB !== null ? `, usually ${L.round(confB, 2)}` : ''})` });
       const phone = (list) => (list.length ? list.filter((c) => c.callType === 'phone').length / list.length : null);
       const pR = phone(recent); const pB = phone(base);
-      if (pR !== null && pB !== null && Math.abs(pR - pB) > 0.5) explanations.push({ kind: 'call_type', block, text: `most ${block} calls were a different kind of call (${pR > pB ? 'phone' : 'browser'}) than usual` });
+      if (pR !== null && pB !== null && Math.abs(pR - pB) > 0.5) explanations.push({ kind: 'call_type', block, text: `most ${label} calls were a different kind of call (${pR > pB ? 'phone' : 'browser'}) than usual` });
     }
     // ask the caregiver once per review period about illness or sleep
     question = await AgentQuestion.findOne({ patient: patient._id, question: { $regex: `^${QUESTION_PREFIX}` }, createdAt: { $gte: new Date(ref.getTime() - 14 * L.DAY) } }).sort({ createdAt: -1 }).lean();
@@ -124,12 +132,12 @@ async function generateWeeklyReview(patientId, referenceDate = new Date(), { use
   }
 
   // 4. her own words from the recent calls, as evidence (never invented)
-  const recentRuns = await AgentRun.find({ patient: patient._id, startedAt: { $gte: new Date(ref.getTime() - 14 * L.DAY), $lte: ref }, trigger: { $ne: 'weekly_review' } }).select('steps startedAt').lean();
-  const linesIn = (block, re) => recentRuns.filter((r) => getTimeOfDay(r.startedAt) === block)
+  const recentRuns = await AgentRun.find({ patient: patient._id, startedAt: { $gte: new Date(ref.getTime() - 14 * L.DAY), $lte: ref }, trigger: { $ne: 'weekly_review' } }).select('steps startedAt trigger flow').lean();
+  const linesIn = (block, re) => recentRuns.filter((r) => (block === 'chat' ? r.flow === 'chat' : r.flow !== 'chat' && getTimeOfDay(r.startedAt) === block))
     .flatMap((r) => (r.steps || []).filter((s) => s.tool === 'patient_said' && s.input && s.input.text).map((s) => String(s.input.text)))
     .filter((t) => (re ? re.test(t) : t.split(/\s+/).length >= 4));
   const findings = twoWeeks.map((r) => {
-    const def = L.METRICS[r.metric];
+    const def = DEFS(r)[r.metric];
     const blockExpl = explanations.filter((e) => !e.block || e.block === r.block);
     const status = blockExpl.length ? 'explained' : caregiverSaid ? 'flagged' : 'checking_with_caregiver';
     const quotes = linesIn(r.block, QUOTE_FOR[r.metric]).slice(-2);
@@ -138,7 +146,8 @@ async function generateWeeklyReview(patientId, referenceDate = new Date(), { use
       flagged: status === 'flagged',
       severity: status === 'flagged' ? 'warning' : 'info',
       baseline: r.base, weekBefore: r.week1, lastWeek: r.week0,
-      observedChange: `On ${r.block} calls ${name} ${def.label} more than usual for 2 weeks (${r.week1} and ${r.week0} ${def.unit}; usually ${r.base}).`.replace('gave shorter answers more than usual', 'gave shorter answers than usual'),
+      // "more than usual" only reads right for counts that went up
+      observedChange: `${where(r)} ${name} ${def.label}${def.worse === 'higher' && !/narrower|longer|slowly|less|fewer/.test(def.label) ? ' more than usual' : ''} for 2 weeks (${r.week1} and ${r.week0}${def.unit ? ` ${def.unit}` : ''}; usually ${r.base}).`.replace('gave shorter answers more than usual', 'gave shorter answers than usual'),
       explanation: blockExpl.map((e) => e.text).join('; ') || null,
       hasAlternativeCause: blockExpl.length > 0,
       quotes,
@@ -155,10 +164,16 @@ async function generateWeeklyReview(patientId, referenceDate = new Date(), { use
   // 5. sundowning → an earlier evening call, for the caregiver to approve
   const sd = L.detectSundowning(calls, missed, { ref });
   let proposal = null;
+  let sundownNote = '';
   if (sd.detected) {
-    const eveningMeds = (await Medicine.find({ patient: patient._id, isActive: true, notificationType: 'call' }).lean())
+    const allCallMeds = await Medicine.find({ patient: patient._id, isActive: true, notificationType: 'call' }).lean();
+    const eveningMeds = allCallMeds
       .filter((m) => (m.scheduledTimes || []).some((t) => Number(String(t).split(':')[0]) >= 17) && !(m.callOffsetMinutes <= -30));
     proposal = await ProposedChange.findOne({ patient: patient._id, kind: 'call_time_change', status: 'pending' }).lean();
+    const hasEveningCall = allCallMeds.some((m) => (m.scheduledTimes || []).some((t) => Number(String(t).split(':')[0]) >= 17));
+    sundownNote = !hasEveningCall
+      ? 'There is no evening reminder call to move earlier; worth discussing with the family.'
+      : 'The evening calls already come 30 minutes early (approved earlier).';
     if (!proposal && eveningMeds.length) {
       proposal = await ProposedChange.create({
         patient: patient._id,
@@ -183,9 +198,9 @@ async function generateWeeklyReview(patientId, referenceDate = new Date(), { use
     else if (f.status === 'checking_with_caregiver') lines.push({ kind: 'checking', text: `${f.observedChange} Before mentioning it, MedTime has asked ${cgName} whether ${name} has been unwell or sleeping badly.` });
     else lines.push({ kind: 'explained', text: `${f.observedChange} Likely explained: ${f.explanation}. Not flagged.` });
   }
-  for (const r of oneWeek) lines.push({ kind: 'watch', text: `One week only, not flagged: on ${r.block} calls ${name} ${L.METRICS[r.metric].label} (${r.week0} ${L.METRICS[r.metric].unit}; usually ${r.base}).` });
+  for (const r of oneWeek) lines.push({ kind: 'watch', text: `One week only, not flagged: ${where(r).toLowerCase()} ${name} ${DEFS(r)[r.metric].label} (${r.week0}${DEFS(r)[r.metric].unit ? ` ${DEFS(r)[r.metric].unit}` : ''}; usually ${r.base}).` });
   if (enoughBlocks.length && !findings.length && !oneWeek.length) lines.push({ kind: 'ok', text: `Calls were within ${name}'s usual range this week (${enoughBlocks.join(', ')}).` });
-  if (sd.detected) lines.push({ kind: 'sundowning', text: `Evenings have been harder for ${sd.weeksWithEveningEvents} weeks running (${sd.eveningEvents} evening events, ${sd.daytimeEvents} in the daytime). ${proposal ? `MedTime proposed calling 30 minutes earlier in the evening; waiting for ${cgName}'s approval.` : 'An earlier evening call is already set.'}` });
+  if (sd.detected) lines.push({ kind: 'sundowning', text: `Evenings have been harder for ${sd.weeksWithEveningEvents} weeks running (${sd.eveningEvents} evening events, ${sd.daytimeEvents} in the daytime). ${proposal ? `MedTime proposed calling 30 minutes earlier in the evening; waiting for ${cgName}'s approval.` : sundownNote}` });
   if (seeded) lines.push({ kind: 'info', text: 'Includes seeded demo data.' });
 
   const flagged = findings.filter((f) => f.status === 'flagged');
@@ -203,7 +218,7 @@ async function generateWeeklyReview(patientId, referenceDate = new Date(), { use
     baselineMetrics: { latencyMs: avg('latencyMs', 'base'), speechRateWpm: 0, repeatedPhrasesAvg: avg('repeatedPhrasesCount', 'base') },
     currentWeekMetrics: { latencyMs: avg('latencyMs', 'week0'), speechRateWpm: 0, repeatedPhrasesAvg: avg('repeatedPhrasesCount', 'week0') },
     findings,
-    comparisons: cmp.results,
+    comparisons: allResults,
     blocks: cmp.blocks,
     explanationsChecked: explanations,
     caregiverQuestion: question ? question._id : undefined,

@@ -65,9 +65,10 @@ const escapeXml = (s) => String(s)
 const url = (path) => `${publicBaseUrl()}${path}`;
 
 // Speech settings per language.
-function speech(lang) {
-  if (lang === 'hi') return { language: 'hi-IN', model: 'experimental_conversations', timeout: '2' };
-  return { language: 'en-IN', model: null, timeout: 'auto' };
+// long: the weekly chat call, where she talks for a while: wait out longer pauses (3 s).
+function speech(lang, long = false) {
+  if (lang === 'hi') return { language: 'hi-IN', model: 'experimental_conversations', timeout: long ? '3' : '2' };
+  return { language: 'en-IN', model: null, timeout: long ? '3' : 'auto' };
 }
 const voice = () => process.env.TWILIO_VOICE || 'Polly.Aditi';
 
@@ -75,7 +76,7 @@ const voice = () => process.env.TWILIO_VOICE || 'Polly.Aditi';
 const say = (text, lang) => `<Say voice="${escapeXml(voice())}" language="${speech(lang).language}">${escapeXml(text)}</Say>`;
 
 // The agent's actions (contract C8) as TwiML.
-function toTwiml(actions, { sessionId, lang = 'en', hints = [], keypadUrl }) {
+function toTwiml(actions, { sessionId, lang = 'en', hints = [], keypadUrl, long = false }) {
   const texts = actions.filter((a) => (a.type === 'play' || a.type === 'neutral') && a.text).map((a) => say(a.text, lang)).join('');
   const turnUrl = url(`${BASE}/turn?sid=${encodeURIComponent(sessionId)}`);
   const types = new Set(actions.map((a) => a.type));
@@ -90,7 +91,7 @@ function toTwiml(actions, { sessionId, lang = 'en', hints = [], keypadUrl }) {
   } else {
     // listen: the question is spoken inside the Gather, so she can answer (or press a key) over it.
     // actionOnEmptyResult: silence still reaches the agent ("no answer twice" → hand over).
-    const s = speech(lang);
+    const s = speech(lang, long);
     const attrs = [
       'input="speech dtmf"', 'numDigits="1"', 'method="POST"', 'actionOnEmptyResult="true"',
       `action="${escapeXml(turnUrl)}"`, `language="${s.language}"`, `speechTimeout="${s.timeout}"`,
@@ -114,7 +115,7 @@ async function callContext(session) {
   const expected = session.state && session.state.expected;
   const hints = [expected && expected.medicine, session.state && session.state.slots && session.state.slots.name].filter(Boolean);
   const keypadUrl = session.reminderId ? url(keypadPath(session.reminderId)) : null;
-  return { lang, hints, keypadUrl };
+  return { lang, hints, keypadUrl, long: session.flow === 'chat' };
 }
 
 // Exported for voiceIncoming.js (call-in) and the tests: TwiML for a session's opening actions.
@@ -146,6 +147,20 @@ router.post('/dose', verifyTwilio({ tokenOf: (req) => req.query.reminderId || nu
       return sendTwiml(res, `<?xml version="1.0" encoding="UTF-8"?><Response><Redirect method="POST">${escapeXml(url(keypadPath(reminderId)))}</Redirect></Response>`);
     }
     return sendTwiml(res, sorry(lang));
+  }
+});
+
+// ── the weekly chat call (Feature 1): Twilio fetches this when she picks up ───
+router.post('/chat', verifyTwilio({ tokenOf: (req) => (req.query.patientId ? `chat:${req.query.patientId}` : null) }), async (req, res) => {
+  initAgent();
+  try {
+    const { startChatCall } = require('../agent/flows/chat');
+    const call = await startChatCall({ patientId: req.query.patientId, trigger: 'weekly_chat', channel: 'phone' });
+    console.log(`📞 [Voice agent] Weekly chat call started (patient ${req.query.patientId}, run ${call.runId}).`);
+    return sendTwiml(res, await openingTwiml({ sessionId: call.sessionId, actions: call.actions, callSid: req.body.CallSid }));
+  } catch (err) {
+    console.error('[Voice agent] Could not start the chat call:', err.message);
+    return sendTwiml(res, sorry('en'));
   }
 });
 

@@ -139,6 +139,20 @@ const makePatientCall = async (toPhone, medName, medicineId, reminderId, { agent
   }
 };
 
+// makeChatCall — the weekly chat call (Feature 1): the agent asks one open question and listens.
+const makeChatCall = async (toPhone, patientId) => {
+  const formattedTo = withCountryCode(toPhone);
+  const path = withToken(`/api/v1/voice/agent/chat?patientId=${encodeURIComponent(patientId)}`, `chat:${patientId}`);
+  const client = getClient();
+  if (!client) {
+    console.log(`[SIMULATION] Weekly chat call → ${formattedTo} (patient ${patientId})`);
+    return true;
+  }
+  const call = await client.calls.create({ url: callbackUrl(path), to: formattedTo, from: process.env.TWILIO_PHONE_NUMBER });
+  console.log(`📞 Weekly chat call to ${formattedTo}. Call SID: ${call.sid}`);
+  return call;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // makeAlertCall — phones a caregiver with a short spoken alert (A2.5).
 //   Twilio fetches the words from POST /api/v1/webhooks/voice/alert?alertId=...
@@ -164,4 +178,4 @@ const makeAlertCall = async (toPhone, alertId) => {
   return call;
 };
 
-module.exports = { sendSMS, sendCaregiverSMS, makePatientCall, makeAlertCall, callbackUrl };
+module.exports = { makeChatCall, sendSMS, sendCaregiverSMS, makePatientCall, makeAlertCall, callbackUrl };

@@ -48,6 +48,8 @@ const patientSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Weekly chat call (Feature 1): off unless the patient or primary caregiver turns it on.
+  weeklyChatEnabled: { type: Boolean, default: false },
   // Language the agent speaks and listens in.
   language: {
     type: String,

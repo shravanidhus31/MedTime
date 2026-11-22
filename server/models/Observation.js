@@ -22,7 +22,7 @@ const ObservationSchema = new mongoose.Schema({
   },
   callType: {
     type: String,
-    enum: ['browser', 'phone', 'simulation'],
+    enum: ['browser', 'phone', 'simulation', 'chat'], // chat: the weekly chat call (metadata.channel)
     default: 'simulation',
   },
   source: {
@@ -48,6 +48,10 @@ const ObservationSchema = new mongoose.Schema({
       'checkFails',             // could not say which tablet when asked
       'silentTurns',            // no answer to a question
       'asrConfidence',          // speech recognition confidence (call quality), 0-1
+      // The weekly chat call, the speech-screening paper's measures (agent/languageMeasures.js)
+      'mtld', 'hdd', 'brunetW', 'cttr', // length-corrected vocabulary
+      'nounShare', 'verbShare',         // English only
+      'wordCount',                      // how much she said
     ],
   },
   value: {

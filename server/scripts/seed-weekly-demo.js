@@ -6,7 +6,8 @@
 //   node scripts/seed-weekly-demo.js 8169003080            seed, then run the review once
 //   node scripts/seed-weekly-demo.js 8169003080 --remove   remove the seeded rows and seeded reviews
 //
-// What it seeds: mornings normal for 4 weeks, then 2 weeks of more "say that again" (a change that
+// What it seeds: weekly chats (MTLD etc.) usual for 4 weeks, then narrower for 2; mornings normal for
+// 4 weeks, then 2 weeks of more "say that again" (a change that
 // the review asks the caregiver about before flagging); evenings with distress words in each of the
 // last 3 weeks (sundowning → a proposal to call 30 min earlier, if she has an evening Call medicine).
 // Uses MONGO_URI from server/.env; for the live app set it in the terminal for that one command
@@ -55,6 +56,17 @@ if (!/^\d{10}$/.test(phone)) {
   for (const [d, c] of [[13, 3], [11, 2], [9, 3], [6, 3], [4, 4], [2, 3]]) call(d, 9, { clarificationCount: c, fillersCount: 1, turnLengthWords: 7, unclearTurns: 1, asrConfidence: 0.89 });
   // evenings: distress words in each of the last 3 weeks
   for (const d of [19, 16, 10, 8, 3, 1]) call(d, 20, { sundowningAnxietyCount: 1, unclearTurns: 2, turnLengthWords: 4, asrConfidence: 0.87 });
+  // weekly chats (the speech-screening paper's measures): 4 usual Sundays, then 2 with a narrower
+  // range of words
+  const chat = (daysAgo, mtld, cttr, hdd) => {
+    const callId = new mongoose.Types.ObjectId();
+    for (const [metric, value] of Object.entries({ mtld, cttr, hdd, brunetW: 9.5, wordCount: 72, fillersCount: 1, repeatedPhrasesCount: 0 })) {
+      rows.push({ patient: patient._id, callId, callType: 'chat', source: 'code', metric, value, timeOfDay: 'morning', timestamp: at(daysAgo, 11), metadata: { seeded: true, flow: 'chat', version: 'demo-seed@1' } });
+    }
+  };
+  for (const d of [41, 34, 27, 20]) chat(d, 82, 4.6, 0.84);
+  chat(13, 58, 3.8, 0.79);
+  chat(6, 54, 3.6, 0.78);
   await Observation.insertMany(rows);
   console.log(`Seeded ${rows.length} demo measure(s) (${new Set(rows.map((r) => String(r.callId))).size} calls) for ${user.name} in "${mongoose.connection.name}".`);
 

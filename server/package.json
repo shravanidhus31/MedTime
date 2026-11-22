@@ -20,7 +20,8 @@
     "callin:check": "node scripts/callin-check.js",
     "phone:check": "node scripts/phone-check.js",
     "followup:check": "node scripts/followup-check.js",
-    "weekly:check": "node scripts/weekly-check.js"
+    "weekly:check": "node scripts/weekly-check.js",
+    "chat:check": "node scripts/chat-check.js"
   },
   "keywords": [],
   "author": "",
@@ -29,6 +30,7 @@
   "dependencies": {
     "ajv": "^8.20.0",
     "bcrypt": "^6.0.0",
+    "compromise": "^14.20.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",

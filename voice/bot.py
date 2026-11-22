@@ -56,6 +56,7 @@ from pipecat.frames.frames import (
     TTSStartedFrame,
     TTSStoppedFrame,
     VADUserStartedSpeakingFrame,
+    VADUserStoppedSpeakingFrame,
 )
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineWorker
@@ -180,42 +181,67 @@ class AgentBridge(FrameProcessor):
         self._http = http
         self._lock = asyncio.Lock()   # one agent turn at a time, in order
         self._ended = False
+        # Timing for the weekly chat call's speech rate and time before answering (Feature 1, plan
+        # 6.5): when the agent's audio ends, when she starts speaking, how long she speaks.
+        self._speak_until = 0.0       # monotonic time the queued agent audio finishes playing
+        self._latency_ms = None       # this answer's time before answering (None after a barge-in)
+        self._seg_start = None
+        self._speech_s = 0.0
+        self._answer_started = False
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
 
         if isinstance(frame, VADUserStartedSpeakingFrame):
+            now = time.monotonic()
+            if not self._answer_started:
+                self._answer_started = True
+                # she spoke over the agent: no "time before answering" for this answer
+                self._latency_ms = round((now - self._speak_until) * 1000) if self._speak_until and now >= self._speak_until else None
+            self._seg_start = now
+            self._speak_until = min(self._speak_until, now)
             # Barge-in: she started speaking, so the agent stops talking at once.
             await self.broadcast_interruption()
+            await self.push_frame(frame, direction)
+        elif isinstance(frame, VADUserStoppedSpeakingFrame):
+            if self._seg_start is not None:
+                self._speech_s += time.monotonic() - self._seg_start
+                self._seg_start = None
             await self.push_frame(frame, direction)
         elif isinstance(frame, TranscriptionFrame):
             # Not passed on: her words go to the agent, not to the speaker.
             text = (frame.text or "").strip()
             if text and not self._ended:
-                self.create_task(self._turn(text), name="agent-turn")
+                timing = {"speechMs": round(self._speech_s * 1000)}
+                if self._latency_ms is not None:
+                    timing["latencyMs"] = self._latency_ms
+                self._latency_ms, self._speech_s, self._answer_started = None, 0.0, False
+                self.create_task(self._turn(text, timing), name="agent-turn")
         else:
             await self.push_frame(frame, direction)
 
     async def _message(self, data: dict):
         await self.push_frame(RTVIServerMessageFrame(data=data))
 
-    async def _post_turn(self, transcript: str) -> dict:
+    async def _post_turn(self, transcript: str, timing: dict | None = None) -> dict:
         # No flow name: the session knows its flow, and a call-in can switch to the dose flow mid-call.
         body = {"sessionId": self._call_id, "transcript": transcript, "isFinal": True}
+        if timing:
+            body["timing"] = timing
         async with self._http.post(f"{AGENT_API_BASE}/agent/turn", json=body, timeout=aiohttp.ClientTimeout(total=TURN_TIMEOUT_S)) as r:
             data = await r.json(content_type=None)
             if r.status != 200:
                 raise RuntimeError(f"/agent/turn {r.status}: {data.get('message') if isinstance(data, dict) else data}")
             return data
 
-    async def _turn(self, text: str):
+    async def _turn(self, text: str, timing: dict | None = None):
         async with self._lock:
             if self._ended:
                 return
             await self._message({"type": "patient", "text": text})
             t0 = time.monotonic()
             try:
-                reply = await self._post_turn(text)
+                reply = await self._post_turn(text, timing)
                 # "wait": the agent is still working; collect its answer with empty turns.
                 while not self._ended and any(a.get("type") == "wait" for a in reply.get("actions", [])):
                     await self.speak_actions([a for a in reply["actions"] if a.get("type") != "wait"])
@@ -235,6 +261,8 @@ class AgentBridge(FrameProcessor):
         if pcm is None:
             pcm = await asyncio.to_thread(neutral_voice.render, text)
         ctx = str(uuid.uuid4())
+        # when this line will have finished playing (16-bit mono): her "time before answering" starts then
+        self._speak_until = max(self._speak_until, time.monotonic()) + len(pcm) / (NeutralVoice.SAMPLE_RATE * 2)
         await self.push_frame(TTSStartedFrame(context_id=ctx))
         step = NeutralVoice.SAMPLE_RATE // 5 * 2  # 200 ms chunks; barge-in flushes what is queued
         for i in range(0, len(pcm), step):

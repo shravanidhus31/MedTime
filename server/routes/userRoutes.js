@@ -96,7 +96,7 @@ async function carePatient(req) {
   const p = await Patient.findOne({ user: req.user.id });
   return p ? { patient: p } : { status: 404, message: 'No patient profile for this account.' };
 }
-const careView = (p) => ({ patientId: String(p._id), dementiaMode: !!p.dementiaMode, language: p.language || 'en', emergencyContact: p.emergencyContact || '' });
+const careView = (p) => ({ patientId: String(p._id), dementiaMode: !!p.dementiaMode, language: p.language || 'en', emergencyContact: p.emergencyContact || '', weeklyChat: !!p.weeklyChatEnabled });
 
 router.get('/care-settings', verifyToken, async (req, res) => {
   try {
@@ -112,8 +112,10 @@ router.put('/care-settings', verifyToken, async (req, res) => {
   try {
     const r = await carePatient(req);
     if (!r.patient) return res.status(r.status).json({ message: r.message });
-    const { dementiaMode, language, emergencyContact } = req.body || {};
+    const { dementiaMode, language, emergencyContact, weeklyChat } = req.body || {};
     const set = {};
+    // the weekly chat call that measures her speech (Feature 1): opt-in
+    if (weeklyChat !== undefined) set.weeklyChatEnabled = !!weeklyChat;
     // Called for red flags and missed doses when no caregiver is linked (services/caregiverAlerts.js).
     if (emergencyContact !== undefined) {
       const digits = String(emergencyContact).replace(/[\s-]/g, '');
