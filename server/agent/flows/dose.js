@@ -140,6 +140,13 @@ async function understand(session, text) {
   } catch (err) {
     label = { ...policy.ruleLabel(text, s.expected), fallbackReason: err.message };
   }
+  // The model can waver on short or Hindi answers ("मिल गई" → unclear, "मेरी दवा कहाँ है?" →
+  // question; Hindi phone test, 22 Nov). When the rules clearly see "where is it", "found it" or
+  // "I already took it", their reading wins over the model's "unclear"/"question".
+  if (label.source === 'model' && ['unclear', 'question'].includes(label.intent)) {
+    const r = policy.ruleLabel(text, s.expected);
+    if (['cant_find', 'taking_now', 'already_took'].includes(r.intent)) label = { ...label, intent: r.intent, confidence: Math.max(Number(label.confidence) || 0, 0.7), ruleOverride: true };
+  }
   // The pill match is rule-first: her words name the medicine or describe the pill (record data).
   // A model "match" only counts when the model also says which pill she mentioned (it helps with
   // Hindi/Marathi descriptions the rule doesn't know). Found in the live check: the model said

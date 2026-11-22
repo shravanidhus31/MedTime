@@ -46,12 +46,13 @@ function ruleLabel(text, expected = {}) {
 
   if (!t.trim()) return label('unclear', 0.3);
   if (has(t, [' already took', ' already taken', ' already had', ' took it this morning', ' took it earlier', ' took it before', ' पहले ही ', ' pehle hi ', ' subah hi '])) return label('already_took');
-  if (has(t, [" can't find", ' cannot find', " don't know where", ' lost ', ' नहीं मिल', ' nahi mil', ' nahin mil'])) return label('cant_find');
+  if (has(t, [" can't find", ' cannot find', " don't know where", ' lost ', ' नहीं मिल', ' nahi mil', ' nahin mil', ' दवा कहाँ', ' दवा कहां', ' दवाई कहाँ', ' दवाई कहां', ' गोली कहाँ', ' गोली कहां', ' dawai kahan', ' dawa kahan', ' goli kahan'])) return label('cant_find');
   // "where is it / my tablet" is about the pill; "Where is Ravi?" is a question (core scenario 5)
   const pillWords = [' it ', ' it?', ' them ', ' pill', ' tablet', ' medicine', ' box', ` ${String(expected.medicine || '').toLowerCase().split(/\s+/)[0] || 'x-none'}`];
   if (has(t, [' where is', ' where are', " where's"]) && has(`${t.replace(/\?/g, ' ? ')} `, pillWords)) return label('cant_find');
   if (has(t, [" won't take", ' will not take', " don't want", ' do not want', ' skip ', ' not taking', " i'm not going to"])) return label('refuse');
-  if (has(t, [' taking it now', ' about to ', ' going to take', ' getting it', ' one minute', ' wait '])) return label('taking_now');
+  // "found it" after a hint means she is about to take it (Hindi call test, 22 Nov: "मिल गई" was "unclear")
+  if (has(t, [' taking it now', ' about to ', ' going to take', ' getting it', ' one minute', ' wait ', ' found it', ' got it', ' i have it', ' मिल गई', ' मिल गया', ' mil gayi ', ' mil gaya ', ' mil gai '])) return label('taking_now');
   if (has(t, [' later', ' after food', ' after lunch', ' after dinner', ' call me back', ' not now', ' not yet', ' बाद में ', ' baad mein ', ' baad me '])) return label('later');
   if (has(t, [" don't remember", ' not sure', " don't know", ' i forgot', ' confused'])) return label('unsure');
   if (has(t, [' took it', ' have taken', " i've taken", ' taken it', ' just took', ' done ', ' i took', ' swallowed', ' ले ली', ' ले लिया', ' खा ली', ' खा लिया', ' le li ', ' le liya ', ' kha li ', ' kha liya '])) return label('taken');

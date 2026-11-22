@@ -216,3 +216,12 @@ test('rules: Hindi answers and pill descriptions', () => {
   assert.equal(P.matchesExpected('छोटी सफ़ेद गोल गोली।', ex), true);
   assert.equal(P.matchesExpected('पीली गोली', { medicine: 'Amlodipine', pill: 'small white round tablet' }), false);
 });
+
+// Hindi phone test (22 Nov): "where is my medicine?" and "found it" after the hint.
+test('rules: Hindi "where is my medicine" is cant_find; "found it" / "मिल गई" is taking_now', () => {
+  const ex = { medicine: 'dolo', pill: 'white' };
+  assert.equal(P.ruleLabel('मेरी दवा कहाँ है?', ex).intent, 'cant_find');
+  assert.equal(P.ruleLabel('मिल गई', ex).intent, 'taking_now');
+  assert.equal(P.ruleLabel('Yes, I found it.', ex).intent, 'taking_now');
+  assert.equal(P.ruleLabel('नहीं मिल रही', ex).intent, 'cant_find');
+});
