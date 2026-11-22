@@ -125,6 +125,30 @@ test('after 8 turns the call is handed over and ended', async () => {
   await assert.rejects(orch.handleTurn({ sessionId, transcript: 'still there?' }), (e) => e.status === 404);
 });
 
+test('init sets up state; onEnd runs once on hang-up, including a call that ends on its first reply', async () => {
+  const ended = [];
+  orch.registerFlow('short', {
+    start: async (s) => (s.state.endAtOnce ? [{ type: 'neutral', text: 'Already done. Bye.' }, { type: 'hangup' }] : [{ type: 'listen' }]),
+    turn: async () => [{ type: 'neutral', text: 'Bye.' }, { type: 'hangup' }],
+    onEnd: async (s) => ended.push(s.state.tag),
+  });
+  await orch.startSession({ flow: 'short', init: (s) => { s.state = { tag: 'first-reply', endAtOnce: true }; } });
+  const { sessionId } = await orch.startSession({ flow: 'short', init: (s) => { s.state = { tag: 'later' }; } });
+  await orch.handleTurn({ sessionId, transcript: 'ok' });
+  assert.deepEqual(ended, ['first-reply', 'later']);
+  await assert.rejects(orch.handleTurn({ sessionId, transcript: 'again' }), (e) => e.status === 404);
+  assert.deepEqual(ended, ['first-reply', 'later']); // not twice
+});
+
+test('a fallback also ends the call and runs onEnd', async () => {
+  let ends = 0;
+  orch.registerFlow('fails', { start: async () => [{ type: 'listen' }], turn: async () => { throw new Error('x'); }, onEnd: async () => { ends++; } });
+  const { sessionId } = await orch.startSession({ flow: 'fails' });
+  assert.equal((await orch.handleTurn({ sessionId, transcript: 'hi' })).actions[0].type, 'fallback');
+  assert.equal(ends, 1);
+  await assert.rejects(orch.handleTurn({ sessionId, transcript: 'hi' }), (e) => e.status === 404);
+});
+
 test('unknown session and wrong flow are rejected', async () => {
   await assert.rejects(orch.handleTurn({ sessionId: 'nope', transcript: 'hi' }), (e) => e.status === 404);
   const { sessionId } = await start();

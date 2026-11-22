@@ -395,7 +395,7 @@ In order, top to bottom:
 - [x] A2.4 orchestrator and `/agent/turn`
 - [x] A2.5 five core tools
 - [x] A2.6 cron hands over to the agent
-- [ ] A2.7 text simulate endpoints
+- [x] A2.7 text simulate endpoints (with a basic dose flow; A4.1 replaces it)
 - [ ] A1.1 #4 webhook signatures
 - [ ] A1.2 #10 `PUBLIC_BASE_URL` and `TWILIO_ENABLED`
 - [ ] A1.3 #13 per-dose escalation and `doseService`

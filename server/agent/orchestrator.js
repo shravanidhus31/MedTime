@@ -19,8 +19,10 @@
 //      Crash or bad actions → fallback to the keypad.
 //   4. after maxTurns (8: the Twilio trial allows ~10 hops per call) → hand over and hang up.
 //
-// Flows register with registerFlow(name, { start(session), turn(session, input), onTurnLimit? }).
-// Both return an actions array. `session.state` is the flow's own scratch space.
+// Flows register with registerFlow(name, { start(session), turn(session, input), onTurnLimit?, onEnd? }).
+// start and turn return an actions array. `session.state` is the flow's own scratch space
+// (startSession's `init(session)` can set it up). onEnd(session) runs once when the call ends:
+// on hang-up, at the turn limit, or when an abandoned session expires.
 
 const crypto = require('crypto');
 const { screen, responseFor } = require('./safety');
@@ -68,13 +70,29 @@ function setEmergencyHandler(fn) {
 
 function sweepSessions(now = Date.now()) {
   for (const [id, s] of sessions) {
-    if (now - s.lastActiveAt > SESSION_TTL_MS) sessions.delete(id);
+    if (now - s.lastActiveAt > SESSION_TTL_MS) {
+      sessions.delete(id);
+      callOnEnd(s); // abandoned call: still close its record
+    }
+  }
+}
+
+// Runs the flow's onEnd once per session.
+async function callOnEnd(session) {
+  if (session.onEndCalled) return;
+  session.onEndCalled = true;
+  const handler = flows.get(session.flow);
+  if (!handler || typeof handler.onEnd !== 'function') return;
+  try {
+    await handler.onEnd(session);
+  } catch (err) {
+    console.error(`[agent:orchestrator] onEnd for "${session.flow}" failed:`, err.message);
   }
 }
 
 // Starts a call session. The sessionId is a random UUID: it is what lets a front end talk to this
 // session, so it is never guessable.
-async function startSession({ flow, patientId, reminderId, runId, channel = 'text', turnBudgetMs = TURN_BUDGET_MS, maxTurns = MAX_TURNS }) {
+async function startSession({ flow, patientId, reminderId, runId, channel = 'text', turnBudgetMs = TURN_BUDGET_MS, maxTurns = MAX_TURNS, init }) {
   const handler = flows.get(flow);
   if (!handler) throw new Error(`No flow registered with the name "${flow}"`);
   sweepSessions();
@@ -96,10 +114,12 @@ async function startSession({ flow, patientId, reminderId, runId, channel = 'tex
     createdAt: Date.now(),
     lastActiveAt: Date.now(),
   };
+  if (typeof init === 'function') init(session);
   sessions.set(session.sessionId, session);
 
   const actions = await runHandler(session, () => handler.start(session));
-  return { sessionId: session.sessionId, actions };
+  const result = await finishActions(session, actions); // the first reply may already end the call
+  return { sessionId: session.sessionId, actions: result.actions };
 }
 
 function getSession(sessionId) {
@@ -170,9 +190,13 @@ async function collectPending(session) {
   return finishActions(session, actions);
 }
 
-function finishActions(session, actions) {
-  if (actions.some((a) => a.type === 'hangup')) session.ended = true;
-  if (session.ended) setTimeout(() => endSession(session.sessionId), 60000).unref();
+async function finishActions(session, actions) {
+  // A hang-up ends the call; so does a fallback (the front end switches to the keypad menu).
+  if (!session.ended && actions.some((a) => a.type === 'hangup' || a.type === 'fallback')) {
+    session.ended = true;
+    await callOnEnd(session);
+    setTimeout(() => endSession(session.sessionId), 60000).unref();
+  }
   return { actions };
 }
 

@@ -10,7 +10,8 @@
     "loop:check": "node scripts/loop-check.js",
     "runs:check": "node scripts/runs-check.js",
     "tools:check": "node scripts/tools-check.js",
-    "cron:check": "node scripts/cron-check.js"
+    "cron:check": "node scripts/cron-check.js",
+    "simulate:check": "node scripts/simulate-check.js"
   },
   "keywords": [],
   "author": "",

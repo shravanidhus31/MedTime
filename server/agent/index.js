@@ -11,6 +11,7 @@ function initAgent() {
   started = true;
 
   require('./tools/core'); // registers the five core tools
+  require('./flows/dose'); // registers the 'dose' flow and the end_call tool (A2.7)
 
   // A red flag on a call → phone the caregivers at once (neutral, fixed message).
   setEmergencyHandler(async (session, verdict) => {

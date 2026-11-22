@@ -16,7 +16,7 @@ A running record of what's done, what's in progress and what's next. **It's upda
 | Design and research | ✅ Done. PRD, research notes and plan are final |
 | Task split | ✅ Done. Person A (calls, voice, live agent) and Person B (caregiver app, schedules, background agents, evaluation) |
 | Twilio | ✅ New trial account works end to end for keypad calls driven by our server |
-| Agent code | 🟡 A2.1–A2.5 done on `feat/a-agent-runtime` (LLM adapter, tool registry + loop, `AgentRun` + endpoints, orchestrator + `/agent/turn`, five core tools + dose service, cron handover). Next: A2.7 simulate endpoints |
+| Agent code | ✅ Phase 1 agent platform done on `feat/a-agent-runtime` (A2.1–A2.7). Phase 1 gate met on Person A's side: a simulated dose call runs end to end in text and every step shows through `GET /agent/runs/:id`; the Activity panel itself is Person B's. Next: A1 Phase 0 fixes |
 | Person B | 🟡 Working on a feature branch; Day-1 items (#2, #3, #1/#19 and soft delete, #5 top-up) |
 | Phase 0 security fixes | ⏳ Not started. Comes after Phase 1 (low priority) |
 | Person B onboarding | 🟡 Docs pushed; access and secrets still to be sent privately |
@@ -29,7 +29,7 @@ A running record of what's done, what's in progress and what's next. **It's upda
    - `.env` values, sent privately. Each person makes their own free Groq key
    - the research papers
    - their phone number added to Twilio
-3. **Person A, next task: A2.7 text simulate endpoints** (the last Phase 1 task).
+3. **Person A, next task: A1 Phase 0 fixes** (webhook signatures, `PUBLIC_BASE_URL`, per-dose escalation, dose endpoint), then Phase 2 (A3 voice pipeline, A4 dose agent).
 4. **Person A, after A2 and A1:** A3.5 Twilio phone adapter (turn by turn, trial-compatible) and the Core dose agent.
 
 ## Open questions
@@ -37,7 +37,7 @@ A running record of what's done, what's in progress and what's next. **It's upda
 - **Upgrade Twilio near the end?** That would add live streaming, caregiver SMS, call-in on our own number, and timing measures from phone calls.
 - **Does the trial route incoming calls to our server?** Test it via Try out Voice → Receive a call. This matters for Feature 7 on the phone.
 - **Marathi speech recognition:** Twilio's docs don't list it; test a Google V2 model on a real call.
-- **Groq free-plan limits:** check console.groq.com → Settings → Limits. The docs show about 1,000 requests a day per model on the Developer plan. Decide near the end whether to switch to Claude (≈ $10–20) for the final runs and the demo.
+- **Groq free-plan limits (now measured):** gpt-oss-20b allows 8,000 input tokens a minute, and one simulated dose call uses about 4,000 to 7,000 (each model call re-sends the prompt, tool descriptions and conversation, about 1,400 tokens). So the free plan allows roughly **one agent call a minute**, and a long call can hit the limit mid-call (it then falls back safely to the keypad). This matters for Person B's 40-persona evaluation and the demo. Options: Groq's paid Developer tier, Claude for evaluation and demo runs, or shorter prompts. **Needs a decision.**
 
 ---
 
@@ -64,6 +64,13 @@ A running record of what's done, what's in progress and what's next. **It's upda
 ## Change log
 
 ### 22 Nov 2026
+- **A2.7 text simulate endpoints done; Phase 1 complete on Person A's side** (branch `feat/a-agent-runtime`, not committed yet).
+  - `POST /api/v1/simulate/call { reminderId }` → `{ callId, runId, actions, ended }`; `POST /api/v1/simulate/call/:callId/say { text | dtmf }`. Login and access to the patient required; off in production unless `SIMULATE_ENABLED=true`, because a simulated call records real doses.
+  - `agent/flows/dose.js` + prompt `dose@2`: a **basic** dose flow (A4.1 replaces it). One `AgentRun` per call with `patient_said` / `agent_said` steps between the tool calls. New `end_call` tool.
+  - Orchestrator: `startSession({ init })`, `onEnd(session)` hook (runs once on hang-up, fallback, turn limit or expiry); a fallback now also ends the session.
+  - **Found in the live check and fixed in code:** (1) offered every tool on the opening turn, the model recorded the dose as taken before the patient had said anything. `mark_dose` and `notify_caregiver` now only exist after she has spoken. (2) The model often said "Goodbye" without `end_call`, so calls stayed open and the family was called twice. The call now ends by itself once the dose is settled (recorded, family contacted, or already taken at the start).
+  - **Known gaps for A4.1:** the agent sometimes records on "I am taking it now" without the check question; on an already-taken dose it doesn't always say "don't take another one". A4.1 should enforce the check question in code and use fixed phrase-bank lines for these moments.
+  - `npm run simulate:check`: 11/11 (4 calls: takes it → recorded; already taken → nothing recorded; "I already took it" with no record → not recorded, family asked to check; "I fell" → emergency). Paced a minute apart for Groq's free-plan limit (`CHECK_PACE_MS=0` to turn off). 37 offline tests pass; `cron:check` 9/9 and `runs:check` 14/14 still pass.
 - **A2.6 the scheduler hands dose calls to the agent** (branch `feat/a-agent-runtime`, not committed yet).
   - `Patient.js`: `dementiaMode` (default false), `language` (`en|hi|mr`, default `en`), `familyClipsEnabled` (default false).
   - `agent/doseDue.js` `handleDoseDue()`: starts an `AgentRun` (`trigger: 'dose_due'`), runs `check_double_dose` on the due Reminder; already taken → no call; otherwise places the call and logs it as a `place_call` step. If anything fails, it calls anyway.
