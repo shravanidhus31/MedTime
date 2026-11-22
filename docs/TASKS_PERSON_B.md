@@ -420,23 +420,23 @@ Follow PRD Feature 1 and plan section 6.5 exactly.
 
 ## Your checklist
 
-- [ ] B0 Local setup, PRD and papers read, phone number sent to A
-- [ ] B1.1 #2 and #8 caregiver access, `requirePatientAccess`
-- [ ] B1.2 #3 and #9 monthly report
-- [ ] B1.3 #1 and #19 medicine route ownership, soft delete (Day 1)
-- [ ] B1.4 #5 nightly reminder top-up (week 1)
-- [ ] B2 #11 and #12 token refresh, registration, link and approve pages
-- [ ] B3 C10 medicine fields; old escalation fields removed
-- [ ] B4 approval gate, proposals, caregiver questions
-- [ ] B5 safety screen and red-flag lists, with tests
-- [ ] B6 Agent Activity panel
-- [ ] B7 seed script
-- [ ] B8 daily journal with refill alerts
-- [ ] B9 life notes
-- [ ] B10 evaluation harness and 10 core scenarios
-- [ ] B11 call-in agent (Feature 7)
-- [ ] B12 prescription-to-schedule (Feature 8), reminder generation #6, #7 (and #5 extended), OCR #18
-- [ ] B13 full evaluation, GrandGuard sample, SUS form
-- [ ] B14 weekly review, Features 1 and 3 (if time)
-- [ ] B15 copilot, Feature 2 (if time)
-- [ ] B16 demo script and README
+- [x] B0 Local setup, PRD and papers read, phone number sent to A
+- [x] B1.1 #2 and #8 caregiver access, `requirePatientAccess`
+- [x] B1.2 #3 and #9 monthly report
+- [x] B1.3 #1 and #19 medicine route ownership, soft delete (Day 1)
+- [x] B1.4 #5 nightly reminder top-up (week 1)
+- [x] B2 #11 and #12 token refresh, registration, link and approve pages
+- [x] B3 C10 medicine fields; old escalation fields removed
+- [x] B4 approval gate, proposals, caregiver questions
+- [x] B5 safety screen and red-flag lists, with tests
+- [x] B6 Agent Activity panel
+- [x] B7 seed script
+- [x] B8 daily journal with refill alerts
+- [x] B9 life notes
+- [x] B10 evaluation harness and 10 core scenarios
+- [x] B11 call-in agent (Feature 7)
+- [x] B12 prescription-to-schedule (Feature 8), reminder generation #6, #7 (and #5 extended), OCR #18
+- [x] B13 full evaluation, GrandGuard sample, SUS form
+- [x] B14 weekly review, Features 1 and 3 (if time)
+- [x] B15 copilot, Feature 2 (if time)
+- [x] B16 demo script and README
