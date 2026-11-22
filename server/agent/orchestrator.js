@@ -37,8 +37,17 @@ const HOLD_TEXT = 'Let me check that for you.';
 // After a red flag the call stays in emergency mode: this, in the neutral voice, on every turn.
 const STAY_TEXT = "I'm still here with you, and your family has been told. Please stay on the line.";
 const TURN_LIMIT_TEXT = 'Thank you. Someone from your family will call you soon. Goodbye.';
-const HOLD_ACTIONS = [{ type: 'neutral', text: HOLD_TEXT }, { type: 'wait' }];
-const TURN_LIMIT_ACTIONS = [{ type: 'neutral', text: TURN_LIMIT_TEXT }, { type: 'hangup' }];
+// The same lines in Hindi (core scenario 9: a Hindi speaker hears only Hindi). session.lang is set
+// by the flow from the patient's language; anything else gets English.
+const HI = {
+  hold: 'एक पल, मैं देख रही हूँ।',
+  stay: 'मैं आपके साथ हूँ, और आपके परिवार को बता दिया गया है। कृपया फ़ोन पर बने रहिए।',
+  limit: 'धन्यवाद। आपके परिवार से कोई जल्दी ही आपको फ़ोन करेगा। नमस्ते।',
+};
+const hindi = (session) => session && session.lang === 'hi';
+const stayText = (session) => (hindi(session) ? HI.stay : STAY_TEXT);
+const holdActions = (session) => [{ type: 'neutral', text: hindi(session) ? HI.hold : HOLD_TEXT }, { type: 'wait' }];
+const turnLimitActions = (session) => [{ type: 'neutral', text: hindi(session) ? HI.limit : TURN_LIMIT_TEXT }, { type: 'hangup' }];
 
 const flows = new Map();
 const sessions = new Map();
@@ -169,7 +178,7 @@ async function handleTurn({ sessionId, flow, transcript, isFinal = true, asrConf
   // "Okay, bye" went back to the dose flow and was answered "Well done. Which tablet did you take?"
   if (session.emergency) {
     if (!isFinal) return { actions: [] };
-    return { actions: [{ type: 'neutral', text: STAY_TEXT }, { type: 'listen' }], inEmergency: session.emergency.category };
+    return { actions: [{ type: 'neutral', text: stayText(session) }, { type: 'listen' }], inEmergency: session.emergency.category };
   }
 
   // 2. partial transcripts only get the safety check
@@ -190,12 +199,12 @@ async function handleTurn({ sessionId, flow, transcript, isFinal = true, asrConf
   if (actions) return finishActions(session, actions);
 
   session.pending = work;
-  return { actions: HOLD_ACTIONS };
+  return { actions: holdActions(session) };
 }
 
 async function collectPending(session) {
   const actions = await withinBudget(session.pending, session.turnBudgetMs);
-  if (!actions) return { actions: HOLD_ACTIONS };
+  if (!actions) return { actions: holdActions(session) };
   session.pending = null;
   return finishActions(session, actions);
 }
@@ -220,7 +229,7 @@ function limitActions(session) {
       console.error('[agent:orchestrator] onTurnLimit failed:', err.message);
     }
   }
-  return TURN_LIMIT_ACTIONS;
+  return turnLimitActions(session);
 }
 
 async function emergency(session, verdict, text, screenMs) {
@@ -230,7 +239,7 @@ async function emergency(session, verdict, text, screenMs) {
   alerted.add(verdict.category);
   session.emergency = { category: verdict.category, at: new Date(), alerted };
   session.pending = null; // whatever the agent was doing no longer matters
-  const response = responseFor(verdict);
+  const response = responseFor(verdict, session.lang);
 
   if (session.runId) {
     addStep(session.runId, {
@@ -249,7 +258,7 @@ async function emergency(session, verdict, text, screenMs) {
 
   // Neutral voice only, then keep listening (A3.4: stay on the line). `emergency` is set only when
   // the family was alerted just now; a repeat of the same red flag is reassured, not re-alerted.
-  if (!first) return { actions: [{ type: 'neutral', text: STAY_TEXT }, { type: 'listen' }], inEmergency: verdict.category };
+  if (!first) return { actions: [{ type: 'neutral', text: stayText(session) }, { type: 'listen' }], inEmergency: verdict.category };
   return { actions: [{ type: 'neutral', text: response.neutralText }, { type: 'listen' }], emergency: verdict.category };
 }
 

@@ -25,6 +25,8 @@ const LINES = {
   'dose.greet.concerned': "{name}, I'm a little worried. You haven't taken your {medicine} yet.{food} Can you take it now, and tell me when it's done?",
 
   'dose.already_done': "{name}, your {medicine} is already done for today. Please don't take another one. Goodbye.",
+  // she is about to take a dose that is already recorded (core scenario 4): stop, family told
+  'dose.already_taken_stop': "{name}, your {medicine} is already recorded as taken today. Please don't take another one. I'll let {caregiver} know. Goodbye.",
   'dose.take_your_time': "Take your time. Tell me when you've taken it.",
   'dose.check_question': 'Well done. Which tablet did you take?',
   'dose.check_reask': 'Which tablet did you just take?',
@@ -50,12 +52,43 @@ const LINES = {
   'dose.handover_unsure': "Please don't take any more tablets now. {caregiver} will call you to check. Goodbye.",
 };
 
+// The same lines in Hindi (Patient.language 'hi'; core scenario 9: "replies in Hindi, same
+// decisions"). Same ids and slots; the decisions don't change. Polite "aap" forms that read the
+// same for any gender of the listener; the agent speaks as a woman (the neutral Hindi voice).
+// Marathi is not written yet: a Marathi patient hears English.
+const LINES_HI = {
+  'dose.greet.calm': 'नमस्ते {name} जी। {slot} की दवा, {medicine}, लेने का समय हो गया है।{food} क्या आप अभी दवा लेकर मुझे बता सकते हैं?',
+  'dose.greet.firmer': '{name} जी, मैं फिर से बोल रही हूँ। आपकी {medicine} अभी बाकी है।{food} क्या आप अभी दवा लेकर मुझे बता सकते हैं?',
+  'dose.greet.concerned': '{name} जी, मुझे थोड़ी चिंता हो रही है। आपने अभी तक {medicine} नहीं ली है।{food} क्या आप अभी दवा लेकर मुझे बता सकते हैं?',
+  'dose.already_done': '{name} जी, आज की {medicine} हो चुकी है। कृपया दूसरी गोली मत लीजिए। नमस्ते।',
+  'dose.already_taken_stop': '{name} जी, आज की {medicine} पहले ही ली जा चुकी है। कृपया दूसरी गोली मत लीजिए। मैं {caregiver} को बता रही हूँ। नमस्ते।',
+  'dose.take_your_time': 'कोई जल्दी नहीं। दवा लेने के बाद मुझे बताइए।',
+  'dose.check_question': 'बहुत अच्छा। आपने कौन सी गोली ली?',
+  'dose.check_reask': 'आपने अभी कौन सी गोली ली?',
+  'dose.check_hint': 'आपकी {medicine} ऐसी दिखती है: {pill}। आपने कौन सी गोली ली?',
+  'dose.praise': 'बिल्कुल सही। शाबाश, {name} जी। फिर बात करेंगे।',
+  'dose.hint_location': 'अपनी {medicine} यहाँ देखिए: {location}। क्या आपको मिल गई?',
+  'dose.hint_pillbox': 'अपने पिलबॉक्स में देखिए: {box}। क्या आपको मिल गई?',
+  'dose.hint_pill': 'आपकी {medicine} ऐसी दिखती है: {pill}। क्या आपको मिल गई?',
+  'dose.hint_generic': 'आपकी {medicine} बाकी दवाइयों के साथ रखी है। क्या आपको मिल गई?',
+  'dose.reask': 'क्या आपने अपनी {medicine} ले ली है?',
+  'dose.sorry_reask': 'माफ़ कीजिए, मैं समझ नहीं पाई। क्या आपने अपनी {medicine} ले ली है?',
+  'dose.redirect': 'मैं इसके बारे में {caregiver} से पूछूँगी। पहले दवा पूरी कर लेते हैं।',
+  'dose.unsafe': 'यह बात डॉक्टर या {caregiver} से पूछनी होगी। पहले दवा पूरी कर लेते हैं।',
+  'dose.call_back': 'ठीक है। मैं दस मिनट में फिर फ़ोन करूँगी। नमस्ते।',
+  'dose.ok_skip': 'कोई बात नहीं, {name} जी। मैं {caregiver} को बता दूँगी। नमस्ते।',
+  'dose.dont_take_another': 'कृपया दूसरी गोली मत लीजिए। मैं {caregiver} से आपसे बात करने को कहूँगी। नमस्ते।',
+  'dose.handover': '{caregiver} जल्दी ही आपको फ़ोन करके मदद करेंगे। तब तक कोई दवा मत लीजिए। नमस्ते।',
+  'dose.handover_unsure': 'अभी और गोलियाँ मत लीजिए। {caregiver} आपको फ़ोन करके पूछेंगे। नमस्ते।',
+};
+const BANKS = { en: LINES, hi: LINES_HI };
+
 const capitalise = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
 // Text of a line with its slots filled. Unknown slots are left empty; each sentence starts with a
 // capital letter (so "{caregiver} will call" reads "Your family will call").
-function render(lineId, slots = {}) {
-  const template = LINES[lineId];
+function render(lineId, slots = {}, lang = 'en') {
+  const template = (BANKS[lang] || LINES)[lineId] || LINES[lineId];
   if (!template) throw new Error(`Unknown dose line: ${lineId}`);
   const text = template.replace(/\{(\w+)\}/g, (_, k) => (slots[k] === undefined || slots[k] === null ? '' : String(slots[k])));
   return text.replace(/\s+/g, ' ').trim().replace(/(^|[.?!]\s+)([a-z])/g, (m, p, c) => p + c.toUpperCase());
@@ -63,6 +96,6 @@ function render(lineId, slots = {}) {
 
 // The orchestrator action for a line (contract C8). `text` is the rendered line: the voice front
 // ends speak it in the neutral voice until the phrase-bank resolver (A5.5) supplies family audio.
-const line = (lineId, slots) => ({ type: 'play', lineId, slots, text: render(lineId, slots) });
+const line = (lineId, slots, lang = 'en') => ({ type: 'play', lineId, slots, lang, text: render(lineId, slots, lang) });
 
-module.exports = { LINES, render, line, capitalise };
+module.exports = { LINES, LINES_HI, render, line, capitalise };

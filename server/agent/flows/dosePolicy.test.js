@@ -170,3 +170,49 @@ test('every line the policy can say exists, ends a question last, and the lines 
     assert.match(LINES[id], /Goodbye/, id);
   }
 });
+
+// Core scenario 4 (fix 7, found by the agent eval): the dose was ticked in the app during the call,
+// then she says she is taking it. Before, she heard "Take your time" (a double dose).
+test('already recorded: "taking it now" / "yes" / "I took it" stop the call and tell the family', () => {
+  for (const intent of ['taking_now', 'yes', 'taken', 'cant_find', 'unsure']) {
+    const d = P.decide(P.newState(), { intent, matches_expected: false }, { attempt: 1, turnsLeft: 6, recorded: true });
+    assert.deepEqual(d.say, ['dose.already_taken_stop'], intent);
+    assert.equal(d.end, true);
+    assert.equal(d.tools[0].name, 'notify_caregiver');
+    assert.ok(!d.tools.some((t) => t.name === 'mark_dose'), 'nothing recorded again');
+  }
+  const done = P.decide(P.newState(), { intent: 'already_took' }, { attempt: 1, turnsLeft: 6, recorded: true });
+  assert.deepEqual(done.say, ['dose.already_done']);
+  assert.equal(done.tools.length, 0);
+});
+
+// Core scenario 5: "Where is Ravi?" is a question, not "can't find the pill" (rules fallback).
+test('rules: "where is <person>" is a question; "where is it / my tablet" is cant_find', () => {
+  const ex = { medicine: 'Amlodipine', pill: 'small white round tablet' };
+  assert.equal(P.ruleLabel('Where is Ravi?', ex).intent, 'question');
+  assert.equal(P.ruleLabel('Where is it?', ex).intent, 'cant_find');
+  assert.equal(P.ruleLabel('where is my tablet', ex).intent, 'cant_find');
+  assert.equal(P.ruleLabel('Where is the Amlodipine?', ex).intent, 'cant_find');
+});
+
+// Core scenario 9: a Hindi speaker hears only Hindi, so every line needs its Hindi version.
+test('every dose line has a Hindi version with the same slots', () => {
+  const { LINES_HI } = require('./doseLines');
+  const slotsOf = (t) => (t.match(/\{\w+\}/g) || []).sort().join(',');
+  for (const [id, text] of Object.entries(LINES)) {
+    assert.ok(LINES_HI[id], `no Hindi line for ${id}`);
+    assert.equal(slotsOf(LINES_HI[id]), slotsOf(text), id);
+    assert.ok((LINES_HI[id].match(/\?/g) || []).length <= 1, `${id}: one question at a time`);
+  }
+});
+
+// Core scenario 9 without the model: basic Hindi answers and pill colours are understood.
+test('rules: Hindi answers and pill descriptions', () => {
+  const ex = { medicine: 'Amlodipine', pill: 'small white round tablet' };
+  assert.equal(P.ruleLabel('हाँ, मैंने दवा ले ली।', ex).intent, 'taken');
+  assert.equal(P.ruleLabel('मैंने पहले ही ले ली थी।', ex).intent, 'already_took');
+  assert.equal(P.ruleLabel('बाद में लूँगी', ex).intent, 'later');
+  assert.equal(P.ruleLabel('हाँ', ex).intent, 'yes');
+  assert.equal(P.matchesExpected('छोटी सफ़ेद गोल गोली।', ex), true);
+  assert.equal(P.matchesExpected('पीली गोली', { medicine: 'Amlodipine', pill: 'small white round tablet' }), false);
+});

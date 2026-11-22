@@ -363,7 +363,13 @@
         "debit card otp",
         "secret code on my phone",
         "bank account number",
-        "share my bank account"
+        "share my bank account",
+        "otp",
+        "one time password",
+        "one-time password",
+        "pin number",
+        "asked for my bank",
+        "asked for my card"
       ],
       "hi": [
         "bank pin",
@@ -379,7 +385,8 @@
         "बैंक खाता",
         "पिन बताओ",
         "पासवर्ड",
-        "bank account number"
+        "bank account number",
+        "otp"
       ],
       "mr": [
         "paise pathva",
@@ -392,7 +399,8 @@
         "बँक खाते",
         "ओटीपी द्या",
         "पिन द्या",
-        "पासवर्ड द्या"
+        "पासवर्ड द्या",
+        "otp"
       ]
     }
   }

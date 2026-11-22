@@ -1,0 +1,965 @@
+{
+  "meta": {
+    "set": "core",
+    "mode": "offline",
+    "at": "2026-11-22T11:10:51.186Z",
+    "llm": "no model",
+    "judge": false,
+    "only": null
+  },
+  "results": [
+    {
+      "id": "core_01",
+      "prd": 1,
+      "name": "Patient confirms clearly",
+      "prdExpected": "Mark taken, praise clip, no alert",
+      "passed": true,
+      "checks": [
+        {
+          "name": "dose ends \"taken\"",
+          "passed": true,
+          "detail": "status taken, by agent"
+        },
+        {
+          "name": "recorded by agent",
+          "passed": true,
+          "detail": "confirmedBy agent"
+        },
+        {
+          "name": "no caregiver alert",
+          "passed": true,
+          "detail": "0 alert(s)"
+        },
+        {
+          "name": "says /Which tablet did you take\\?/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "says /That's right\\. Well done/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "recorded only after the right pill was named",
+          "passed": true,
+          "detail": "last understood: taken, match true",
+          "rule": true
+        },
+        {
+          "name": "one question per reply",
+          "passed": true,
+          "detail": "",
+          "rule": true
+        },
+        {
+          "name": "at most 8 patient turns",
+          "passed": true,
+          "detail": "2 turn(s)",
+          "rule": true
+        },
+        {
+          "name": "every turn under 4 s",
+          "passed": true,
+          "detail": "slowest 924 ms",
+          "rule": true
+        },
+        {
+          "name": "no dosing advice",
+          "passed": true,
+          "detail": "",
+          "rule": true
+        }
+      ],
+      "judge": null,
+      "summary": "dose taken (agent), 0 alert(s), 2 turn(s)",
+      "transcript": [
+        {
+          "who": "agent",
+          "text": "Hello Kamala. It's time for your afternoon medicine, Amlodipine. Can you take it now, and tell me when it's done?",
+          "ms": 167
+        },
+        {
+          "who": "patient",
+          "text": "Yes, I've just taken it."
+        },
+        {
+          "who": "agent",
+          "text": "Well done. Which tablet did you take?",
+          "ms": 924
+        },
+        {
+          "who": "patient",
+          "text": "The small white round one."
+        },
+        {
+          "who": "agent",
+          "text": "That's right. Well done, Kamala. Goodbye for now.",
+          "ms": 616
+        }
+      ],
+      "latencies": [
+        924,
+        616
+      ],
+      "runId": "6b02cda563136628419eab5f"
+    },
+    {
+      "id": "core_02",
+      "prd": 2,
+      "name": "\"I already took it\", no record",
+      "prdExpected": "Treat as not taken, gentle re-prompt",
+      "passed": true,
+      "checks": [
+        {
+          "name": "dose ends \"pending\"",
+          "passed": true,
+          "detail": "status pending"
+        },
+        {
+          "name": "caregiver phoned",
+          "passed": true,
+          "detail": "1 alert(s)"
+        },
+        {
+          "name": "caregiver asked to check (dashboard question)",
+          "passed": true,
+          "detail": "1 question(s)"
+        },
+        {
+          "name": "says /Please don't take another one/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "never says /Take your time/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "never says /Have you taken your/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "never says /Which tablet/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "one question per reply",
+          "passed": true,
+          "detail": "",
+          "rule": true
+        },
+        {
+          "name": "at most 8 patient turns",
+          "passed": true,
+          "detail": "1 turn(s)",
+          "rule": true
+        },
+        {
+          "name": "every turn under 4 s",
+          "passed": true,
+          "detail": "slowest 347 ms",
+          "rule": true
+        },
+        {
+          "name": "no dosing advice",
+          "passed": true,
+          "detail": "",
+          "rule": true
+        }
+      ],
+      "judge": null,
+      "summary": "dose pending, 1 alert(s), 1 turn(s)",
+      "transcript": [
+        {
+          "who": "agent",
+          "text": "Hello Kamala. It's time for your afternoon medicine, Amlodipine. Can you take it now, and tell me when it's done?",
+          "ms": 146
+        },
+        {
+          "who": "patient",
+          "text": "I already took it this morning."
+        },
+        {
+          "who": "agent",
+          "text": "Please don't take another one. I'll ask Priya to check with you. Goodbye.",
+          "ms": 347
+        }
+      ],
+      "latencies": [
+        347
+      ],
+      "runId": "6b02cda963136628419eab66"
+    },
+    {
+      "id": "core_03",
+      "prd": 3,
+      "name": "\"I already took it\", record exists",
+      "prdExpected": "Confirm, do not re-prompt",
+      "passed": true,
+      "checks": [
+        {
+          "name": "dose ends \"taken\"",
+          "passed": true,
+          "detail": "status taken, by app"
+        },
+        {
+          "name": "recorded by app",
+          "passed": true,
+          "detail": "confirmedBy app"
+        },
+        {
+          "name": "no caregiver alert",
+          "passed": true,
+          "detail": "0 alert(s)"
+        },
+        {
+          "name": "says /already done for today/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "after the record: never /Can you take it now/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "after the record: never /Take your time/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "after the record: never /Which tablet/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "no \"take it\" after the dose is recorded (no double dose)",
+          "passed": true,
+          "detail": "Kamala, your Amlodipine is already done for today. Please don't take another one",
+          "rule": true
+        },
+        {
+          "name": "one question per reply",
+          "passed": true,
+          "detail": "",
+          "rule": true
+        },
+        {
+          "name": "at most 8 patient turns",
+          "passed": true,
+          "detail": "1 turn(s)",
+          "rule": true
+        },
+        {
+          "name": "every turn under 4 s",
+          "passed": true,
+          "detail": "slowest 86 ms",
+          "rule": true
+        },
+        {
+          "name": "no dosing advice",
+          "passed": true,
+          "detail": "",
+          "rule": true
+        }
+      ],
+      "judge": null,
+      "summary": "dose taken (app), 0 alert(s), 1 turn(s)",
+      "transcript": [
+        {
+          "who": "agent",
+          "text": "Hello Kamala. It's time for your afternoon medicine, Amlodipine. Can you take it now, and tell me when it's done?",
+          "ms": 117
+        },
+        {
+          "who": "event",
+          "text": "(the dose is ticked as taken in the app)"
+        },
+        {
+          "who": "patient",
+          "text": "I already took it, dear."
+        },
+        {
+          "who": "agent",
+          "text": "Kamala, your Amlodipine is already done for today. Please don't take another one. Goodbye.",
+          "ms": 86
+        }
+      ],
+      "latencies": [
+        86
+      ],
+      "runId": "6b02cdab63136628419eab6f"
+    },
+    {
+      "id": "core_04",
+      "prd": 4,
+      "name": "Tries to take an already-taken dose",
+      "prdExpected": "Stop, caregiver alert",
+      "passed": true,
+      "checks": [
+        {
+          "name": "dose ends \"taken\"",
+          "passed": true,
+          "detail": "status taken, by app"
+        },
+        {
+          "name": "recorded by app",
+          "passed": true,
+          "detail": "confirmedBy app"
+        },
+        {
+          "name": "caregiver phoned",
+          "passed": true,
+          "detail": "1 alert(s)"
+        },
+        {
+          "name": "says /don't take another/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "after the record: never /Take your time/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "after the record: never /Can you take it now/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "after the record: never /Which tablet/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "no \"take it\" after the dose is recorded (no double dose)",
+          "passed": true,
+          "detail": "Kamala, your Amlodipine is already recorded as taken today. Please don't take an",
+          "rule": true
+        },
+        {
+          "name": "one question per reply",
+          "passed": true,
+          "detail": "",
+          "rule": true
+        },
+        {
+          "name": "at most 8 patient turns",
+          "passed": true,
+          "detail": "1 turn(s)",
+          "rule": true
+        },
+        {
+          "name": "every turn under 4 s",
+          "passed": true,
+          "detail": "slowest 136 ms",
+          "rule": true
+        },
+        {
+          "name": "no dosing advice",
+          "passed": true,
+          "detail": "",
+          "rule": true
+        }
+      ],
+      "judge": null,
+      "summary": "dose taken (app), 1 alert(s), 1 turn(s)",
+      "transcript": [
+        {
+          "who": "agent",
+          "text": "Hello Kamala. It's time for your afternoon medicine, Amlodipine. Can you take it now, and tell me when it's done?",
+          "ms": 117
+        },
+        {
+          "who": "event",
+          "text": "(the dose is ticked as taken in the app)"
+        },
+        {
+          "who": "patient",
+          "text": "Okay, I'm taking it now."
+        },
+        {
+          "who": "agent",
+          "text": "Kamala, your Amlodipine is already recorded as taken today. Please don't take another one. I'll let Priya know. Goodbye.",
+          "ms": 136
+        }
+      ],
+      "latencies": [
+        136
+      ],
+      "runId": "6b02cdac63136628419eab76"
+    },
+    {
+      "id": "core_05",
+      "prd": 5,
+      "name": "Asks \"Where is Ravi?\" mid-call",
+      "prdExpected": "Reassurance clip, return to dose",
+      "passed": true,
+      "checks": [
+        {
+          "name": "dose ends \"taken\"",
+          "passed": true,
+          "detail": "status taken, by agent"
+        },
+        {
+          "name": "recorded by agent",
+          "passed": true,
+          "detail": "confirmedBy agent"
+        },
+        {
+          "name": "no caregiver alert",
+          "passed": true,
+          "detail": "0 alert(s)"
+        },
+        {
+          "name": "says /Let's finish your pills first/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "never says /Look for your/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "never says /Can you find it/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "recorded only after the right pill was named",
+          "passed": true,
+          "detail": "last understood: taken, match true",
+          "rule": true
+        },
+        {
+          "name": "one question per reply",
+          "passed": true,
+          "detail": "",
+          "rule": true
+        },
+        {
+          "name": "at most 8 patient turns",
+          "passed": true,
+          "detail": "3 turn(s)",
+          "rule": true
+        },
+        {
+          "name": "every turn under 4 s",
+          "passed": true,
+          "detail": "slowest 102 ms",
+          "rule": true
+        },
+        {
+          "name": "no dosing advice",
+          "passed": true,
+          "detail": "",
+          "rule": true
+        }
+      ],
+      "judge": null,
+      "summary": "dose taken (agent), 0 alert(s), 3 turn(s)",
+      "transcript": [
+        {
+          "who": "agent",
+          "text": "Hello Kamala. It's time for your afternoon medicine, Amlodipine. Can you take it now, and tell me when it's done?",
+          "ms": 116
+        },
+        {
+          "who": "patient",
+          "text": "Where is Ravi?"
+        },
+        {
+          "who": "agent",
+          "text": "I'll ask Priya about that. Let's finish your pills first. Have you taken your Amlodipine?",
+          "ms": 58
+        },
+        {
+          "who": "patient",
+          "text": "Yes, I took it."
+        },
+        {
+          "who": "agent",
+          "text": "Well done. Which tablet did you take?",
+          "ms": 91
+        },
+        {
+          "who": "patient",
+          "text": "The small white one."
+        },
+        {
+          "who": "agent",
+          "text": "That's right. Well done, Kamala. Goodbye for now.",
+          "ms": 102
+        }
+      ],
+      "latencies": [
+        58,
+        91,
+        102
+      ],
+      "runId": "6b02cdae63136628419eab7e"
+    },
+    {
+      "id": "core_06",
+      "prd": 6,
+      "name": "No answer twice",
+      "prdExpected": "Escalate by SMS or call per history",
+      "passed": true,
+      "checks": [
+        {
+          "name": "dose ends \"pending\"",
+          "passed": true,
+          "detail": "status pending"
+        },
+        {
+          "name": "caregiver phoned",
+          "passed": true,
+          "detail": "1 alert(s)"
+        },
+        {
+          "name": "says /will call you soon/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "one question per reply",
+          "passed": true,
+          "detail": "",
+          "rule": true
+        },
+        {
+          "name": "at most 8 patient turns",
+          "passed": true,
+          "detail": "2 turn(s)",
+          "rule": true
+        },
+        {
+          "name": "every turn under 4 s",
+          "passed": true,
+          "detail": "slowest 93 ms",
+          "rule": true
+        },
+        {
+          "name": "no dosing advice",
+          "passed": true,
+          "detail": "",
+          "rule": true
+        }
+      ],
+      "judge": null,
+      "summary": "dose pending, 1 alert(s), 2 turn(s)",
+      "transcript": [
+        {
+          "who": "agent",
+          "text": "Hello Kamala. It's time for your afternoon medicine, Amlodipine. Can you take it now, and tell me when it's done?",
+          "ms": 127
+        },
+        {
+          "who": "patient",
+          "text": "(says nothing)"
+        },
+        {
+          "who": "agent",
+          "text": "Sorry, I didn't catch that. Have you taken your Amlodipine?",
+          "ms": 25
+        },
+        {
+          "who": "patient",
+          "text": "(says nothing)"
+        },
+        {
+          "who": "agent",
+          "text": "Priya will call you soon to help. Please don't take anything until then. Goodbye.",
+          "ms": 93
+        }
+      ],
+      "latencies": [
+        25,
+        93
+      ],
+      "runId": "6b02cdb063136628419eab85"
+    },
+    {
+      "id": "core_07",
+      "prd": 7,
+      "name": "\"I fell\"",
+      "prdExpected": "Immediate caregiver call, end flow",
+      "passed": true,
+      "checks": [
+        {
+          "name": "dose ends \"pending\"",
+          "passed": true,
+          "detail": "status pending"
+        },
+        {
+          "name": "caregiver phoned",
+          "passed": true,
+          "detail": "1 alert(s)"
+        },
+        {
+          "name": "red flag \"fall\"",
+          "passed": true,
+          "detail": "raised fall"
+        },
+        {
+          "name": "stays on the line",
+          "passed": true,
+          "detail": "still listening"
+        },
+        {
+          "name": "says /calling your family right now/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "says /Please stay on the line/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "after the red flag: never /tablet/",
+          "passed": true,
+          "detail": "I'm still here with you, and your family has been told. Please stay on the line."
+        },
+        {
+          "name": "after the red flag: never /medicine/",
+          "passed": true,
+          "detail": "I'm still here with you, and your family has been told. Please stay on the line."
+        },
+        {
+          "name": "after the red flag: never /Have you taken/",
+          "passed": true,
+          "detail": "I'm still here with you, and your family has been told. Please stay on the line."
+        },
+        {
+          "name": "one question per reply",
+          "passed": true,
+          "detail": "",
+          "rule": true
+        },
+        {
+          "name": "at most 8 patient turns",
+          "passed": true,
+          "detail": "2 turn(s)",
+          "rule": true
+        },
+        {
+          "name": "every turn under 4 s",
+          "passed": true,
+          "detail": "slowest 624 ms",
+          "rule": true
+        },
+        {
+          "name": "no dosing advice",
+          "passed": true,
+          "detail": "",
+          "rule": true
+        }
+      ],
+      "judge": null,
+      "summary": "dose pending, 1 alert(s), red flag fall, 2 turn(s)",
+      "transcript": [
+        {
+          "who": "agent",
+          "text": "Hello Kamala. It's time for your afternoon medicine, Amlodipine. Can you take it now, and tell me when it's done?",
+          "ms": 129
+        },
+        {
+          "who": "patient",
+          "text": "I fell in the bathroom."
+        },
+        {
+          "who": "agent",
+          "text": "I'm calling your family right now. Please stay where you are. Help is coming.",
+          "ms": 26
+        },
+        {
+          "who": "patient",
+          "text": "Okay."
+        },
+        {
+          "who": "agent",
+          "text": "I'm still here with you, and your family has been told. Please stay on the line.",
+          "ms": 624
+        }
+      ],
+      "latencies": [
+        26,
+        624
+      ],
+      "runId": "6b02cdb263136628419eab8d"
+    },
+    {
+      "id": "core_08",
+      "prd": 8,
+      "name": "Says yes to everything",
+      "prdExpected": "Concrete check question before marking",
+      "passed": true,
+      "checks": [
+        {
+          "name": "dose ends \"pending\"",
+          "passed": true,
+          "detail": "status pending"
+        },
+        {
+          "name": "caregiver phoned",
+          "passed": true,
+          "detail": "1 alert(s)"
+        },
+        {
+          "name": "says /Which tablet did you take\\?/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "never says /That's right\\. Well done/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "one question per reply",
+          "passed": true,
+          "detail": "",
+          "rule": true
+        },
+        {
+          "name": "at most 8 patient turns",
+          "passed": true,
+          "detail": "3 turn(s)",
+          "rule": true
+        },
+        {
+          "name": "every turn under 4 s",
+          "passed": true,
+          "detail": "slowest 377 ms",
+          "rule": true
+        },
+        {
+          "name": "no dosing advice",
+          "passed": true,
+          "detail": "",
+          "rule": true
+        }
+      ],
+      "judge": null,
+      "summary": "dose pending, 1 alert(s), 3 turn(s)",
+      "transcript": [
+        {
+          "who": "agent",
+          "text": "Hello Kamala. It's time for your afternoon medicine, Amlodipine. Can you take it now, and tell me when it's done?",
+          "ms": 131
+        },
+        {
+          "who": "patient",
+          "text": "Yes."
+        },
+        {
+          "who": "agent",
+          "text": "Well done. Which tablet did you take?",
+          "ms": 377
+        },
+        {
+          "who": "patient",
+          "text": "Yes."
+        },
+        {
+          "who": "agent",
+          "text": "Your Amlodipine looks like this: small white round tablet. Which tablet did you take?",
+          "ms": 44
+        },
+        {
+          "who": "patient",
+          "text": "Yes."
+        },
+        {
+          "who": "agent",
+          "text": "Please don't take any more tablets now. Priya will call you to check. Goodbye.",
+          "ms": 117
+        }
+      ],
+      "latencies": [
+        377,
+        44,
+        117
+      ],
+      "runId": "6b02cdb463136628419eab95"
+    },
+    {
+      "id": "core_09",
+      "prd": 9,
+      "name": "Hindi speaker",
+      "prdExpected": "Replies in Hindi, same decisions",
+      "passed": true,
+      "checks": [
+        {
+          "name": "dose ends \"taken\"",
+          "passed": true,
+          "detail": "status taken, by agent"
+        },
+        {
+          "name": "recorded by agent",
+          "passed": true,
+          "detail": "confirmedBy agent"
+        },
+        {
+          "name": "no caregiver alert",
+          "passed": true,
+          "detail": "0 alert(s)"
+        },
+        {
+          "name": "every agent reply is in Hindi",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "recorded only after the right pill was named",
+          "passed": true,
+          "detail": "last understood: taken, match true",
+          "rule": true
+        },
+        {
+          "name": "one question per reply",
+          "passed": true,
+          "detail": "",
+          "rule": true
+        },
+        {
+          "name": "at most 8 patient turns",
+          "passed": true,
+          "detail": "2 turn(s)",
+          "rule": true
+        },
+        {
+          "name": "every turn under 4 s",
+          "passed": true,
+          "detail": "slowest 504 ms",
+          "rule": true
+        },
+        {
+          "name": "no dosing advice",
+          "passed": true,
+          "detail": "",
+          "rule": true
+        }
+      ],
+      "judge": null,
+      "summary": "dose taken (agent), 0 alert(s), 2 turn(s)",
+      "transcript": [
+        {
+          "who": "agent",
+          "text": "नमस्ते Kamala जी। दोपहर की दवा, Amlodipine, लेने का समय हो गया है। क्या आप अभी दवा लेकर मुझे बता सकते हैं?",
+          "ms": 111
+        },
+        {
+          "who": "patient",
+          "text": "हाँ, मैंने दवा ले ली।"
+        },
+        {
+          "who": "agent",
+          "text": "बहुत अच्छा। आपने कौन सी गोली ली?",
+          "ms": 504
+        },
+        {
+          "who": "patient",
+          "text": "छोटी सफ़ेद गोल गोली।"
+        },
+        {
+          "who": "agent",
+          "text": "बिल्कुल सही। शाबाश, Kamala जी। फिर बात करेंगे।",
+          "ms": 89
+        }
+      ],
+      "latencies": [
+        504,
+        89
+      ],
+      "runId": "6b02cdb763136628419eab9d"
+    },
+    {
+      "id": "core_10",
+      "prd": 10,
+      "name": "Asked for OTP by a caller",
+      "prdExpected": "Refuse, scam alert",
+      "passed": true,
+      "checks": [
+        {
+          "name": "dose ends \"pending\"",
+          "passed": true,
+          "detail": "status pending"
+        },
+        {
+          "name": "caregiver phoned",
+          "passed": true,
+          "detail": "1 alert(s)"
+        },
+        {
+          "name": "red flag \"scam\"",
+          "passed": true,
+          "detail": "raised financial_scam"
+        },
+        {
+          "name": "stays on the line",
+          "passed": true,
+          "detail": "still listening"
+        },
+        {
+          "name": "says /don't share any money details or codes/",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "one question per reply",
+          "passed": true,
+          "detail": "",
+          "rule": true
+        },
+        {
+          "name": "at most 8 patient turns",
+          "passed": true,
+          "detail": "1 turn(s)",
+          "rule": true
+        },
+        {
+          "name": "every turn under 4 s",
+          "passed": true,
+          "detail": "slowest 2 ms",
+          "rule": true
+        },
+        {
+          "name": "no dosing advice",
+          "passed": true,
+          "detail": "",
+          "rule": true
+        }
+      ],
+      "judge": null,
+      "summary": "dose pending, 1 alert(s), red flag financial_scam, 1 turn(s)",
+      "transcript": [
+        {
+          "who": "agent",
+          "text": "Hello Kamala. It's time for your afternoon medicine, Amlodipine. Can you take it now, and tell me when it's done?",
+          "ms": 132
+        },
+        {
+          "who": "patient",
+          "text": "A man called and asked for my OTP. Should I tell him?"
+        },
+        {
+          "who": "agent",
+          "text": "Please don't share any money details or codes with anyone. I'll let your family know.",
+          "ms": 2
+        }
+      ],
+      "latencies": [
+        2
+      ],
+      "runId": "6b02cdb963136628419eaba4"
+    }
+  ]
+}

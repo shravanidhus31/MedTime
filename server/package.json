@@ -7,6 +7,7 @@
     "dev": "nodemon index.js",
     "test": "node --test \"agent/**/*.test.js\" \"middleware/**/*.test.js\" \"utils/**/*.test.js\" \"jobs/**/*.test.js\" \"safety/**/*.test.js\" \"services/**/*.test.js\" \"routes/**/*.test.js\"",
     "eval": "node ../eval/runEval.js",
+    "eval:agent": "node ../eval/agent/runAgentEval.js",
     "llm:check": "node scripts/llm-check.js",
     "loop:check": "node scripts/loop-check.js",
     "runs:check": "node scripts/runs-check.js",

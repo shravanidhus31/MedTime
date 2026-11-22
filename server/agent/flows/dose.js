@@ -40,6 +40,10 @@ const LABEL_TIMEOUT_MS = 3000; // inside the 4 s phone turn budget
 const LABEL_MAX_TOKENS = 400;
 const SNOOZE_MINUTES = 10;
 const FOOD = { before: ' Please take it before food.', after: ' Please take it after food.', with: ' Please take it with food.', any: '' };
+// Hindi slot words (doseLines LINES_HI)
+const FOOD_HI = { before: ' कृपया इसे खाने से पहले लीजिए।', after: ' कृपया इसे खाने के बाद लीजिए।', with: ' कृपया इसे खाने के साथ लीजिए।', any: '' };
+const SLOT_HI = { morning: 'सुबह', afternoon: 'दोपहर', evening: 'शाम', night: 'रात' };
+const langOf = (patient) => (patient && patient.language === 'hi' ? 'hi' : 'en');
 
 const LABEL_SCHEMA = {
   name: 'dose_turn_label',
@@ -96,7 +100,7 @@ function timeOfDay(date) {
 // Speaks lines: the actions, plus an agent_said step with the words.
 async function say(session, lineIds, then) {
   const s = session.state;
-  const actions = lineIds.map((id) => line(id, s.slots));
+  const actions = lineIds.map((id) => line(id, s.slots, s.lang));
   const text = actions.map((a) => a.text).join(' ');
   s.transcript.push({ who: 'agent', text });
   s.lastQuestion = actions.length ? actions[actions.length - 1].text : s.lastQuestion;
@@ -156,6 +160,8 @@ function caregiverWords(s, why) {
       return { message: `${name} couldn't confirm which tablet was taken for the ${when} ${medicine}, and was asked not to take any more. Please check.` };
     case 'refused':
       return { message: `${name} didn't want to take the ${when} ${medicine}. It is recorded as skipped.` };
+    case 'tried_again':
+      return { message: `${name} was about to take the ${when} ${medicine} again, but it is already recorded as taken. ${name} was asked not to take another one. Please check.` };
     default:
       return { message: `${name} needs help with the ${when} ${medicine}. Please call.` };
   }
@@ -213,7 +219,9 @@ const doseFlow = {
       turnsLeft: session.maxTurns - session.turns,
       unsafe: !!(input.safety && input.safety.verdict === 'unsafe'),
     };
-    if (s.policy.phase === 'reminder' && label.intent === 'already_took') {
+    // The dose log decides, on every answer that could lead to taking a tablet (core scenario 4):
+    // someone may have ticked the dose in the app while the call was ringing.
+    if (s.policy.phase === 'reminder' && policy.LOG_CHECK_INTENTS.includes(label.intent)) {
       const check = await runTool(session, 'check_double_dose', { reminderId: s.reminderId });
       info.recorded = !!(check.ok && check.data && check.data.alreadyTaken);
     }
@@ -273,14 +281,15 @@ function phrase(text) {
 }
 
 function buildSlots({ med, patient, caregiver, scheduledTime }) {
+  const hi = langOf(patient) === 'hi';
   return {
     name: ((patient.user && patient.user.name) || 'there').split(' ')[0],
     medicine: med.name,
     pill: phrase(med.pillDescription),
-    slot: timeOfDay(scheduledTime),
+    slot: hi ? SLOT_HI[timeOfDay(scheduledTime)] : timeOfDay(scheduledTime),
     box: String(med.pillboxSlot || '').trim().replace(/\s*\/\s*/g, ', '),
-    food: FOOD[med.mealTiming] || '',
-    caregiver: caregiver ? caregiver.name.split(' ')[0] : 'your family',
+    food: (hi ? FOOD_HI : FOOD)[med.mealTiming] || '',
+    caregiver: caregiver ? caregiver.name.split(' ')[0] : hi ? 'आपके परिवार वाले' : 'your family',
     location: phrase(med.locationHint),
   };
 }
@@ -291,7 +300,7 @@ async function doseLineTexts({ med, patient, scheduledTime = new Date() }) {
   const { LINES, render } = require('./doseLines');
   const caregiver = (await listCaregivers(patient._id)).find((c) => c.role !== 'doctor' && c.name);
   const slots = buildSlots({ med, patient, caregiver, scheduledTime });
-  return Object.keys(LINES).map((id) => render(id, slots));
+  return Object.keys(LINES).map((id) => render(id, slots, langOf(patient)));
 }
 
 // Everything a dose call needs about one dose: { reminder, patient, promptVersion, state }.
@@ -308,6 +317,7 @@ async function loadDoseState(reminderId) {
   const promptVersion = `${FLOW_VERSION}+${label.promptVersion}`;
   const state = {
     reminderId: String(reminder._id),
+    lang: langOf(patient),
     attempt: Math.max(1, reminder.attempts || 0),
     dueTime: spokenTime(reminder.scheduledTime),
     slots: buildSlots({ med, patient, caregiver, scheduledTime: reminder.scheduledTime }),
@@ -334,6 +344,7 @@ async function switchToDose(session, reminderId) {
   const { reminder, state } = await loadDoseState(reminderId);
   session.state = { ...state, transcript: (session.state && session.state.transcript) || [] };
   session.flow = 'dose';
+  session.lang = state.lang;
   session.reminderId = reminder._id;
   if (session.runId) {
     await AgentRun.updateOne({ _id: session.runId }, { $set: { reminder: reminder._id, flow: 'dose' } }).catch(() => {});
@@ -359,6 +370,7 @@ async function startDoseCall({ reminderId, trigger = 'simulate', channel = 'text
     turnBudgetMs,
     init: (session) => {
       session.state = state;
+      session.lang = state.lang; // the orchestrator's own lines (hold, emergency) follow it
     },
   });
   return { sessionId, runId: runId ? String(runId) : null, patientId: String(patient._id), actions };

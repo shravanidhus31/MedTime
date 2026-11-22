@@ -15,15 +15,21 @@
 
 const INTENTS = ['taken', 'taking_now', 'already_took', 'later', 'refuse', 'cant_find', 'unsure', 'question', 'yes', 'no', 'unclear'];
 const MIN_CONFIDENCE = 0.5;
+// Answers after which the dose log is checked before deciding (the flow runs check_double_dose).
+const LOG_CHECK_INTENTS = ['already_took', 'taken', 'yes', 'taking_now', 'cant_find', 'unsure'];
 const MAX_CALL_ATTEMPTS = 3; // first call + 2 retries (A4.1), then the caregiver
 
 // ── understanding: the rule-based fallback ───────────────────────────────────
 
 const has = (t, words) => words.some((w) => t.includes(w));
 
+// Hindi words for how a pill looks, read as the English words the caregiver typed (core scenario 9).
+const HINDI_LOOKS = { 'सफ़ेद': 'white', 'सफेद': 'white', 'छोटी': 'small', 'छोटा': 'small', 'बड़ी': 'large', 'बड़ा': 'large', 'बडी': 'large', 'गोल': 'round', 'पीली': 'yellow', 'पीला': 'yellow', 'गुलाबी': 'pink', 'लाल': 'red', 'नीली': 'blue', 'नीला': 'blue', 'लंबी': 'oval', 'हरी': 'green', 'नारंगी': 'orange' };
+const fromHindi = (text) => String(text || '').replace(/[\u0900-\u0963\u0966-\u097F]+/g, (w) => HINDI_LOOKS[w] || w).replace(/[\u0964\u0965]/g, ' ');
+
 // Does the text name the expected medicine, or describe the pill? expected = { medicine, pill }
 function matchesExpected(text, expected = {}) {
-  const t = ` ${String(text || '').toLowerCase()} `;
+  const t = ` ${fromHindi(text).toLowerCase()} `;
   const name = String(expected.medicine || '').toLowerCase().split(/\s+/)[0];
   if (name && name.length >= 3 && t.includes(name)) return true;
   const describe = String(expected.pill || '').toLowerCase().split(/[\s,]+/).filter((w) => w.length >= 3 && !['the', 'and', 'one', 'pill', 'tablet'].includes(w));
@@ -33,22 +39,26 @@ function matchesExpected(text, expected = {}) {
 // A simple English labeller, used when the model is unavailable (rate limit, timeout). It only has
 // to be safe: when in doubt it says 'unclear', which re-asks and then hands over.
 function ruleLabel(text, expected = {}) {
-  const t = ` ${String(text || '').toLowerCase().replace(/[’']/g, "'").replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ')} `;
+  // Devanagari is kept (Hindi answers, core scenario 9); the danda and other punctuation are not.
+  const t = ` ${String(text || '').toLowerCase().replace(/[’']/g, "'").replace(/[\u0964\u0965]/g, ' ').replace(/[^a-z0-9'\u0900-\u097F ]+/g, ' ').replace(/\s+/g, ' ')} `;
   const pill = matchesExpected(text, expected);
   const label = (intent, confidence = 0.7) => ({ intent, pill_mentioned: pill ? expected.medicine || null : null, matches_expected: pill, confidence, source: 'rules' });
 
   if (!t.trim()) return label('unclear', 0.3);
-  if (has(t, [' already took', ' already taken', ' already had', ' took it this morning', ' took it earlier', ' took it before'])) return label('already_took');
-  if (has(t, [" can't find", ' cannot find', " don't know where", ' where is', ' where are', ' lost '])) return label('cant_find');
+  if (has(t, [' already took', ' already taken', ' already had', ' took it this morning', ' took it earlier', ' took it before', ' पहले ही ', ' pehle hi ', ' subah hi '])) return label('already_took');
+  if (has(t, [" can't find", ' cannot find', " don't know where", ' lost ', ' नहीं मिल', ' nahi mil', ' nahin mil'])) return label('cant_find');
+  // "where is it / my tablet" is about the pill; "Where is Ravi?" is a question (core scenario 5)
+  const pillWords = [' it ', ' it?', ' them ', ' pill', ' tablet', ' medicine', ' box', ` ${String(expected.medicine || '').toLowerCase().split(/\s+/)[0] || 'x-none'}`];
+  if (has(t, [' where is', ' where are', " where's"]) && has(`${t.replace(/\?/g, ' ? ')} `, pillWords)) return label('cant_find');
   if (has(t, [" won't take", ' will not take', " don't want", ' do not want', ' skip ', ' not taking', " i'm not going to"])) return label('refuse');
   if (has(t, [' taking it now', ' about to ', ' going to take', ' getting it', ' one minute', ' wait '])) return label('taking_now');
-  if (has(t, [' later', ' after food', ' after lunch', ' after dinner', ' call me back', ' not now', ' not yet'])) return label('later');
+  if (has(t, [' later', ' after food', ' after lunch', ' after dinner', ' call me back', ' not now', ' not yet', ' बाद में ', ' baad mein ', ' baad me '])) return label('later');
   if (has(t, [" don't remember", ' not sure', " don't know", ' i forgot', ' confused'])) return label('unsure');
-  if (has(t, [' took it', ' have taken', " i've taken", ' taken it', ' just took', ' done ', ' i took', ' swallowed'])) return label('taken');
+  if (has(t, [' took it', ' have taken', " i've taken", ' taken it', ' just took', ' done ', ' i took', ' swallowed', ' ले ली', ' ले लिया', ' खा ली', ' खा लिया', ' le li ', ' le liya ', ' kha li ', ' kha liya '])) return label('taken');
   if (pill) return label('taken', 0.6);
   if (/\?\s*$/.test(String(text).trim()) || has(t, [' what ', ' why ', ' when ', ' who ', ' how '])) return label('question', 0.6);
-  if (has(t, [' yes ', ' yeah ', ' yep ', ' ok ', ' okay ', ' haan ', ' ha '])) return label('yes', 0.6);
-  if (has(t, [' no ', ' nope ', ' nahi '])) return label('no', 0.6);
+  if (has(t, [' yes ', ' yeah ', ' yep ', ' ok ', ' okay ', ' haan ', ' ha ', ' हाँ ', ' हां ', ' जी हाँ ', ' ठीक है '])) return label('yes', 0.6);
+  if (has(t, [' no ', ' nope ', ' nahi ', ' नहीं '])) return label('no', 0.6);
   return label('unclear', 0.3);
 }
 
@@ -100,6 +110,13 @@ function decide(state, label, info = {}) {
   }
 
   // ── after the reminder ("Can you take it now, and tell me when it's done?") ──
+  // Already recorded (ticked in the app during the call, say) and she is about to take it, or
+  // looking for it: stop, and tell the family (core scenario 4). "I already took it" is confirmed.
+  if (info.recorded && LOG_CHECK_INTENTS.includes(intent)) {
+    if (intent === 'already_took') return end(['dose.already_done']);
+    return end(['dose.already_taken_stop'], [{ name: 'notify_caregiver', input: { reason: 'other', why: 'tried_again' } }], { informCaregiver: true });
+  }
+
   switch (intent) {
     case 'taken':
     case 'yes':
@@ -156,4 +173,4 @@ function decide(state, label, info = {}) {
   }
 }
 
-module.exports = { INTENTS, MIN_CONFIDENCE, MAX_CALL_ATTEMPTS, matchesExpected, ruleLabel, normaliseLabel, newState, greetLine, decide };
+module.exports = { INTENTS, LOG_CHECK_INTENTS, MIN_CONFIDENCE, MAX_CALL_ATTEMPTS, matchesExpected, ruleLabel, normaliseLabel, newState, greetLine, decide };
