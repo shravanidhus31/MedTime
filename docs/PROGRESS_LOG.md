@@ -79,6 +79,7 @@ A running record of what's done, what's in progress and what's next. **It's upda
 ## Change log
 
 ### 22 Nov 2026
+- **PR #1 opened** (https://github.com/shravanidhus31/MedTime/pull/1): the integration branch into `main`, Person B requested as reviewer.
 - **Merged Person B's week-4 commit (`1a47ef9`: B13–B16)** into `feat/a-integrate-b`: 40 personas, GrandGuard 300-item rig, weekly review, caregiver copilot, SUS form, demo script and README. One conflict (`index.js`, both sides' routes kept). Same load crash in B's two new routes (`weeklyReviewRoutes`, `copilotRoutes`), same one-line fix. B's updated red-flag list: every category has a neutral reply on Person A's side.
   - Checks: `npm test` 66/66 (B's copilot 9/9, weekly review 6/6, safety screen 71/71); `cron:check` 20/20, `tools:check` 25/25, `runs:check` 14/14; server boots with the new routes. `simulate:check` failed once on call 4 (red flag), then passed 11/11 on the re-run. The check counts red-flag alerts across all 4 calls, so the likely cause is B's LLM safety check flagging an ordinary sentence in an earlier call (a false alarm that would phone the caregiver), or the alert being saved late. The check now prints what was flagged, to tell next time. **Watch this in B13 runs.**
 - **Integrated Person B's branch (`origin/Anuj`, B1–B12) with Person A's work** on `feat/a-integrate-b` (from `feat/a-phase0-fixes`). Not pushed; waiting for B's review before it goes to `main`.
@@ -240,4 +241,4 @@ A running record of what's done, what's in progress and what's next. **It's upda
 ---
 
 ## Not yet committed (local only)
-- Nothing uncommitted. **`feat/a-integrate-b` is pushed to GitHub** (22 Nov) and contains all of Person A's A2.1–A2.7 and A1.1–A1.3 plus Person B's B1–B16. Next: open the PR into `main` (the GitHub CLI isn't installed here, so it's opened from the browser), Person B reviews, then merge. The local `feat/a-agent-runtime` and `feat/a-phase0-fixes` branches are contained in it and don't need pushing. A1.4 starts after the merge.
+- Nothing uncommitted. **PR #1 is open:** https://github.com/shravanidhus31/MedTime/pull/1 (`feat/a-integrate-b` → `main`, Person B requested as reviewer). It contains all of Person A's A2.1–A2.7 and A1.1–A1.3 plus Person B's B1–B16. After B approves and it's merged: B runs `scripts/migrate-caregivers.js` on the real database, Render deploys, one real call checks the webhook signatures, then `NGROK_URL` is deleted on Render. A1.4 starts after the merge.
