@@ -49,8 +49,8 @@ router.get('/pdf', verifyToken, async (req, res) => {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     const vitals = await Vital.find({ patientId: userId, recordedAt: { $gte: thirtyDaysAgo } }).sort({ recordedAt: -1 });
-    // Medicine.patient stores patientProfile._id (NOT the User._id)
-    const medicines = await Medicine.find({ patient: patientProfile._id, isActive: true }) // soft-deleted medicines left out (B1.3);
+    // Medicine.patient stores patientProfile._id (NOT the User._id); soft-deleted medicines left out (B1.3)
+    const medicines = await Medicine.find({ patient: patientProfile._id, isActive: true });
 
     if (medicines.length === 0) console.warn('[PDF Report] No medicines found for patient', String(patientProfile._id));
 
