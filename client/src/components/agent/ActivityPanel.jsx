@@ -1,21 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 
-export default function ActivityPanel({ patientId }) {
+// live: refresh every 2 s and keep the newest run open (beside the voice call, for the demo).
+export default function ActivityPanel({ patientId, live = false }) {
   const [runs, setRuns] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedRunId, setExpandedRunId] = useState(null);
 
-  const fetchRuns = async () => {
+  const fetchRuns = async (quiet = false) => {
     if (!patientId) return;
-    setIsLoading(true);
+    if (!quiet) setIsLoading(true);
     try {
       // Person A's C2 endpoint: { runs: [...] }; steps=1 includes each run's timeline.
       const res = await api.get(`/agent/runs?patient=${patientId}&steps=1&limit=30`);
       const list = Array.isArray(res.data) ? res.data : res.data.runs || [];
       setRuns(list);
-      if (list.length > 0 && !expandedRunId) {
-        setExpandedRunId(list[0]._id); // Expand latest run by default
+      if (list.length > 0) {
+        // Expand the latest run by default; while live, follow the newest one.
+        setExpandedRunId((current) => (live || !current ? list[0]._id : current));
       }
     } catch (err) {
       console.error('Failed to fetch agent runs:', err);
@@ -26,7 +28,10 @@ export default function ActivityPanel({ patientId }) {
 
   useEffect(() => {
     fetchRuns();
-  }, [patientId]);
+    if (!live) return undefined;
+    const timer = setInterval(() => fetchRuns(true), 2000);
+    return () => clearInterval(timer);
+  }, [patientId, live]);
 
   if (isLoading && runs.length === 0) {
     return <div className="text-sm text-[#8a7560] py-4">Loading Agent Activity...</div>;

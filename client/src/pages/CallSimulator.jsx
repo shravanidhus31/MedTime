@@ -17,6 +17,7 @@ import { useSelector } from 'react-redux';
 import { PipecatClient } from '@pipecat-ai/client-js';
 import { SmallWebRTCTransport } from '@pipecat-ai/small-webrtc-transport';
 import api from '../utils/api';
+import ActivityPanel from '../components/agent/ActivityPanel';
 
 const VOICE_URL = (import.meta.env.VITE_VOICE_URL || 'http://localhost:7860').replace(/\/+$/, '');
 
@@ -156,7 +157,8 @@ export default function CallSimulator() {
 
   return (
     <div className="min-h-screen bg-[#faf6ef] p-6">
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-7xl mx-auto flex flex-col xl:flex-row gap-6 items-start">
+      <div className="w-full max-w-3xl">
         <h1 className="text-2xl font-bold text-[#5c4535]" style={{ fontFamily: "'Lora', serif" }}>Voice call</h1>
         <p className="text-sm text-[#8a7560] mt-1">
           A spoken call with the agent: MedTime calling about a dose, or the patient calling in with a question. Speak normally; you can interrupt it. This records real doses for the patient.
@@ -238,6 +240,13 @@ export default function CallSimulator() {
           ))}
           <div ref={bottomRef} />
         </div>
+      </div>
+      {/* The agent's steps, live, beside the call (B6: mounted beside the call screen for the demo) */}
+      {doses?.patient?.id && (
+        <div className="w-full xl:w-[440px] xl:sticky xl:top-6">
+          <ActivityPanel patientId={doses.patient.id} live={busy || status === 'ended'} />
+        </div>
+      )}
       </div>
     </div>
   );
