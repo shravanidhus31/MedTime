@@ -5,6 +5,7 @@ const Vital = require('../models/Vital');
 const Medicine = require('../models/Medicine');
 const User = require('../models/User');
 const Patient = require('../models/Patient');
+const Reminder = require('../models/Reminder');
 const { verifyToken } = require('../middleware/authMiddleware');
 
 // Load Roboto fonts from pdfmake's bundled vfs (base64 strings)
@@ -49,13 +50,9 @@ router.get('/pdf', verifyToken, async (req, res) => {
 
     const vitals = await Vital.find({ patientId: userId, recordedAt: { $gte: thirtyDaysAgo } }).sort({ recordedAt: -1 });
     // Medicine.patient stores patientProfile._id (NOT the User._id)
-    const medicines = await Medicine.find({ patient: patientProfile._id });
+    const medicines = await Medicine.find({ patient: patientProfile._id, isActive: true }) // soft-deleted medicines left out (B1.3);
 
-    // ── Diagnostic log — remove after confirming data is correct ──────────────
-    console.log('[PDF Report] userId:', userId, '| patientProfileId:', patientProfile._id);
-    console.log('[PDF Report] medicines found:', medicines.length);
-    if (medicines.length > 0) console.log('[PDF Report] sample medicine:', JSON.stringify(medicines[0], null, 2));
-    else console.warn('[PDF Report] ⚠️ No medicines found for patientProfileId:', patientProfile._id);
+    if (medicines.length === 0) console.warn('[PDF Report] No medicines found for patient', String(patientProfile._id));
 
     // 2. Calculate Executive Summary Stats
     let avgSys = 0, avgDia = 0, vitalsStatus = 'Stable';
@@ -78,8 +75,25 @@ router.get('/pdf', verifyToken, async (req, res) => {
       ]
     ];
 
+    // Status per medicine from its doses over the last 30 days (A1.3: escalation is per dose; the
+    // old Medicine.caregiverAlerted flag no longer changes).
+    const since = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+    const doseCounts = await Reminder.aggregate([
+      { $match: { medicine: { $in: medicines.map(m => m._id) }, scheduledTime: { $gte: since, $lte: new Date() }, status: { $in: ['taken', 'skipped', 'missed'] } } },
+      { $group: { _id: { medicine: '$medicine', status: '$status' }, n: { $sum: 1 } } },
+    ]);
+    const countsFor = (id) => {
+      const c = { taken: 0, skipped: 0, missed: 0 };
+      for (const d of doseCounts) if (String(d._id.medicine) === String(id)) c[d._id.status] = d.n;
+      return c;
+    };
+
     medicines.forEach(med => {
-      const statusText = med.caregiverAlerted ? 'Caregiver Alerted' : 'On Track';
+      const c = countsFor(med._id);
+      const total = c.taken + c.skipped + c.missed;
+      const statusText = total === 0 ? 'No doses yet'
+        : c.missed + c.skipped === 0 ? `On track (${c.taken}/${total} taken)`
+        : `${c.taken}/${total} taken${c.missed ? `, ${c.missed} missed` : ''}${c.skipped ? `, ${c.skipped} skipped` : ''}`;
       medTableBody.push([
         med.name    || '—',
         med.dosage  || '—',

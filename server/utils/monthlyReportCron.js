@@ -122,13 +122,18 @@ async function generateClinicalPDF(patient, medicines, vitals) {
         'Critical Vitals',
         `BP ${v.sys}/${v.dia} mmHg`
       ]);
-    const escalatedMeds = medicines
-      .filter(m => m.caregiverAlerted)
-      .map(m => [
-        fmt(new Date(m.updatedAt)),
-        'Caregiver SMS Sent',
-        `Missed dose of ${m.name} ${m.dosage}`
-      ]);
+    // Per dose (A1.3): every dose in the period whose caregiver alert went out. The old
+    // Medicine.caregiverAlerted flag no longer changes.
+    const medById = new Map(medicines.map(m => [String(m._id), m]));
+    const escalatedMeds = (await Reminder.find({
+      medicine: { $in: medicineIds },
+      scheduledTime: { $gte: thirtyDaysAgo, $lte: now },
+      caregiverAlerted: true,
+    }).sort({ scheduledTime: 1 }).lean())
+      .map(r => {
+        const m = medById.get(String(r.medicine)) || {};
+        return [fmt(new Date(r.scheduledTime)), 'Caregiver phoned', `Missed dose of ${m.name || 'a medicine'} ${m.dosage || ''}`.trim()];
+      });
     const escalationLog = [...criticalVitals, ...escalatedMeds];
 
     // ── SECTION HELPERS ─────────────────────────────────────────────────────
