@@ -76,8 +76,8 @@ router.get('/doctor-settings', verifyToken, async (req, res) => {
 });
 
 // ─── Call settings (A3.5) ─────────────────────────────────────────────────────
-// GET /api/v1/users/care-settings[?patientId=]   → { patientId, dementiaMode, language }
-// PUT /api/v1/users/care-settings  { patientId?, dementiaMode?, language? }
+// GET /api/v1/users/care-settings[?patientId=]   → { patientId, dementiaMode, language, emergencyContact }
+// PUT /api/v1/users/care-settings  { patientId?, dementiaMode?, language?, emergencyContact? }
 // dementiaMode on: dose calls run the speech agent (retries, check question, caregiver hand-over);
 // off: the keypad menu. language: what the agent speaks and listens for (en, hi; mr not written yet).
 // The patient changes their own; a caregiver needs primary access to that patient.
@@ -96,7 +96,7 @@ async function carePatient(req) {
   const p = await Patient.findOne({ user: req.user.id });
   return p ? { patient: p } : { status: 404, message: 'No patient profile for this account.' };
 }
-const careView = (p) => ({ patientId: String(p._id), dementiaMode: !!p.dementiaMode, language: p.language || 'en' });
+const careView = (p) => ({ patientId: String(p._id), dementiaMode: !!p.dementiaMode, language: p.language || 'en', emergencyContact: p.emergencyContact || '' });
 
 router.get('/care-settings', verifyToken, async (req, res) => {
   try {
@@ -112,8 +112,14 @@ router.put('/care-settings', verifyToken, async (req, res) => {
   try {
     const r = await carePatient(req);
     if (!r.patient) return res.status(r.status).json({ message: r.message });
-    const { dementiaMode, language } = req.body || {};
+    const { dementiaMode, language, emergencyContact } = req.body || {};
     const set = {};
+    // Called for red flags and missed doses when no caregiver is linked (services/caregiverAlerts.js).
+    if (emergencyContact !== undefined) {
+      const digits = String(emergencyContact).replace(/[\s-]/g, '');
+      if (!/^(\+91)?[6-9]\d{9}$/.test(digits)) return res.status(400).json({ message: 'Emergency contact must be a 10-digit Indian mobile number (optionally with +91).' });
+      set.emergencyContact = digits;
+    }
     if (dementiaMode !== undefined) set.dementiaMode = !!dementiaMode;
     if (language !== undefined) {
       if (!['en', 'hi', 'mr'].includes(language)) return res.status(400).json({ message: 'language must be en, hi or mr' });

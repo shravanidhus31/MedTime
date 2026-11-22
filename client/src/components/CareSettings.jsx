@@ -72,6 +72,27 @@ export default function CareSettings({ patientId }) {
               <option value="hi">हिन्दी (Hindi)</option>
             </select>
           </label>
+          <form
+            className="block"
+            onSubmit={(e) => { e.preventDefault(); save({ emergencyContact: e.target.elements.ec.value }); }}
+          >
+            <span className="block text-sm font-semibold text-[#2d2418] mb-1">Emergency contact</span>
+            <span className="block text-xs text-[#8a7560] mb-2">
+              Phoned for a fall, chest pain or a missed dose when no caregiver is linked. On the Twilio trial this number
+              must also be verified in Twilio.
+            </span>
+            <div className="flex gap-2">
+              <input
+                name="ec"
+                key={settings.emergencyContact}
+                defaultValue={settings.emergencyContact}
+                inputMode="tel"
+                placeholder="10-digit mobile number"
+                className="flex-1 border border-[#e8dcc8] rounded-lg px-3 py-2 text-sm"
+              />
+              <button type="submit" disabled={saving} className="bg-[#5c4535] text-white text-sm font-semibold px-4 rounded-lg disabled:opacity-60">Save</button>
+            </div>
+          </form>
           {msg && <p className={`text-xs ${msg.type === 'success' ? 'text-[#2a4a28]' : 'text-[#7a2a1a]'}`}>{msg.text}</p>}
         </>
       )}

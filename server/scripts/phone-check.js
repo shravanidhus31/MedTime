@@ -167,6 +167,9 @@ const said = (xml) => [...xml.matchAll(/<Say[^>]*>([^<]*)<\/Say>/g)].map((m) => 
     cs = await api('PUT', '/api/v1/users/care-settings', link.user, { patientId: String(kamala._id), dementiaMode: true });
     const stranger = await api('PUT', '/api/v1/users/care-settings', sita.user, { patientId: String(kamala._id), dementiaMode: false });
     const bad = await api('PUT', '/api/v1/users/care-settings', kamala.user, { language: 'fr' });
+    const ec1 = await api('PUT', '/api/v1/users/care-settings', kamala.user, { emergencyContact: '98765 43210' });
+    const ec2 = await api('PUT', '/api/v1/users/care-settings', kamala.user, { emergencyContact: '12345' });
+    check('settings: emergency contact saved (spaces removed); a bad number refused (400)', ec1.status === 200 && ec1.body.emergencyContact === '9876543210' && ec2.status === 400, `${ec1.status} ${ec1.body.emergencyContact} / ${ec2.status}`);
     check('settings: the primary caregiver can turn it on; another patient cannot (403); unknown language refused (400)',
       cs.status === 200 && cs.body.dementiaMode === true && stranger.status === 403 && bad.status === 400 && (await Patient.findById(kamala._id).lean()).dementiaMode === true, `${cs.status}/${stranger.status}/${bad.status}`);
 
