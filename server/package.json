@@ -14,7 +14,8 @@
     "cron:check": "node scripts/cron-check.js",
     "simulate:check": "node scripts/simulate-check.js",
     "voice:check": "node scripts/voice-check.js",
-    "dose:check": "node scripts/dose-endpoint-check.js"
+    "dose:check": "node scripts/dose-endpoint-check.js",
+    "journal:check": "node scripts/journal-check.js"
   },
   "keywords": [],
   "author": "",

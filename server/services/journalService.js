@@ -3,6 +3,7 @@ const Patient = require('../models/Patient');
 const Reminder = require('../models/Reminder');
 const Medicine = require('../models/Medicine');
 const ProposedChange = require('../models/ProposedChange');
+const AgentQuestion = require('../models/AgentQuestion');
 const writeJournal = require('../agent/tools/writeJournal');
 
 /**
@@ -42,174 +43,136 @@ function getDayBoundsIST(targetDate = new Date()) {
   };
 }
 
+// IST clock time, e.g. "8:05 PM".
+function istTime(date) {
+  const d = new Date(new Date(date).getTime() + 5.5 * 3600 * 1000);
+  const h = d.getUTCHours();
+  return `${h % 12 || 12}:${String(d.getUTCMinutes()).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
+const RED_FLAG_WORDS = {
+  fall: 'a fall', chest_pain: 'chest pain', breathing: 'trouble breathing', breathlessness: 'trouble breathing',
+  extra_pills: 'extra pills taken', self_harm: 'talk of self-harm', scam: 'a request for money or codes',
+  financial_scam: 'a request for money or codes', sudden_confusion: 'signs of a stroke', help_key: 'the help key',
+};
+
+// Her own words from a run: dose calls ({ tool: 'patient_said', input.text }) and the older
+// call-in shape (summary "Patient said: ...").
+function patientWords(run) {
+  const out = [];
+  for (const s of run.steps || []) {
+    if (s.tool === 'patient_said' && s.input && s.input.text) out.push(String(s.input.text));
+    else if (/^Patient said:/i.test(s.summaryText || s.summary || '')) out.push(String(s.summaryText || s.summary).replace(/^Patient said:\s*"?|"$/gi, ''));
+  }
+  return out.map((t) => t.trim()).filter(Boolean);
+}
+
+// The red flag in a run, if any: { category, words }.
+function redFlagOf(run) {
+  const step = (run.steps || []).find((s) => s.tool === 'safety_screen' && s.output && s.output.verdict === 'redflag');
+  if (!step && run.outcome !== 'red_flag') return null;
+  const category = (step && step.output.category) || run.fallbackReason || 'red flag';
+  return { category, words: step && step.input && step.input.transcript };
+}
+
+const shorten = (t, n = 90) => (t.length > n ? `${t.slice(0, n - 3).trim()}...` : t);
+
+/**
+ * Builds and saves the day's journal for one patient (Feature 6, B8; rewritten in the 22 Nov review:
+ * the old version crashed on save, looked up doses by a field that doesn't exist, and never found
+ * the patient's words). Every line is assembled from a record of the day, so it always has a
+ * source and quotes are exact; nothing is paraphrased or diagnosed.
+ */
 async function generateDailyJournal(patientId, targetDate = new Date()) {
   const patient = await Patient.findById(patientId);
-  if (!patient) {
-    throw new Error(`Patient ${patientId} not found`);
-  }
-
+  if (!patient) throw new Error(`Patient ${patientId} not found`);
   const { start, end, calendarDate } = getDayBoundsIST(targetDate);
 
-  // 1. Fetch day's AgentRuns
-  const runs = await AgentRun.find({
-    patient: patientId,
-    createdAt: { $gte: start, $lte: end },
-  }).sort({ createdAt: 1 }).lean();
+  const runs = await AgentRun.find({ patient: patientId, trigger: { $ne: 'journal' }, startedAt: { $gte: start, $lte: end } })
+    .sort({ startedAt: 1 }).lean();
+  const reminders = await Reminder.find({ patient: patientId, scheduledTime: { $gte: start, $lte: end } })
+    .sort({ scheduledTime: 1 }).populate('medicine', 'name').lean();
+  const proposals = await ProposedChange.find({ patient: patientId, status: 'pending' }).lean();
+  const questions = await AgentQuestion.find({ patient: patientId, status: 'pending' }).lean();
+  const lowStock = await Medicine.find({ patient: patientId, isActive: true, $expr: { $lte: ['$tabletCount', '$refillThreshold'] } }).lean();
 
-  // 2. Fetch day's Reminders
-  const reminders = await Reminder.find({
-    $or: [{ patient: patientId }, { user: patient.user }],
-    time: { $gte: start, $lte: end },
-  }).populate('medicine medication').lean();
-
-  // 3. Fetch day's ProposedChanges
-  const proposals = await ProposedChange.find({
-    patient: patientId,
-    createdAt: { $gte: start, $lte: end },
-  }).lean();
-
-  // 4. Check low stock medicines (refill alerts FR6)
-  const lowStockMeds = await Medicine.find({
-    patient: patientId,
-    isActive: true,
-    $expr: { $lte: ['$tabletCount', '$refillThreshold'] },
-  }).lean();
-
-  // 5. Create the Journal AgentRun audit record
   const journalRun = await AgentRun.create({
-    trigger: 'journal',
-    patient: patientId,
-    flow: 'daily_journal',
-    steps: [
-      { step: 'collect_history', summary: `Found ${runs.length} runs, ${reminders.length} reminders, ${proposals.length} proposals` },
-    ],
-    status: 'running',
-    model: process.env.LLM_MODEL_SMART || 'groq/llama-3.3-70b-versatile',
+    trigger: 'journal', patient: patientId, flow: 'daily_journal', status: 'running',
+    steps: [{ tool: 'collect_day', at: new Date(), output: { runs: runs.length, doses: reminders.length, proposals: proposals.length, questions: questions.length } }],
   });
+  const runFor = (reminderId) => runs.slice().reverse().find((r) => r.reminder && String(r.reminder) === String(reminderId));
+  const src = (run) => String((run && run._id) || journalRun._id);
+  const attention = []; // headlines: red flags, missed / unconfirmed doses, approvals, questions
+  const attentionQuotes = []; // her words behind a red flag, right after the headlines
+  const rest = [];
 
-  const rawLines = [];
-
-  // ─── Priority 1: Attention items first ─────────────────────────────────────
-
-  // Red flags from AgentRuns
-  const redFlagRuns = runs.filter((r) => r.outcome === 'red_flag' || (r.steps && r.steps.some((s) => s.type === 'red_flag' || s.step === 'red_flag')));
-  for (const rfRun of redFlagRuns) {
-    const rfStep = rfRun.steps?.find((s) => s.type === 'red_flag' || s.step === 'red_flag');
-    const category = rfStep?.output?.category || rfStep?.category || 'emergency red flag';
-    rawLines.push({
-      text: `Safety alert triggered: ${category}. Caregiver notified immediately in neutral voice.`,
-      source: 'agent_noticed',
-      runId: rfRun._id.toString(),
-    });
-  }
-
-  // Missed doses
-  const missedReminders = reminders.filter((r) => r.status === 'missed' || r.status === 'alerted');
-  for (const r of missedReminders) {
-    const medName = r.medicine?.name || r.medication?.name || 'Scheduled medication';
-    const timeStr = r.time ? new Date(r.time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }) : '';
-    const matchingRun = runs.find((run) => run.reminder && run.reminder.toString() === r._id.toString()) || journalRun;
-    rawLines.push({
-      text: `Missed scheduled dose of ${medName}${timeStr ? ` at ${timeStr}` : ''}. Escalation completed.`,
-      source: 'action_taken',
-      runId: matchingRun._id.toString(),
-    });
-  }
-
-  // Pending proposals waiting for approval
-  const pendingProposals = proposals.filter((p) => p.status === 'pending');
-  for (const p of pendingProposals) {
-    rawLines.push({
-      text: `Medication schedule change (${p.kind.replace(/_/g, ' ')}) waiting for caregiver approval.`,
-      source: 'action_taken',
-      runId: (p.createdByRun || journalRun._id).toString(),
-    });
-  }
-
-  // Low stock / refill alert lines
-  for (const med of lowStockMeds) {
-    const dailyDoses = (med.scheduledTimes && med.scheduledTimes.length) || 1;
-    const daysLeft = Math.max(1, Math.floor((med.tabletCount || 0) / dailyDoses));
-    rawLines.push({
-      text: `About ${daysLeft} days of ${med.name} left in stock (${med.tabletCount} tablets remaining; refill recommended).`,
-      source: 'agent_noticed',
-      runId: journalRun._id.toString(),
-    });
-  }
-
-  // ─── Priority 2: Interaction quotes & behavioral observations ─────────────
-
-  // Patient quotes from phone/simulator runs
+  // ── attention items first ──
   for (const run of runs) {
-    if (rawLines.length >= 7) break;
-    const speechSteps = (run.steps || []).filter((s) => s.step === 'patient_speech' || s.type === 'patient_speech' || (s.summary && s.summary.startsWith('Patient said')));
-    for (const step of speechSteps) {
-      if (rawLines.length >= 7) break;
-      let quote = step.summary ? step.summary.replace(/^Patient said:?\s*/i, '') : step.output?.text;
-      if (quote && quote.length > 5) {
-        // Shorten long quotes to under 80 chars
-        if (quote.length > 80) quote = quote.substring(0, 77) + '...';
-        rawLines.push({
-          text: `Patient said: "${quote.replace(/"/g, '')}"`,
-          source: 'patient_said',
-          runId: run._id.toString(),
-        });
-      }
+    const flag = redFlagOf(run);
+    if (!flag) continue;
+    const what = RED_FLAG_WORDS[flag.category] || String(flag.category).replace(/_/g, ' ');
+    attention.push({ text: `Red flag on a call at ${istTime(run.startedAt)}: ${what}. The family was phoned at once.`, source: 'agent_noticed', runId: src(run) });
+    if (flag.words) attentionQuotes.push({ text: `Patient said: "${shorten(flag.words)}"`, source: 'patient_said', runId: src(run) });
+  }
+  const now = new Date();
+  for (const r of reminders) {
+    const name = (r.medicine && r.medicine.name) || 'a medicine';
+    if (r.status === 'missed') {
+      attention.push({ text: `${name} at ${istTime(r.scheduledTime)} was missed${r.caregiverAlerted ? '; the family was phoned' : ''}.`, source: 'action_taken', runId: src(runFor(r._id)) });
+    } else if ((r.status === 'pending' || r.status === 'alerted') && r.scheduledTime < now && (r.attempts || 0) > 0) {
+      attention.push({ text: `${name} at ${istTime(r.scheduledTime)} was not confirmed.`, source: 'agent_noticed', runId: src(runFor(r._id)) });
     }
   }
-
-  // ─── Priority 3: Routine / Adherence status ────────────────────────────────
-
-  const takenReminders = reminders.filter((r) => r.status === 'taken');
-  if (takenReminders.length > 0 && missedReminders.length === 0) {
-    const medNames = [...new Set(takenReminders.map((r) => r.medicine?.name || r.medication?.name).filter(Boolean))].join(', ');
-    rawLines.push({
-      text: `All scheduled doses taken on time (${medNames || `${takenReminders.length} doses`}). Patient had a calm day.`,
-      source: 'agent_noticed',
-      runId: (takenReminders[0] ? runs.find((run) => run.reminder?.toString() === takenReminders[0]._id.toString()) : null)?._id?.toString() || journalRun._id.toString(),
-    });
+  for (const p of proposals) {
+    attention.push({ text: `A ${String(p.kind).replace(/_/g, ' ')} is waiting for your approval.`, source: 'action_taken', runId: String(p.createdByRun || journalRun._id) });
+  }
+  for (const q of questions) {
+    attention.push({ text: `Question for you: ${shorten(q.question, 120)}`, source: 'action_taken', runId: String(q.run || journalRun._id) });
   }
 
-  // ─── Priority 4: Quiet day fallback (Rule: quiet days get 1 line) ──────────
-
-  if (rawLines.length === 0) {
-    rawLines.push({
-      text: 'Routine quiet day with no intervention required; all scheduled care completed peacefully.',
-      source: 'agent_noticed',
-      runId: journalRun._id.toString(),
-    });
+  // ── then refills, her words, the doses, patterns ──
+  for (const med of lowStock) {
+    const perDay = (med.scheduledTimes && med.scheduledTimes.length) || 1;
+    rest.push({ text: `About ${Math.max(0, Math.floor((med.tabletCount || 0) / perDay))} days of ${med.name} left (${med.tabletCount} tablets).`, source: 'agent_noticed', runId: src(null) });
+  }
+  const quoted = new Set(attentionQuotes.map((l) => l.text));
+  const said = [];
+  for (const run of runs) {
+    if (redFlagOf(run)) continue;
+    for (const w of patientWords(run)) if (w.split(/\s+/).length >= 4) said.push({ w, run });
+  }
+  for (const { w, run } of said.slice(-2)) {
+    const text = `Patient said: "${shorten(w)}"`;
+    if (!quoted.has(text)) rest.push({ text, source: 'patient_said', runId: src(run) });
+  }
+  const taken = reminders.filter((r) => r.status === 'taken');
+  if (taken.length) {
+    const list = taken.map((r) => `${(r.medicine && r.medicine.name) || 'medicine'} ${istTime(r.scheduledTime)}`).join(', ');
+    rest.push({ text: `Taken: ${list}.`, source: 'action_taken', runId: src(runFor(taken[0]._id)) });
+  }
+  const callins = runs.filter((r) => r.trigger === 'callin');
+  if (callins.length >= 3) {
+    rest.push({ text: `Called in ${callins.length} times today to ask about medicines.`, source: 'agent_noticed', runId: src(callins[callins.length - 1]) });
   }
 
-  // Cap at 8 lines per entry (PRD / Contract rule: 1 to 8 lines)
-  const finalLines = rawLines.slice(0, 8);
+  let lines = [...attention, ...attentionQuotes, ...rest].slice(0, 8);
+  if (lines.length === 0) {
+    lines = [{ text: 'A quiet day: no calls or doses needed attention.', source: 'agent_noticed', runId: src(null) }];
+  }
 
-  // 6. Write journal using the write_journal tool
-  const result = await writeJournal.run(
-    {
-      date: calendarDate.toISOString(),
-      lines: finalLines,
-    },
-    {
-      patientId: patientId.toString(),
-      runId: journalRun._id.toString(),
-    }
-  );
-
+  const result = await writeJournal.run({ date: calendarDate.toISOString(), lines }, { patientId: String(patientId), runId: String(journalRun._id) });
+  journalRun.steps.push({ tool: 'write_journal', at: new Date(), input: { lines: lines.length }, output: result });
+  journalRun.endedAt = new Date();
   if (!result.ok) {
     journalRun.status = 'failed';
     journalRun.outcome = `Journal tool failed: ${result.error}`;
     await journalRun.save();
     throw new Error(`Failed to write journal: ${result.error}`);
   }
-
-  journalRun.status = 'completed';
-  journalRun.outcome = `Journal generated with ${finalLines.length} lines`;
-  journalRun.steps.push({
-    step: 'write_journal',
-    output: { journalId: result.journalId, lineCount: result.lineCount },
-  });
+  journalRun.status = 'finished';
+  journalRun.outcome = 'done';
+  journalRun.text = `Journal written with ${lines.length} line(s).`;
   await journalRun.save();
-
   return result;
 }
 

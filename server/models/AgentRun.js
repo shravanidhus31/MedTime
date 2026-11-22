@@ -25,9 +25,19 @@ const stepSchema = new mongoose.Schema(
     // plain-language line to show instead of the raw input.
     label: { type: String, enum: ['patient_said', 'agent_noticed', 'action_taken'] },
     summaryText: { type: String },
+    // Older step shape used by some of Person B's writers ({ step, summary }); mapped onto
+    // tool / summaryText before validation, so those runs save instead of failing (review, 22 Nov).
+    step: { type: String },
+    type: { type: String },
+    summary: { type: String },
   },
   { _id: false },
 );
+
+stepSchema.pre('validate', function mapOldShape() {
+  if (!this.tool) this.tool = this.step || this.type || 'note';
+  if (!this.summaryText && this.summary) this.summaryText = this.summary;
+});
 
 const agentRunSchema = new mongoose.Schema(
   {
