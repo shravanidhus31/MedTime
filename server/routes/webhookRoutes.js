@@ -7,14 +7,16 @@ const Reminder = require('../models/Reminder');
 const Medicine = require('../models/Medicine');
 const mongoose = require('mongoose');
 const { markDose } = require('../services/doseService');
-const { verifyTwilioSignature } = require('../middleware/twilioSignature');
+const { verifyTwilio, withToken } = require('../middleware/twilioSignature');
 const { publicBaseUrl } = require('../utils/publicUrl');
 
 const MessagingResponse = twilio.twiml.MessagingResponse;
 
 // A1.1: every route below is called by Twilio, so each request must carry a
 // valid X-Twilio-Signature. Forged requests get 403 before any handler runs.
-router.use(verifyTwilioSignature);
+// Twilio's signature, or the token we put in the URL (the dose or alert it is about). /sms has no
+// URL of ours, so it needs the signature.
+router.use(verifyTwilio({ tokenOf: (req) => req.query.reminderId || req.query.medicineId || req.query.alertId || null }));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/v1/webhooks/sms
@@ -137,7 +139,7 @@ router.post('/voice/prompt', async (req, res) => {
 
   const query = new URLSearchParams({ medicineId: medicineId || '' });
   if (reminderId) query.set('reminderId', reminderId);
-  const actionUrl = `${baseUrl}/api/v1/webhooks/voice?${query}`;
+  const actionUrl = `${baseUrl}${withToken(`/api/v1/webhooks/voice?${query}`, String(reminderId || medicineId || ''))}`;
   console.log(`📞 [Voice Prompt] Serving menu for "${medName}" (medicineId: ${medicineId}, reminderId: ${reminderId || '-'})`);
 
   res.type('text/xml').send(

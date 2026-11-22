@@ -7,7 +7,7 @@ const AgentRun = require('../models/AgentRun');
 const { verifyToken: authMiddleware } = require('../middleware/authMiddleware');
 const { handleCallinQuestion } = require('../agent/flows/callinFlow');
 // Twilio-facing routes need a valid X-Twilio-Signature (A1.1), like /webhooks.
-const { verifyTwilioSignature } = require('../middleware/twilioSignature');
+const { verifyTwilioSignature, verifyTwilio } = require('../middleware/twilioSignature');
 
 /**
  * Voice Incoming Routes — B11 (Feature 7)
@@ -23,7 +23,8 @@ const { verifyTwilioSignature } = require('../middleware/twilioSignature');
 
 // ─── TWILIO INCOMING CALL WEBHOOK ─────────────────────────────────────────────
 
-router.post('/incoming', verifyTwilioSignature, async (req, res) => {
+// Twilio's signature, or ?t= in the URL set on the Twilio number (the server prints it at start).
+router.post('/incoming', verifyTwilio({ tokenOf: () => 'incoming' }), async (req, res) => {
   const callerPhone = req.body?.From || req.body?.Caller || '';
 
   // Strip country code for phone number comparison

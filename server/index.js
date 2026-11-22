@@ -8,6 +8,14 @@ require('dotenv').config();
     process.exit(1);
   }
   if (urlCheck.warning) console.warn(`⚠️  [Startup] ${urlCheck.warning}`);
+  // The address to paste into the Twilio number's "A call comes in" webhook (call-in, A3.5). It
+  // carries a token, so it works even when Twilio sends no signature header.
+  const { twilioEnabled } = require('./utils/runtime');
+  const base = require('./utils/publicUrl').publicBaseUrl();
+  if (twilioEnabled() && base) {
+    const { withToken } = require('./middleware/twilioSignature');
+    console.log(`📞 [Startup] Call-in webhook for the Twilio number (POST): ${base}${withToken('/api/v1/voice/incoming', 'incoming')}`);
+  }
 }
 const express = require('express');
 const mongoose = require('mongoose');

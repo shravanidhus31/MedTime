@@ -2,6 +2,8 @@ require('dotenv').config();
 const twilio = require('twilio');
 const { publicBaseUrl } = require('./publicUrl');
 const { twilioEnabled, twilioSwitchedOff } = require('./runtime');
+// every URL we give Twilio carries a token (t), in case Twilio's signature header doesn't arrive
+const { withToken } = require('../middleware/twilioSignature');
 
 // ── Twilio client ─────────────────────────────────────────────────────────────
 // Off (simulation mode) when TWILIO_ENABLED=false or credentials are missing:
@@ -108,7 +110,9 @@ const makePatientCall = async (toPhone, medName, medicineId, reminderId, { agent
   const useAgent = agent && !!reminderId && agentCallsOn();
   const query = new URLSearchParams({ medicineId: String(medicineId) });
   if (reminderId) query.set('reminderId', String(reminderId));
-  const path = useAgent ? `/api/v1/voice/agent/dose?reminderId=${encodeURIComponent(reminderId)}` : `/api/v1/webhooks/voice/prompt?${query}`;
+  const path = useAgent
+    ? withToken(`/api/v1/voice/agent/dose?reminderId=${encodeURIComponent(reminderId)}`, String(reminderId))
+    : withToken(`/api/v1/webhooks/voice/prompt?${query}`, String(reminderId || medicineId));
   const client = getClient();
 
   if (!client) {
@@ -143,7 +147,7 @@ const makePatientCall = async (toPhone, medName, medicineId, reminderId, { agent
 // ─────────────────────────────────────────────────────────────────────────────
 const makeAlertCall = async (toPhone, alertId) => {
   const formattedTo = withCountryCode(toPhone);
-  const path = `/api/v1/webhooks/voice/alert?alertId=${encodeURIComponent(alertId)}`;
+  const path = withToken(`/api/v1/webhooks/voice/alert?alertId=${encodeURIComponent(alertId)}`, String(alertId));
   const client = getClient();
 
   if (!client) {

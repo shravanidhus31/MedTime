@@ -24,7 +24,9 @@ const express = require('express');
 const router = express.Router();
 const Reminder = require('../models/Reminder');
 const Patient = require('../models/Patient');
-const { verifyTwilioSignature } = require('../middleware/twilioSignature');
+const { verifyTwilio, withToken } = require('../middleware/twilioSignature');
+// the keypad menu for a dose, with its URL token
+const keypadPath = (reminderId) => withToken(`/api/v1/webhooks/voice/prompt?reminderId=${encodeURIComponent(reminderId)}`, String(reminderId));
 const { publicBaseUrl } = require('../utils/publicUrl');
 const { initAgent } = require('../agent');
 const { handleTurn, getSession, endSession, closeSession, TurnError } = require('../agent/orchestrator');
@@ -111,7 +113,7 @@ async function callContext(session) {
   const lang = (patient && patient.language) || 'en';
   const expected = session.state && session.state.expected;
   const hints = [expected && expected.medicine, session.state && session.state.slots && session.state.slots.name].filter(Boolean);
-  const keypadUrl = session.reminderId ? url(`/api/v1/webhooks/voice/prompt?reminderId=${encodeURIComponent(session.reminderId)}`) : null;
+  const keypadUrl = session.reminderId ? url(keypadPath(session.reminderId)) : null;
   return { lang, hints, keypadUrl };
 }
 
@@ -125,7 +127,8 @@ async function openingTwiml({ sessionId, actions, callSid }) {
 }
 
 // ── the dose call: Twilio fetches this when she picks up ─────────────────────
-router.post('/dose', verifyTwilioSignature, async (req, res) => {
+// Twilio's signature, or the token in the URL the scheduler gave Twilio (made from the reminder id).
+router.post('/dose', verifyTwilio({ tokenOf: (req) => req.query.reminderId || null }), async (req, res) => {
   initAgent();
   const { reminderId } = req.query;
   let lang = 'en';
@@ -140,14 +143,15 @@ router.post('/dose', verifyTwilioSignature, async (req, res) => {
     console.error('[Voice agent] Could not start the dose call:', err.message);
     // the agent can't run: the keypad menu still gets the dose confirmed
     if (reminderId) {
-      return sendTwiml(res, `<?xml version="1.0" encoding="UTF-8"?><Response><Redirect method="POST">${escapeXml(url(`/api/v1/webhooks/voice/prompt?reminderId=${encodeURIComponent(reminderId)}`))}</Redirect></Response>`);
+      return sendTwiml(res, `<?xml version="1.0" encoding="UTF-8"?><Response><Redirect method="POST">${escapeXml(url(keypadPath(reminderId)))}</Redirect></Response>`);
     }
     return sendTwiml(res, sorry(lang));
   }
 });
 
 // ── each turn: Twilio posts what she said ────────────────────────────────────
-router.post('/turn', verifyTwilioSignature, async (req, res) => {
+// Twilio's signature, or a live session id: a random UUID only Twilio (in our TwiML) and we know.
+router.post('/turn', verifyTwilio({ allow: (req) => { const s = getSession(String(req.query.sid || '')); return !!(s && !s.ended); } }), async (req, res) => {
   const sessionId = String(req.query.sid || '');
   const session = getSession(sessionId);
   if (!session || session.ended) return sendTwiml(res, sorry('en'));
@@ -169,7 +173,7 @@ router.post('/turn', verifyTwilioSignature, async (req, res) => {
 });
 
 // ── the call ended (Twilio statusCallback): close the session and its AgentRun ─
-router.post('/status', verifyTwilioSignature, async (req, res) => {
+router.post('/status', verifyTwilio({ allow: (req) => callSessions.has(req.body && req.body.CallSid) }), async (req, res) => {
   const { CallSid, CallStatus } = req.body || {};
   const sessionId = callSessions.get(CallSid);
   if (sessionId && ['completed', 'busy', 'no-answer', 'failed', 'canceled'].includes(CallStatus)) {

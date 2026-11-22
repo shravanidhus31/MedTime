@@ -118,3 +118,17 @@ test("Render's own address (RENDER_EXTERNAL_URL) is accepted; any other host is 
   assert.equal((await post(path, {}, { sign: 'https://someone-else.example' + path })).status, 403);
   delete process.env.RENDER_EXTERNAL_URL;
 });
+
+// Third real call (22 Nov): Twilio's request had no signature header at all. The URLs we give
+// Twilio carry a token made with a server-side key; it lets the request through, a wrong one doesn't.
+test('no signature header: a valid URL token passes; a wrong or missing token is rejected', async () => {
+  process.env.PUBLIC_BASE_URL = BASE;
+  const { withToken } = require('./twilioSignature');
+  const good = withToken('/api/v1/webhooks/voice/prompt?reminderId=r123', 'r123');
+  assert.match(good, /&t=[0-9a-f]{32}$/);
+  assert.equal((await post(good, {})).status, 200);
+  const other = withToken('/api/v1/webhooks/voice/prompt?reminderId=r999', 'r999').replace('r999', 'r123');
+  assert.equal((await post(other, {})).status, 403, 'a token for another dose');
+  assert.equal((await post('/api/v1/webhooks/voice/prompt?reminderId=r123&t=00000000000000000000000000000000', {})).status, 403);
+  assert.equal((await post('/api/v1/webhooks/voice/prompt?reminderId=r123', {})).status, 403, 'no token');
+});
