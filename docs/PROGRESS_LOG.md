@@ -240,4 +240,4 @@ A running record of what's done, what's in progress and what's next. **It's upda
 ---
 
 ## Not yet committed (local only)
-- Nothing uncommitted. **No branch is pushed yet.** Local branches, each on top of the previous: `feat/a-agent-runtime` (A2.1–A2.7) → `feat/a-phase0-fixes` (A1.1 `1b288ad`, A1.2 `0070f8b`, A1.3 `ca84733`) → `feat/a-integrate-b` (merge of B's `origin/Anuj`). A1.4 starts after the integration is on `main`.
+- Nothing uncommitted. **`feat/a-integrate-b` is pushed to GitHub** (22 Nov) and contains all of Person A's A2.1–A2.7 and A1.1–A1.3 plus Person B's B1–B16. Next: open the PR into `main` (the GitHub CLI isn't installed here, so it's opened from the browser), Person B reviews, then merge. The local `feat/a-agent-runtime` and `feat/a-phase0-fixes` branches are contained in it and don't need pushing. A1.4 starts after the merge.
