@@ -10,6 +10,7 @@ import CaregiverDashboard from './pages/CaregiverDashBoard';
 import CaregiverLinkPage from './pages/CaregiverLinkPage';
 import CaregiverAccessPage from './pages/CaregiverAccessPage';
 import VitalsDashboard from './pages/VitalsDashboard';
+import CallSimulator from './pages/CallSimulator'; // A3.2 browser voice call (Person A)
 
 export default function App() {
   // Grab auth state from Redux
@@ -70,6 +71,16 @@ export default function App() {
         />
 
         {/* Catch all */}
+        {/* A3.2 browser voice dose call (Person A) */}
+        <Route
+          path="/call"
+          element={
+            isAuthenticated && (user?.role === 'patient' || user?.role === 'caregiver')
+              ? <CallSimulator />
+              : <Navigate to="/" />
+          }
+        />
+
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>

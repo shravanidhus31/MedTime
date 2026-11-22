@@ -1,8 +1,14 @@
 // Text simulate endpoints (A2.7). A dose call in text: the same flow, tools and AgentRun log as a
 // real call, with Twilio replaced by text. Person B's evaluation harness uses these.
 //
-//   POST /api/v1/simulate/call { reminderId }
-//     → { callId, runId, actions, ended }        the agent's opening turn
+//   GET  /api/v1/simulate/doses?patient=<Patient id>     (patient: optional for a patient's own login)
+//     → { patient: { id, firstName, language }, medicines: [{ medicineId, name, dosage, times, openReminderId, lines }] }
+//     lines: every line a call about that dose can say; the page has the voice server render them first.
+//   POST /api/v1/simulate/call { reminderId } or { medicineId }, channel?: 'text' | 'voice'
+//     → { callId, runId, actions, ended, hints, language }   the agent's opening turn
+//     medicineId: the medicine's open dose due within 12 hours, or a new dose due now (A3.2).
+//     channel 'voice' (A3.2): the browser voice call; turns then go to POST /agent/turn from the
+//     voice server, with the normal 4-second turn budget. hints = words for speech recognition.
 //   POST /api/v1/simulate/call/:callId/say { text } or { dtmf: '9' }
 //     → { callId, runId, actions, ended, emergency? }
 //
@@ -12,10 +18,29 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const Reminder = require('../models/Reminder');
+const Medicine = require('../models/Medicine');
+const Patient = require('../models/Patient');
 const { verifyToken } = require('../middleware/authMiddleware');
 const { canAccess } = require('../agent/access');
-const { startDoseCall } = require('../agent/flows/dose');
-const { handleTurn, getSession, TurnError } = require('../agent/orchestrator');
+const { startDoseCall, doseLineTexts } = require('../agent/flows/dose');
+const { handleTurn, getSession, TurnError, HOLD_TEXT, TURN_LIMIT_TEXT, STAY_TEXT } = require('../agent/orchestrator');
+const { LINES, render } = require('../agent/flows/doseLines');
+const { RESPONSES } = require('../agent/safety');
+
+// Lines every call can say whatever the patient: the emergency replies, the hold line, the
+// turn-limit line.
+const COMMON_LINES = () => [...new Set([...Object.values(RESPONSES).map((r) => r.neutralText), HOLD_TEXT, TURN_LIMIT_TEXT, STAY_TEXT])];
+
+// Every line this call can say, filled in for this patient (A3.1): the voice server renders them
+// once and plays them from its cache, so no speech is generated mid-call (plan section 7).
+function callLines(sessionId) {
+  const session = getSession(sessionId);
+  const slots = session && session.state && session.state.slots;
+  const texts = new Set();
+  if (slots) for (const id of Object.keys(LINES)) texts.add(render(id, slots));
+  for (const t of COMMON_LINES()) texts.add(t);
+  return [...texts];
+}
 
 const router = express.Router();
 const MAX_TEXT_CHARS = 2000;
@@ -32,16 +57,74 @@ router.use((req, res, next) => {
 
 const isEnded = (actions) => actions.some((a) => a.type === 'hangup' || a.type === 'fallback');
 
+const HOUR = 60 * 60 * 1000;
+
+// The patient this request is about: ?patient=, or the logged-in patient's own record.
+async function resolvePatient(req) {
+  const id = req.query.patient;
+  if (id) return mongoose.isValidObjectId(id) ? Patient.findById(id).populate('user', 'name').lean() : null;
+  if (req.user.role === 'patient') return Patient.findOne({ user: req.user.id }).populate('user', 'name').lean();
+  return null;
+}
+
+// The medicine's open dose due within 12 hours (nearest first), or null.
+const openDose = (medicineId, now = new Date()) =>
+  Reminder.find({ medicine: medicineId, status: { $in: ['pending', 'alerted'] }, scheduledTime: { $gte: new Date(now - 12 * HOUR), $lte: new Date(+now + 12 * HOUR) } })
+    .lean()
+    .then((rs) => rs.sort((a, b) => Math.abs(a.scheduledTime - now) - Math.abs(b.scheduledTime - now))[0] || null);
+
+router.get('/doses', verifyToken, async (req, res) => {
+  try {
+    const patient = await resolvePatient(req);
+    if (!patient || !(await canAccess(req.user, patient._id, 'primary'))) return res.status(404).json({ message: 'Patient not found.' });
+    const meds = await Medicine.find({ patient: patient._id, isActive: true }).select('name dosage scheduledTimes').lean();
+    const medicines = await Promise.all(meds.map(async (m) => {
+      const dose = await openDose(m._id);
+      // lines: what a call about this dose can say, so the voice server can render them before it starts
+      const full = await Medicine.findById(m._id).lean();
+      const lines = [...new Set([...(await doseLineTexts({ med: full, patient, scheduledTime: dose ? dose.scheduledTime : new Date() })), ...COMMON_LINES()])];
+      return { medicineId: String(m._id), name: m.name, dosage: m.dosage, times: m.scheduledTimes, openReminderId: dose ? String(dose._id) : null, lines };
+    }));
+    return res.json({
+      patient: { id: String(patient._id), firstName: ((patient.user && patient.user.name) || '').split(' ')[0], language: patient.language || 'en' },
+      medicines,
+    });
+  } catch (err) {
+    console.error('[simulateRoutes] doses failed:', err.message);
+    return res.status(500).json({ message: 'Could not load the doses.' });
+  }
+});
+
 router.post('/call', verifyToken, async (req, res) => {
   try {
-    const { reminderId } = req.body || {};
-    if (!mongoose.isValidObjectId(reminderId)) return res.status(400).json({ message: '"reminderId" must be a Reminder id.' });
-    const reminder = await Reminder.findById(reminderId).select('patient').lean();
+    const { medicineId } = req.body || {};
+    let { reminderId } = req.body || {};
+    const channel = req.body && req.body.channel === 'voice' ? 'voice' : 'text';
+
+    if (!reminderId && medicineId) {
+      if (!mongoose.isValidObjectId(medicineId)) return res.status(400).json({ message: '"medicineId" must be a Medicine id.' });
+      const med = await Medicine.findById(medicineId).select('patient isActive').lean();
+      if (!med || !med.isActive || !(await canAccess(req.user, med.patient, 'primary'))) return res.status(404).json({ message: 'Medicine not found.' });
+      const dose = (await openDose(med._id)) || (await Reminder.create({ medicine: med._id, patient: med.patient, scheduledTime: new Date(), status: 'pending' }));
+      reminderId = String(dose._id);
+    }
+    if (!mongoose.isValidObjectId(reminderId)) return res.status(400).json({ message: 'Send "reminderId" (a Reminder id) or "medicineId" (a Medicine id).' });
+    const reminder = await Reminder.findById(reminderId).select('patient medicine').populate('medicine', 'name').lean();
     if (!reminder || !(await canAccess(req.user, reminder.patient, 'primary'))) {
       return res.status(404).json({ message: 'Reminder not found.' });
     }
-    const call = await startDoseCall({ reminderId, trigger: 'simulate', channel: 'text', turnBudgetMs: TEXT_TURN_BUDGET_MS });
-    return res.status(201).json({ callId: call.sessionId, runId: call.runId, actions: call.actions, ended: isEnded(call.actions) });
+    const call = await startDoseCall({ reminderId, trigger: 'simulate', channel, turnBudgetMs: channel === 'text' ? TEXT_TURN_BUDGET_MS : undefined });
+    // This dose is being called right now (in the browser or as text), so the scheduler must not
+    // place its own reminder call for it: counted as a call attempt, with no escalation clock.
+    // Without this, a demo call on Render would also ring the patient's real phone a minute later.
+    await Reminder.updateOne({ _id: reminderId, attempts: { $not: { $gt: 0 } } }, { $set: { lastCallAt: new Date() }, $inc: { attempts: 1 } });
+    const patient = await Patient.findById(reminder.patient).populate('user', 'name').select('user language').lean();
+    const hints = [reminder.medicine && reminder.medicine.name, patient && patient.user && patient.user.name && patient.user.name.split(' ')[0]].filter(Boolean);
+    return res.status(201).json({
+      callId: call.sessionId, runId: call.runId, reminderId, actions: call.actions, ended: isEnded(call.actions),
+      hints, language: (patient && patient.language) || 'en',
+      lines: channel === 'voice' ? callLines(call.sessionId) : undefined,
+    });
   } catch (err) {
     if (err.status) return res.status(err.status).json({ message: err.message });
     console.error('[simulateRoutes] start failed:', err.message);

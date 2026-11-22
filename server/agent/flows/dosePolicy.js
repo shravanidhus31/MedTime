@@ -96,7 +96,7 @@ function decide(state, label, info = {}) {
     if (intent === 'question') return out(['dose.redirect', reaskLine]);
     s.checkFails += 1;
     if (s.checkFails >= 2 || info.turnsLeft <= 0) return handover('unsure', 'dose.handover_unsure');
-    return out(['dose.check_hint']);
+    return out([info.hasPill ? 'dose.check_hint' : 'dose.check_reask']);
   }
 
   // ── after the reminder ("Can you take it now, and tell me when it's done?") ──
@@ -142,7 +142,7 @@ function decide(state, label, info = {}) {
       if (s.findFails >= 2 || info.turnsLeft <= 0) return handover();
       if (info.hasLocation && s.findFails === 1) return out(['dose.hint_location']);
       if (info.hasPillbox) return out(['dose.hint_pillbox']);
-      return out(['dose.hint_pill']);
+      return out([info.hasPill ? 'dose.hint_pill' : 'dose.hint_generic']);
     }
 
     case 'question':

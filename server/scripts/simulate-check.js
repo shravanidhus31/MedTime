@@ -135,6 +135,17 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       c1.run && c1.run.status === 'finished' && c1.run.outcome === 'done' && c1.run.steps.some((s) => s.tool === 'patient_said') &&
         c1.run.steps.some((s) => s.tool === 'agent_said') && c1.run.steps.some((s) => s.tool === 'mark_dose') && c1.run.trigger === 'simulate');
 
+    // The scheduler must not place its own call for a dose that is being called in the simulator
+    // (on Render that would ring the patient's real phone).
+    const d1b = await newDose();
+    await post('/simulate/call', { reminderId: String(d1b._id) });
+    const { runTick, task } = require('../jobs/missedDoseCron');
+    task.stop();
+    const quietLog = console.log; console.log = () => {};
+    try { await runTick(new Date()); } finally { console.log = quietLog; }
+    const cronRuns = await AgentRun.countDocuments({ patient: patient._id, trigger: 'dose_due' });
+    check('a dose being called in the simulator is not also called by the scheduler', cronRuns === 0 && (await Reminder.findById(d1b._id).lean()).attempts === 1, `${cronRuns} scheduler run(s)`);
+
     // 2. already taken in the app → tells her not to take another, no new record
     const d2 = await newDose('taken');
     const c2 = await playCall('Call 2: already taken', d2, ['Should I take one now?']);

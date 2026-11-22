@@ -236,14 +236,17 @@ registerFlow('dose', {
   // from your family will call you", so the caregiver is phoned here.
   onEnd: async (session) => {
     const s = session.state;
-    if (!s.settled && session.turns > session.maxTurns) {
+    if (!s.settled && !session.emergency && session.turns > session.maxTurns) {
       const r = await notifyCaregivers({ patientId: session.patientId, reason: 'handover', message: caregiverWords(s, 'handover').message, runId: session.runId })
         .catch((err) => ({ ok: false, error: err.message }));
       if (r.ok) await noteCaregiverInformed(s.reminderId).catch(() => {});
       s.ending = { outcome: 'done', fallbackReason: 'turn_limit' };
     }
     if (!session.runId) return;
-    const ending = s.ending || { outcome: 'fallback', fallbackReason: 'ended' };
+    // A red flag ends the dose part of the call; 'red_flag' is what Person B's journal looks for.
+    const ending = session.emergency
+      ? { outcome: 'red_flag', fallbackReason: session.emergency.category }
+      : s.ending || { outcome: 'fallback', fallbackReason: 'ended' };
     const last = [...s.transcript].reverse().find((t) => t.who === 'agent');
     await finishRun(session.runId, {
       outcome: ending.outcome,
@@ -258,6 +261,36 @@ registerFlow('dose', {
     }).catch((err) => console.error('[flow:dose] could not finish run:', err.message));
   },
 });
+
+// The slot values for this patient's lines (doseLines.js). patient.user must be populated.
+// Free text from the medicine form, made speakable: trimmed, no trailing full stop, and a lower-case
+// first letter so it reads inside a sentence ("Kitchen table" → "kitchen table").
+function phrase(text) {
+  const t = String(text || '').trim().replace(/[.\s]+$/, '');
+  return t ? t[0].toLowerCase() + t.slice(1) : '';
+}
+
+function buildSlots({ med, patient, caregiver, scheduledTime }) {
+  return {
+    name: ((patient.user && patient.user.name) || 'there').split(' ')[0],
+    medicine: med.name,
+    pill: phrase(med.pillDescription),
+    slot: timeOfDay(scheduledTime),
+    box: String(med.pillboxSlot || '').trim().replace(/\s*\/\s*/g, ', '),
+    food: FOOD[med.mealTiming] || '',
+    caregiver: caregiver ? caregiver.name.split(' ')[0] : 'your family',
+    location: phrase(med.locationHint),
+  };
+}
+
+// Every line a dose call about this medicine can say, for this patient (A3.1): the voice server
+// renders them before the call. scheduledTime: the dose's time (picks "morning"/"evening").
+async function doseLineTexts({ med, patient, scheduledTime = new Date() }) {
+  const { LINES, render } = require('./doseLines');
+  const caregiver = (await listCaregivers(patient._id)).find((c) => c.role !== 'doctor' && c.name);
+  const slots = buildSlots({ med, patient, caregiver, scheduledTime });
+  return Object.keys(LINES).map((id) => render(id, slots));
+}
 
 // Starts a dose call for one Reminder. Returns { sessionId, runId, patientId, actions }.
 async function startDoseCall({ reminderId, trigger = 'simulate', channel = 'text', turnBudgetMs }) {
@@ -289,15 +322,7 @@ async function startDoseCall({ reminderId, trigger = 'simulate', channel = 'text
         reminderId: String(reminder._id),
         attempt: Math.max(1, reminder.attempts || 0),
         dueTime: spokenTime(reminder.scheduledTime),
-        slots: {
-          name: ((patient.user && patient.user.name) || 'there').split(' ')[0],
-          medicine: med.name,
-          pill: med.pillDescription ? `${med.pillDescription} ` : '',
-          slot: med.pillboxSlot || timeOfDay(reminder.scheduledTime),
-          food: FOOD[med.mealTiming] || '',
-          caregiver: caregiver ? caregiver.name.split(' ')[0] : 'your family',
-          location: med.locationHint || '',
-        },
+        slots: buildSlots({ med, patient, caregiver, scheduledTime: reminder.scheduledTime }),
         expected: { medicine: med.name, pill: med.pillDescription || '' },
         info: { hasLocation: !!med.locationHint, hasPillbox: !!med.pillboxSlot, hasPill: !!med.pillDescription },
         policy: policy.newState(),
@@ -316,4 +341,4 @@ async function startDoseCall({ reminderId, trigger = 'simulate', channel = 'text
   return { sessionId, runId: runId ? String(runId) : null, patientId: String(patient._id), actions };
 }
 
-module.exports = { startDoseCall, LABEL_SCHEMA };
+module.exports = { startDoseCall, doseLineTexts, LABEL_SCHEMA };

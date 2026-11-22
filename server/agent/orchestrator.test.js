@@ -60,14 +60,31 @@ test('a red flag in a PARTIAL transcript skips the flow: neutral voice, caregive
   assert.deepEqual(alerts, ['fall']);
 });
 
-test('keypad 9 is an emergency at any moment; the alert goes out once per call', async () => {
+test('keypad 9 is an emergency at any moment; the family is alerted once per kind of emergency', async () => {
   const { sessionId } = await start();
   const r1 = await orch.handleTurn({ sessionId, dtmf: '9' });
   const r2 = await orch.handleTurn({ sessionId, transcript: 'my chest hurts', isFinal: true });
+  const r3 = await orch.handleTurn({ sessionId, transcript: 'my chest still hurts', isFinal: true });
   assert.equal(r1.emergency, 'help_key');
   assert.equal(r2.emergency, 'chest_pain');
+  assert.equal(r3.emergency, undefined); // same red flag again: reassured, not re-alerted
+  assert.equal(r3.inEmergency, 'chest_pain');
   await sleep(10);
-  assert.deepEqual(alerts, ['help_key']);
+  assert.deepEqual(alerts, ['help_key', 'chest_pain']);
+});
+
+test('after a red flag the call stays in emergency mode: the flow never runs again (live voice test)', async () => {
+  const { sessionId } = await start();
+  const r1 = await orch.handleTurn({ sessionId, transcript: 'I have fallen down', isFinal: true });
+  assert.equal(r1.emergency, 'fall');
+  const r2 = await orch.handleTurn({ sessionId, transcript: 'Okay, bye.', isFinal: true });
+  assert.equal(r2.actions[0].type, 'neutral');
+  assert.equal(r2.actions[0].text, orch.STAY_TEXT);
+  assert.equal(r2.actions[1].type, 'listen');
+  assert.ok(!r2.actions.some((a) => /heard:/.test(a.text || '')), 'the flow must not answer after a red flag');
+  assert.equal(r2.emergency, undefined);
+  await sleep(10);
+  assert.deepEqual(alerts, ['fall']);
 });
 
 test('the stand-in screen catches the PRD red flags and leaves normal replies alone', async () => {

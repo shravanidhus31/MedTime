@@ -123,6 +123,10 @@ test("can't find it → location hint, then a hand-over after the second failure
   assert.deepEqual(toolNames(d2), ['notify_caregiver']);
   const noData = P.decide(P.newState(), L('unsure'), { ...INFO, hasLocation: false, hasPillbox: false });
   assert.deepEqual(noData.say, ['dose.hint_pill']);
+  const nothing = P.decide(P.newState(), L('unsure'), { ...INFO, hasLocation: false, hasPillbox: false, hasPill: false });
+  assert.deepEqual(nothing.say, ['dose.hint_generic']);
+  const s1 = P.decide(P.newState(), L('taken'), INFO).state;
+  assert.deepEqual(P.decide(s1, L('taken', { matches_expected: false }), { ...INFO, hasPill: false }).say, ['dose.check_reask']);
 });
 
 test('a question → redirect, then the question again (last); unsafe → polite refusal, nothing run', () => {

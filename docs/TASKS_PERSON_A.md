@@ -220,6 +220,8 @@ Folder: `voice/` (Python 3.11, with its own `requirements.txt`, run with `python
 - **Barge-in:** when VAD detects speech, stop playback at once.
 - Language comes from `Patient.language`. If Hindi or Marathi accuracy is poor, test an AI4Bharat Indic speech model.
 
+**A3.1 as built (22 Nov):** `voice/bot.py` (Pipecat 1.16, SmallWebRTC, Silero VAD, Whisper `base` with the medicine and patient names as hint words, greedy decoding, one shared model). The neutral voice (Kokoro) is outside the live pipeline: the page has the server render the call's lines first (`POST /api/prepare`), and they play from a disk cache. Turns go to `POST /agent/turn`. `npm run voice:check`: greeting 0.4 s, replies 2.2–3.2 s, barge-in 0.6 s. Setup and numbers: `voice/README.md`.
+
 **A3.2 · Browser call screen** (`client/src/pages/CallSimulator.jsx`)
 - Microphone in, audio out, transcript shown live. Person B mounts the Agent Activity panel beside it for the demo.
 
@@ -403,7 +405,10 @@ In order, top to bottom:
 - [x] A1.2 #10 `PUBLIC_BASE_URL` and `TWILIO_ENABLED`
 - [x] A1.3 #13 per-dose escalation and `doseService`
 - [ ] A1.4 #14 dose endpoint and dashboard update
-- [ ] A3.1–A3.4 voice pipeline, browser call screen, emergency reflex (Media Streams only after an upgrade)
+- [x] A3.1 voice pipeline, browser first (Pipecat, Silero, Whisper base, cached neutral voice, barge-in)
+- [x] A3.2 browser call screen (`/call`)
+- [ ] A3.3 Twilio Media Streams (only after an upgrade)
+- [ ] A3.4 emergency reflex in the voice path: works on each finished sentence through the API (no partial transcripts with Whisper); not yet tested by voice
 - [ ] A3.5 Twilio phone adapter (turn by turn, trial-compatible)
 - [x] A4.1 dose flow (fixed lines, per-turn label, rules in code, retries)
 - [ ] A4.2–A4.4 call tools, Planner follow-ups, real recordings

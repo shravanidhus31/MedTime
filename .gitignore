@@ -29,3 +29,8 @@ yarn-error.log*
 /server/logs
 # Research papers (copyrighted PDFs, not for the repo)
 Medtime papers/
+
+# Voice pipeline (A3): Python virtual environment and downloaded models
+/voice/.venv/
+__pycache__/
+/voice/.cache/
