@@ -22,9 +22,10 @@
  * Patients with dementiaMode: [C] and [B] go through the agent (agent/doseDue.js),
  * which checks the dose log before calling.
  *
- * Stand-in for Person B's nightly reminder top-up (ISSUES #5): if a call-type
- * medicine is due this minute and has no Reminder for it, one is created first,
- * so no dose goes uncalled because its record is missing.
+ * Safety net next to Person B's reminder top-up (ISSUES #5, jobs/reminderTopUpJob.js):
+ * if a daily call-type medicine is due this minute and has no Reminder for it, one is
+ * created first, so no dose goes uncalled because its record is missing (e.g. the
+ * server was asleep at midnight). Weekly/alternate-day medicines rely on the top-up.
  */
 
 const cron     = require('node-cron');
@@ -61,8 +62,18 @@ const startOfMinute = (date) => new Date(Math.floor(date.getTime() / MINUTE) * M
 // ─────────────────────────────────────────────────────────────────────────────
 async function ensureDueReminders(now) {
   const slot = startOfMinute(now);
-  const due = await Medicine.find({ isActive: true, notificationType: 'call', scheduledTimes: toHHMM(now) })
-    .select('_id patient name').lean();
+  // Daily medicines only, within their dates. Weekly and alternate-day medicines are left to
+  // Person B's top-up (jobs/reminderTopUpJob.js), which knows which days they fall on.
+  const due = await Medicine.find({
+    isActive: true,
+    notificationType: 'call',
+    scheduledTimes: toHHMM(now),
+    frequency: { $nin: ['weekly', 'alternate_days'] },
+    $and: [
+      { $or: [{ startDate: null }, { startDate: { $lte: now } }] },
+      { $or: [{ endDate: null }, { endDate: { $gte: now } }] },
+    ],
+  }).select('_id patient name').lean();
   let created = 0;
   for (const med of due) {
     const r = await Reminder.updateOne(
@@ -162,7 +173,7 @@ async function runTick(now = new Date()) {
     })
       .sort({ scheduledTime: 1 })
       .populate('medicine')
-      .populate({ path: 'patient', populate: { path: 'user caregivers.user', model: 'User' } });
+      .populate({ path: 'patient', populate: { path: 'user', model: 'User' } });
 
     // Only call-type medicines: SMS reminders are reminderJob.js's.
     const doses = candidates.filter((r) => r.medicine && r.medicine.isActive && r.medicine.notificationType === 'call');

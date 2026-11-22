@@ -1,0 +1,389 @@
+[
+  {
+    "id": "rx_01_clean_single",
+    "title": "Standard Clean Typed Single Medicine",
+    "type": "typed",
+    "text": "APOLLO CLINIC\nPatient: Ramesh Kumar  Age: 68  Date: 14-Nov-2026\nRx:\n1. Tab. Metformin 500mg\n   1 tablet once daily after breakfast\n   Duration: 30 days",
+    "expected": [
+      {
+        "name": "Metformin",
+        "dosage": "500mg",
+        "frequency": "once",
+        "foodRule": "after"
+      }
+    ],
+    "expectedLevel": 1,
+    "hasConflicts": false,
+    "hasLowConfidence": false
+  },
+  {
+    "id": "rx_02_clean_multi_cardiac",
+    "title": "Clean Multi-Medicine Post-Discharge Bundle",
+    "type": "typed",
+    "text": "MANIPAL HOSPITAL - CARDIOLOGY\nDr. S. Nair, MD, DM\nDate: 10-Nov-2026\nRx:\n1. Tab. Aspirin 75mg - 1 OD with breakfast\n2. Tab. Atorvastatin 20mg - 1 OD at bedtime\n3. Tab. Amlodipine 5mg - 1 OD morning after food",
+    "expected": [
+      {
+        "name": "Aspirin",
+        "dosage": "75mg",
+        "frequency": "once",
+        "foodRule": "with"
+      },
+      {
+        "name": "Atorvastatin",
+        "dosage": "20mg",
+        "frequency": "once",
+        "foodRule": "any"
+      },
+      {
+        "name": "Amlodipine",
+        "dosage": "5mg",
+        "frequency": "once",
+        "foodRule": "after"
+      }
+    ],
+    "expectedLevel": 1,
+    "hasConflicts": false,
+    "hasLowConfidence": false
+  },
+  {
+    "id": "rx_03_bid_schedule",
+    "title": "Twice Daily Metformin Schedule",
+    "type": "typed",
+    "text": "CITY CARE CLINIC\nRx:\n1. Tab. Metformin 500mg\n   Take 1 tablet twice daily with meals (morning and night)",
+    "expected": [
+      {
+        "name": "Metformin",
+        "dosage": "500mg",
+        "frequency": "twice",
+        "foodRule": "with"
+      }
+    ],
+    "expectedLevel": 1,
+    "hasConflicts": false,
+    "hasLowConfidence": false
+  },
+  {
+    "id": "rx_04_tid_acute",
+    "title": "Thrice Daily Acute Antipyretic",
+    "type": "typed",
+    "text": "COMMUNITY HEALTH CENTER\nDate: 18-Nov-2026\nRx:\n1. Tab. Paracetamol 650mg\n   1 tablet thrice daily after meals for 3 days",
+    "expected": [
+      {
+        "name": "Paracetamol",
+        "dosage": "650mg",
+        "frequency": "thrice",
+        "foodRule": "after"
+      }
+    ],
+    "expectedLevel": 1,
+    "hasConflicts": false,
+    "hasLowConfidence": false
+  },
+  {
+    "id": "rx_05_alternate_days",
+    "title": "Alternate Days Schedule",
+    "type": "typed",
+    "text": "DR. MEHTA ARTHRITIS CLINIC\nRx:\n1. Tab. Methotrexate 7.5mg\n   Take 1 tablet on alternate days in the morning after breakfast",
+    "expected": [
+      {
+        "name": "Methotrexate",
+        "dosage": "7.5mg",
+        "frequency": "alternate_days",
+        "foodRule": "after"
+      }
+    ],
+    "expectedLevel": 1,
+    "hasConflicts": false,
+    "hasLowConfidence": false
+  },
+  {
+    "id": "rx_06_weekly_schedule",
+    "title": "Weekly High-Dose Vitamin D3",
+    "type": "typed",
+    "text": "WELLNESS DIABETES CENTRE\nRx:\n1. Cap. Cholecalciferol 60000 IU\n   1 capsule once weekly on Sundays after breakfast for 8 weeks",
+    "expected": [
+      {
+        "name": "Cholecalciferol",
+        "dosage": "60000 IU",
+        "frequency": "weekly",
+        "foodRule": "after"
+      }
+    ],
+    "expectedLevel": 1,
+    "hasConflicts": false,
+    "hasLowConfidence": false
+  },
+  {
+    "id": "rx_07_before_food_antacid",
+    "title": "Proton Pump Inhibitor Before Food",
+    "type": "typed",
+    "text": "MAX HEALTHCARE\nRx:\n1. Cap. Pantoprazole 40mg\n   1 capsule once daily 30 minutes before breakfast",
+    "expected": [
+      {
+        "name": "Pantoprazole",
+        "dosage": "40mg",
+        "frequency": "once",
+        "foodRule": "before"
+      }
+    ],
+    "expectedLevel": 1,
+    "hasConflicts": false,
+    "hasLowConfidence": false
+  },
+  {
+    "id": "rx_08_after_food_nsaid",
+    "title": "NSAID Strictly After Food",
+    "type": "typed",
+    "text": "BONE & JOINT CLINIC\nRx:\n1. Tab. Ibuprofen 400mg\n   1 tablet twice daily strictly after meals",
+    "expected": [
+      {
+        "name": "Ibuprofen",
+        "dosage": "400mg",
+        "frequency": "twice",
+        "foodRule": "after"
+      }
+    ],
+    "expectedLevel": 1,
+    "hasConflicts": false,
+    "hasLowConfidence": false
+  },
+  {
+    "id": "rx_09_with_food_heavy",
+    "title": "Metformin Heavy Dose With Dinner",
+    "type": "typed",
+    "text": "METABOLIC HEALTH CLINIC\nRx:\n1. Tab. Metformin 1000mg\n   1 tablet once daily with dinner",
+    "expected": [
+      {
+        "name": "Metformin",
+        "dosage": "1000mg",
+        "frequency": "once",
+        "foodRule": "with"
+      }
+    ],
+    "expectedLevel": 1,
+    "hasConflicts": false,
+    "hasLowConfidence": false
+  },
+  {
+    "id": "rx_10_ocr_handwritten_noise_1",
+    "title": "Handwritten OCR Artifact with Typos",
+    "type": "handwritten_ocr",
+    "text": "Dr. Kulkarni Clnic\nPt: Sita Shrma\nRx -\n1. Tab Telmisatan 4Omg  1-O-O aftr brkfast\n2. Tab Ecosprin 75mg  O-1-O aftr lunch",
+    "expected": [
+      {
+        "name": "Telmisartan",
+        "dosage": "40mg",
+        "frequency": "once",
+        "foodRule": "after"
+      },
+      {
+        "name": "Ecosprin",
+        "dosage": "75mg",
+        "frequency": "once",
+        "foodRule": "after"
+      }
+    ],
+    "expectedLevel": 1,
+    "hasConflicts": false,
+    "hasLowConfidence": false
+  },
+  {
+    "id": "rx_11_ocr_symbols_noise_2",
+    "title": "Handwritten OCR with Symbols & Punctuation",
+    "type": "handwritten_ocr",
+    "text": "CLINICAL SUMMARY ///\n>> Rx:\n* Tab. Amlodipine 5 mg -- [1 OD] morning (PC)\n* Cap. Omeprazole 20mg -- [1 OD] early morn (AC)",
+    "expected": [
+      {
+        "name": "Amlodipine",
+        "dosage": "5mg",
+        "frequency": "once",
+        "foodRule": "after"
+      },
+      {
+        "name": "Omeprazole",
+        "dosage": "20mg",
+        "frequency": "once",
+        "foodRule": "before"
+      }
+    ],
+    "expectedLevel": 1,
+    "hasConflicts": false,
+    "hasLowConfidence": false
+  },
+  {
+    "id": "rx_12_duplicate_conflict",
+    "title": "Duplicate Medicine Against Active Schedule",
+    "type": "conflict_test",
+    "text": "METRO SPECIALTY CLINIC\nRx:\n1. Tab. Aspirin 75mg\n   Take 1 tablet once daily after breakfast",
+    "expected": [
+      {
+        "name": "Aspirin",
+        "dosage": "75mg",
+        "frequency": "once",
+        "foodRule": "after"
+      }
+    ],
+    "expectedLevel": 2,
+    "hasConflicts": true,
+    "hasLowConfidence": false
+  },
+  {
+    "id": "rx_13_strength_change_conflict",
+    "title": "Dose Strength Change from 500mg to 1000mg",
+    "type": "conflict_test",
+    "text": "DIABETES MONITORING CENTRE\nRx:\n1. Tab. Metformin 1000mg\n   1 tablet twice daily after meals (increased dose)",
+    "expected": [
+      {
+        "name": "Metformin",
+        "dosage": "1000mg",
+        "frequency": "twice",
+        "foodRule": "after"
+      }
+    ],
+    "expectedLevel": 2,
+    "hasConflicts": true,
+    "hasLowConfidence": false
+  },
+  {
+    "id": "rx_14_low_conf_smudged_name",
+    "title": "Smudged Medicine Name (Low Confidence - Never Guess)",
+    "type": "low_confidence_test",
+    "text": "GENERAL HOSPITAL OPD\nRx:\n1. Tab. ??????? 250mg\n   1 tablet once daily morning after breakfast",
+    "expected": [
+      {
+        "name": null,
+        "dosage": "250mg",
+        "frequency": "once",
+        "foodRule": "after"
+      }
+    ],
+    "expectedLevel": 2,
+    "hasConflicts": false,
+    "hasLowConfidence": true
+  },
+  {
+    "id": "rx_15_low_conf_smudged_freq",
+    "title": "Smudged Frequency (Low Confidence - Never Guess)",
+    "type": "low_confidence_test",
+    "text": "CLINICAL NOTE\nRx:\n1. Tab. Cilnidipine 10mg\n   Take ??? as directed by Dr",
+    "expected": [
+      {
+        "name": "Cilnidipine",
+        "dosage": "10mg",
+        "frequency": null,
+        "foodRule": "any"
+      }
+    ],
+    "expectedLevel": 2,
+    "hasConflicts": false,
+    "hasLowConfidence": true
+  },
+  {
+    "id": "rx_16_four_drug_cardiac",
+    "title": "Post-MI Complex 4-Drug Bundle",
+    "type": "typed",
+    "text": "NARAYANA HRUDAYALAYA\nDischarge Prescription:\n1. Tab. Clopidogrel 75mg - 1 OD morning after breakfast\n2. Tab. Ramipril 2.5mg - 1 OD morning after breakfast\n3. Tab. Metoprolol 25mg - 1 BD (morning and night)\n4. Tab. Rosuvastatin 10mg - 1 HS (night at bedtime)",
+    "expected": [
+      {
+        "name": "Clopidogrel",
+        "dosage": "75mg",
+        "frequency": "once",
+        "foodRule": "after"
+      },
+      {
+        "name": "Ramipril",
+        "dosage": "2.5mg",
+        "frequency": "once",
+        "foodRule": "after"
+      },
+      {
+        "name": "Metoprolol",
+        "dosage": "25mg",
+        "frequency": "twice",
+        "foodRule": "any"
+      },
+      {
+        "name": "Rosuvastatin",
+        "dosage": "10mg",
+        "frequency": "once",
+        "foodRule": "any"
+      }
+    ],
+    "expectedLevel": 1,
+    "hasConflicts": false,
+    "hasLowConfidence": false
+  },
+  {
+    "id": "rx_17_diabetic_hypertensive_combo",
+    "title": "Dual Metabolic Regimen (Before and After Food)",
+    "type": "typed",
+    "text": "ENDOCRINE WELLNESS CLINIC\nRx:\n1. Tab. Glimepiride 1mg - 1 OD 15 mins before breakfast\n2. Tab. Metformin 500mg - 1 BD with breakfast and dinner\n3. Tab. Losartan 50mg - 1 OD morning after breakfast",
+    "expected": [
+      {
+        "name": "Glimepiride",
+        "dosage": "1mg",
+        "frequency": "once",
+        "foodRule": "before"
+      },
+      {
+        "name": "Metformin",
+        "dosage": "500mg",
+        "frequency": "twice",
+        "foodRule": "with"
+      },
+      {
+        "name": "Losartan",
+        "dosage": "50mg",
+        "frequency": "once",
+        "foodRule": "after"
+      }
+    ],
+    "expectedLevel": 1,
+    "hasConflicts": false,
+    "hasLowConfidence": false
+  },
+  {
+    "id": "rx_18_acute_antibiotic_course",
+    "title": "5-Day Antibiotic Short Course",
+    "type": "typed",
+    "text": "DR. JOSHI CHEST CLINIC\nRx:\n1. Tab. Azithromycin 500mg\n   1 tablet once daily after lunch for 5 days only",
+    "expected": [
+      {
+        "name": "Azithromycin",
+        "dosage": "500mg",
+        "frequency": "once",
+        "foodRule": "after"
+      }
+    ],
+    "expectedLevel": 1,
+    "hasConflicts": false,
+    "hasLowConfidence": false
+  },
+  {
+    "id": "rx_19_conditional_sos_regimen",
+    "title": "PRN / SOS Pain Medication",
+    "type": "typed",
+    "text": "ORTHOPEDIC CARE\nRx:\n1. Tab. Paracetamol 500mg\n   Take 1 tablet SOS for severe knee pain, maximum twice daily after food",
+    "expected": [
+      {
+        "name": "Paracetamol",
+        "dosage": "500mg",
+        "frequency": "twice",
+        "foodRule": "after"
+      }
+    ],
+    "expectedLevel": 1,
+    "hasConflicts": false,
+    "hasLowConfidence": false
+  },
+  {
+    "id": "rx_20_illegible_scan_rejection",
+    "title": "Severe OCR Noise / Unusable Image",
+    "type": "unusable_scan",
+    "text": "~~~ CLINIC HEADER SMUDGED ~~~\n#$@*&! 994821 ... illegible watermark\n==============================\n... unreadable scribble ...",
+    "expected": [],
+    "expectedLevel": 2,
+    "hasConflicts": false,
+    "hasLowConfidence": true
+  }
+]

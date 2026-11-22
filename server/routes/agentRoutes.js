@@ -1,7 +1,8 @@
 // Agent run endpoints (A2.3, contract C2). Read-only; used by Person B's Activity panel.
 //
-//   GET /api/v1/agent/runs?patient=<Patient id>&from=<ISO date>&to=<ISO date>&limit=50
-//     → { runs: [ ...run without steps, with stepCount ] }, newest first
+//   GET /api/v1/agent/runs?patient=<Patient id>&from=<ISO date>&to=<ISO date>&limit=50&steps=1
+//     → { runs: [ ...run without steps, with stepCount ] }, newest first.
+//       steps=1 includes each run's steps (Person B's Activity panel shows the timeline inline).
 //   GET /api/v1/agent/runs/:id
 //     → { run: { ...run, steps: [{ tool, input, output, ms, at, approvalLevel, proposalId }] } }
 //
@@ -78,7 +79,10 @@ router.get('/runs', verifyToken, async (req, res) => {
       if (to) filter.startedAt.$lte = to;
     }
 
-    const runs = await AgentRun.find(filter).select('-steps').sort({ startedAt: -1 }).limit(limit).lean();
+    const withSteps = req.query.steps === '1' || req.query.steps === 'true';
+    let query = AgentRun.find(filter).sort({ startedAt: -1 }).limit(limit);
+    if (!withSteps) query = query.select('-steps');
+    const runs = await query.lean();
     return res.json({ runs });
   } catch (err) {
     console.error('[agentRoutes] list runs failed:', err.message);

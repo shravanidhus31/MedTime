@@ -10,6 +10,7 @@ const Medicine = require('../../models/Medicine');
 const Reminder = require('../../models/Reminder');
 const { markDose } = require('../../services/doseService');
 const { notifyCaregivers, REASONS } = require('../../services/caregiverAlerts');
+const { listCaregivers } = require('../../services/caregiverLinks');
 const { registerTool } = require('./index');
 
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
@@ -69,7 +70,7 @@ registerTool({
   run: async (input, ctx) => {
     const bad = needPatient(ctx);
     if (bad) return bad;
-    const patient = await Patient.findById(ctx.patientId).populate('user', 'name').populate('caregivers.user', 'name').lean();
+    const patient = await Patient.findById(ctx.patientId).populate('user', 'name').lean();
     if (!patient) return { ok: false, error: 'Patient not found' };
     const medicines = await Medicine.find({ patient: ctx.patientId, isActive: true })
       .select('name dosage type scheduledTimes mealTiming')
@@ -84,9 +85,8 @@ registerTool({
         language: patient.language || 'en',
         dementiaMode: !!patient.dementiaMode,
         familyClipsEnabled: !!patient.familyClipsEnabled,
-        caregivers: (patient.caregivers || [])
-          .filter((c) => c.user)
-          .map((c) => ({ name: c.user.name, relation: c.role })),
+        // Names and roles only, never phone numbers (CaregiverAccess + unmigrated old links).
+        caregivers: (await listCaregivers(patient._id)).map((c) => ({ name: c.name, relation: c.role })),
         medicines: medicines.map((m) => ({
           medicineId: String(m._id),
           name: m.name,

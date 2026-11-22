@@ -23,6 +23,7 @@ if (!dbName || !/dev|test/i.test(dbName)) {
 const mongoose = require('mongoose');
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const CaregiverAccess = require('../models/CaregiverAccess');
 const User = require('../models/User');
 const Patient = require('../models/Patient');
 const Medicine = require('../models/Medicine');
@@ -59,6 +60,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const priya = await mkUser(`Priya ${TAG}`, 'caregiver');
     const stranger = await mkUser(`Stranger ${TAG}`, 'caregiver');
     const patient = await Patient.create({ user: amma._id, emergencyContact: '+910000000004', dementiaMode: true, caregivers: [{ user: priya._id, role: 'primary' }] });
+    // Access comes from Person B's CaregiverAccess (C3); the old caregivers list alone isn't enough.
+    await CaregiverAccess.create({ patient: patient._id, user: priya._id, role: 'primary', status: 'active' });
     made.patients.push(patient._id);
     const med = await Medicine.create({
       patient: patient._id, name: 'Amlodipine', dosage: '5mg', type: 'tablet', frequency: 'once',
@@ -155,6 +158,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   } finally {
     if (server) server.close();
     await CaregiverAlert.deleteMany({ patient: { $in: made.patients } });
+    await CaregiverAccess.deleteMany({ patient: { $in: made.patients } });
     await AgentRun.deleteMany({ patient: { $in: made.patients } });
     await Reminder.deleteMany({ patient: { $in: made.patients } });
     await Medicine.deleteMany({ _id: { $in: made.medicines } });

@@ -38,7 +38,14 @@ const RESPONSES = {
     responseLineId: 'emergency.help',
     neutralText: "I'm calling your family right now. Please stay on the line.",
   },
+  sudden_confusion: {
+    responseLineId: 'emergency.confusion',
+    neutralText: "I'm calling your family right now. Please sit down and stay where you are.",
+  },
 };
+// Person B's screen (C9, server/safety/redflags.json) names two categories differently.
+RESPONSES.breathlessness = RESPONSES.breathing;
+RESPONSES.financial_scam = RESPONSES.scam;
 
 // Stand-in keyword lists (English, and common Hindi in Latin script). B's redflags.json replaces these.
 const KEYWORDS = {

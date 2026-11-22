@@ -17,7 +17,7 @@ A running record of what's done, what's in progress and what's next. **It's upda
 | Task split | ✅ Done. Person A (calls, voice, live agent) and Person B (caregiver app, schedules, background agents, evaluation) |
 | Twilio | ✅ New trial account works end to end for keypad calls driven by our server |
 | Agent code | ✅ Phase 1 agent platform done on `feat/a-agent-runtime` (A2.1–A2.7). Phase 1 gate met on Person A's side: a simulated dose call runs end to end in text and every step shows through `GET /agent/runs/:id`; the Activity panel itself is Person B's. Next: A1 Phase 0 fixes |
-| Person B | 🟡 Reports B1–B12 done (status shared 22 Nov), all on branch `origin/Anuj`, **not merged to `main`**. Left: B13 40-persona evaluation, B13.2 GrandGuard recall, B13.3 SUS form, B14 weekly review, B15 copilot (optional), B16 demo script and README |
+| Person B | 🟡 Reports B1–B12 done (status shared 22 Nov). Their branch `origin/Anuj` is **merged into `feat/a-integrate-b`** (not yet on `main`, waiting for B's review). Left: B13 40-persona evaluation, B13.2 GrandGuard recall, B13.3 SUS form, B14 weekly review, B15 copilot (optional), B16 demo script and README |
 | Phase 0 security fixes | 🟡 In progress on `feat/a-phase0-fixes`. A1.1 webhook signatures, A1.2 `PUBLIC_BASE_URL` / `TWILIO_ENABLED` and A1.3 per-dose escalation done (PRD gate passes in `cron:check`); A1.4 next |
 | Person B onboarding | 🟡 Docs pushed; access and secrets still to be sent privately |
 
@@ -35,10 +35,18 @@ A running record of what's done, what's in progress and what's next. **It's upda
 4. **Person A, after A2 and A1:** A3.5 Twilio phone adapter (turn by turn, trial-compatible) and the Core dose agent.
 
 ## Open questions
-- **Person B's branch `origin/Anuj` overlaps ours (found 22 Nov, before starting A1.4).** 12 commits, about 9,700 lines, not merged to `main`. Same 5 files changed on both sides: `events.js`, `index.js`, `models/AgentRun.js`, `models/Patient.js`, `package.json`. B wrote their own `AgentRun` model and `GET /agent/runs` routes (C2 is Person A's, done in A2.3), and B's `Patient.js` defaults `dementiaMode` and `familyClipsEnabled` to **true** (A2.6 uses false, so every patient would go to the agent). A1.4 edits `medicineRoutes.js` and `PatientDashboard.jsx`, which B's branch also rewrote (ownership checks, `requirePatientAccess`, soft delete). B's reminder top-up skips slots that already exist, so it fits A1.3's stand-in. **Needs a decision on how and when to integrate before A1.4.**
-- **Tell Person B (A1.3):** (1) contract C4 gained a `source` value, `scheduler` (the cron marking a dose missed); `dose.missed` events now really fire. (2) `reportRoutes.js` and `monthlyReportCron.js` still read `Medicine.caregiverAlerted`, which is no longer updated; they should read the per-dose `Reminder` fields (`status`, `caregiverAlerted`). (3) The nightly reminder top-up (#5) should upsert on medicine + time, because the cron now creates a missing call-type Reminder itself.
+- **Integration with Person B (22 Nov): done on `feat/a-integrate-b`, waiting for B's review.** See the change log entry and "Tell Person B" below.
+- **Tell Person B (integration and A1.3):**
+  1. **Before the merged code goes live, run `node scripts/migrate-caregivers.js` once on the real database.** Access checks now use your `CaregiverAccess` only, so caregivers linked the old way can't see the dashboard until then. (Caregiver *alert calls* still reach unmigrated caregivers: `services/caregiverLinks.js` falls back to `Patient.caregivers`.)
+  2. Review `feat/a-integrate-b`, especially the changes in your files: the one-line auth import fix in 4 routes, the one-day fix in `jobs/reminderTopUpJob.js`, `ActivityPanel.jsx`, `agent/proposals/index.js`, `voiceIncoming.js` (Twilio signature check), and `agentRunRoutes.js` (removed). Then re-run your checks.
+  3. Start new work from the merged `main` and stop using `origin/Anuj`.
+  4. C4 gained `source: 'scheduler'`; `dose.missed` events really fire now.
+  5. `reportRoutes.js` and `monthlyReportCron.js` still read `Medicine.caregiverAlerted`, which no longer changes; read the per-dose `Reminder` fields instead.
+  6. B13: drive the agent through the simulate API (see above).
 - **Submission deadline?** Person B's status (22 Nov) says only one week is left, so roughly the end of November 2026. Exact date still to confirm. It decides what gets cut from both task lists.
-- **B's call-in agent (B11) doesn't use Person A's runtime:** `callinFlow.js` and `routes/voiceIncoming.js` don't go through `registerFlow` / `/agent/turn` (C8), and they write to B's own `AgentRun` model. To sort out during integration.
+- **B's call-in agent (B11) doesn't use Person A's runtime** (`registerFlow` / `/agent/turn`, C8). It works as is (it writes to the shared `AgentRun`); moving it onto the runtime is optional later work.
+- **B's evaluation harness (B10) doesn't run the agent yet.** `eval/runEval.js` scores the persona files directly (0 ms per turn), so its "10/10, Phase 2 gate passed" doesn't test the dose agent. B13 should drive the agent through `POST /api/v1/simulate/call` (A2.7), once A4.1 is in.
+- **B's safety screen can return `unsafe`** (e.g. a request to change a medicine or move money). The orchestrator only acts on `redflag`, so `unsafe` currently passes to the flow. Handle it in A4.1 (refuse, give information only, per the PRD's cognitive-decline rule).
 - **Upgrade Twilio near the end?** That would add live streaming, caregiver SMS, call-in on our own number, and timing measures from phone calls.
 - **Does the trial route incoming calls to our server?** Test it via Try out Voice → Receive a call. This matters for Feature 7 on the phone.
 - **Marathi speech recognition:** Twilio's docs don't list it; test a Google V2 model on a real call.
@@ -71,6 +79,15 @@ A running record of what's done, what's in progress and what's next. **It's upda
 ## Change log
 
 ### 22 Nov 2026
+- **Integrated Person B's branch (`origin/Anuj`, B1–B12) with Person A's work** on `feat/a-integrate-b` (from `feat/a-phase0-fixes`). Not pushed; waiting for B's review before it goes to `main`.
+  - **Conflicts (5 files):** `AgentRun.js` = Person A's C2 schema widened for B's code (step `label` and `summaryText`; `at` defaults to now; `outcome` free text; `status` = both sides' values; `trigger` free text). `Patient.js`: `dementiaMode` and `familyClipsEnabled` stay **off** by default (B's seed turns them on for the demo patient). `events.js`: Person A's safe event bus + B's refill listener unchanged. `index.js` and `package.json`: both sides kept; `npm test` also runs `safety/`.
+  - **Duplicate removed:** B's `routes/agentRunRoutes.js`; `/agent/runs` is Person A's only. Added `steps=1` to the list endpoint, and B's `ActivityPanel.jsx` uses it (reads `runs`, `finished` shown like `completed`, titles for `dose_due`/`simulate`, shows the run's summary text).
+  - **Collision fixed:** `agent/proposals.js` (A's stand-in) and B's `agent/proposals/index.js` answered the same `require`, and the file won, so B's approvals, prescription flow and `propose_change` would have got `getProposalKind` = undefined. The stand-in's `proposeChange`/`setProposalHandler` moved into B's module; the file is deleted.
+  - **B's real pieces plugged into A's runtime** (`agent/index.js`): C3 `canAccess` (`CaregiverAccess` roles) and C9 `screen` (EN/HI/MR keywords, LLM only on final transcripts; A's keyword list still runs if it throws). Category aliases added for B's names (`breathlessness`, `financial_scam`, new `sudden_confusion`).
+  - **Caregivers now come from `CaregiverAccess`** for alert calls and `get_patient_context` (new `services/caregiverLinks.js`): active links, primary first; old `Patient.caregivers` entries still count until migrated, unless that user has a `CaregiverAccess` record (revoked or pending means no). B's caregiver routes only write `CaregiverAccess`, so without this a newly linked caregiver would never have been phoned.
+  - **Bugs found in B's code and fixed (B to review):** (1) `journalRoutes`, `lifeNoteRoutes`, `ocrRoutes` and `voiceIncoming` crashed on load (the auth module object was used as middleware), so the server could not start with them; one-line import fix each. (2) `reminderTopUpJob` put every reminder **one day early** (built from IST midnight expressed in UTC, the previous day), so weekly and alternate-day doses landed on the wrong day; one-line fix + 4 offline tests (all 4 fail on the old line). (3) B's `/voice/incoming` and `/voice/twilio-turn` Twilio webhooks had no signature check; Person A's A1.1 check added.
+  - **A1.3 safety net narrowed:** the cron creates a missing reminder only for daily medicines within their dates; weekly/alternate-day ones are left to B's top-up, which now also runs once at server start (Render's free plan may sleep through midnight).
+  - **Checks on the merged code:** `npm test` 64/64 (incl. B's suites: safety screen 71/71, call-in + prescription 19/19); `cron:check` 20/20; `tools:check` 25/25 (new: caregivers from `CaregiverAccess`; revoked, pending and doctor not called); `runs:check` 14/14; `simulate:check` 11/11 (its test caregiver now linked through `CaregiverAccess`); the server boots with every route and job mounted.
 - **Render:** `PUBLIC_BASE_URL` added with the same value as `NGROK_URL` (the `onrender.com` address). `NGROK_URL` stays until the A1.2 code is live and a real call works.
 - **A1.3 per-dose escalation (PRD #13)** (branch `feat/a-phase0-fixes`, not committed yet).
   - `Reminder` now holds the escalation for its own dose: `snoozeUntil`, `caregiverAlertTime`, `caregiverAlerted`, plus `attempts`, `lastCallAt`, `callError`, and for the caregiver alert `alertAttempts`, `alertFailed`, `alertError`. The old `Medicine` fields stay in the schema, unused.
@@ -221,4 +238,4 @@ A running record of what's done, what's in progress and what's next. **It's upda
 ---
 
 ## Not yet committed (local only)
-- Nothing uncommitted. No branch is pushed yet: `feat/a-agent-runtime` (A2.1–A2.7), `feat/a-phase0-fixes` on top of it (A1.1 `1b288ad`, A1.2 `0070f8b`, A1.3 `ca84733`), and `feat/a-dose-endpoint` on top of that (A1.4, not started).
+- Nothing uncommitted. **No branch is pushed yet.** Local branches, each on top of the previous: `feat/a-agent-runtime` (A2.1–A2.7) → `feat/a-phase0-fixes` (A1.1 `1b288ad`, A1.2 `0070f8b`, A1.3 `ca84733`) → `feat/a-integrate-b` (merge of B's `origin/Anuj`). A1.4 starts after the integration is on `main`.

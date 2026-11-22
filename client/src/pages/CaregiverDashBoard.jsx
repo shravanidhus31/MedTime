@@ -1,20 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
+import { Link, useNavigate } from 'react-router-dom';
+import { logoutUser } from '../redux/authSlice';
 import api from '../utils/api';
+import ApprovalsPanel from '../components/approvals/ApprovalsPanel';
+import QuestionsPanel from '../components/approvals/QuestionsPanel';
+import ActivityPanel from '../components/agent/ActivityPanel';
+import JournalPanel from '../components/journal/JournalPanel';
+import LifeNotesEditor from '../components/memory/LifeNotesEditor';
+import CallinSimulator from '../components/agent/CallinSimulator';
+import PrescriptionReviewPanel from '../components/prescription/PrescriptionReviewPanel';
+import RoutineProfileEditor from '../components/prescription/RoutineProfileEditor';
 
 export default function CaregiverDashboard() {
   const { user } = useSelector((state) => state.auth);
-  
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+
   // State
   const [patients, setPatients] = useState([]);
   const [selectedPatientId, setSelectedPatientId] = useState(null);
   const [patientHistory, setPatientHistory] = useState([]);
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
+  const [pendingQuestionsCount, setPendingQuestionsCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   // Link Patient State
   const [linkPhone, setLinkPhone] = useState('');
   const [linkMessage, setLinkMessage] = useState(null);
-  
+
   // Date Logic: Generate the last 7 days for the top picker
   const [weekDays, setWeekDays] = useState([]);
   const [selectedDateStr, setSelectedDateStr] = useState('');
@@ -54,14 +68,14 @@ export default function CaregiverDashboard() {
   useEffect(() => {
     fetchCaregiverData();
     // Auto-refresh every 10 seconds
-    const interval = setInterval(fetchCaregiverData, 10000); 
+    const interval = setInterval(fetchCaregiverData, 10000);
     return () => clearInterval(interval);
   }, [selectedPatientId]);
 
   // 2. Fetch History when a Patient is Selected
   useEffect(() => {
     if (!selectedPatientId) return;
-    
+
     const fetchHistory = async () => {
       setIsLoading(true);
       try {
@@ -73,7 +87,7 @@ export default function CaregiverDashboard() {
         setIsLoading(false);
       }
     };
-    
+
     fetchHistory();
   }, [selectedPatientId]);
 
@@ -100,7 +114,7 @@ export default function CaregiverDashboard() {
 
   return (
     <div className="min-h-screen bg-[#fdf8f0] text-[#2d2418] font-sans pb-12" style={{ fontFamily: "'Nunito', sans-serif" }}>
-      
+
       {/* ─── TOP NAV ─── */}
       <nav className="sticky top-0 z-40 bg-white border-b-[1.5px] border-[#e8dcc8] px-8 h-[68px] flex items-center shadow-[0_2px_12px_rgba(90,60,30,0.06)] justify-between">
         <div className="flex items-center gap-3">
@@ -111,10 +125,31 @@ export default function CaregiverDashboard() {
             MedTime Care
           </span>
         </div>
-        <div className="flex gap-4">
-          <span className="text-[14px] font-bold text-[#8a7560] px-3 py-2">
-            Welcome, {user?.name || 'Caregiver'}
+        <div className="flex items-center gap-3">
+          <Link
+            to="/caregiver/link"
+            className="text-xs md:text-sm font-bold text-[#5c4535] bg-[#f5ede0] hover:bg-[#e8dcc8] px-3.5 py-2 rounded-xl transition-colors border border-[#e8dcc8]"
+          >
+            + Request Link
+          </Link>
+          <Link
+            to="/caregiver/access"
+            className="text-xs md:text-sm font-bold text-[#5c4535] bg-[#f5ede0] hover:bg-[#e8dcc8] px-3.5 py-2 rounded-xl transition-colors border border-[#e8dcc8]"
+          >
+            Manage Access
+          </Link>
+          <span className="hidden md:inline text-[14px] font-bold text-[#8a7560] px-2">
+            {user?.name || 'Caregiver'}
           </span>
+          <button
+            onClick={() => {
+              dispatch(logoutUser());
+              navigate('/');
+            }}
+            className="text-xs md:text-sm font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-xl border border-red-200 transition-colors"
+          >
+            Sign Out
+          </button>
         </div>
       </nav>
 
@@ -126,9 +161,9 @@ export default function CaregiverDashboard() {
             Link a Family Member
           </h2>
           <form onSubmit={handleLinkPatient} className="flex gap-3 items-center flex-wrap md:flex-nowrap">
-            <input 
-              type="text" 
-              placeholder="Enter patient's registered phone number (e.g. 9876543210)" 
+            <input
+              type="text"
+              placeholder="Enter patient's registered phone number (e.g. 9876543210)"
               value={linkPhone}
               onChange={(e) => setLinkPhone(e.target.value)}
               className="flex-1 px-4 py-[13px] bg-white border-[1.5px] border-[#e8dcc8] rounded-xl outline-none focus:border-[#5c4535] font-sans transition-colors w-full"
@@ -162,8 +197,8 @@ export default function CaregiverDashboard() {
                     key={p.patientId}
                     onClick={() => setSelectedPatientId(p.patientId)}
                     className={`px-6 py-3 rounded-xl font-bold transition-all border-[1.5px] whitespace-nowrap
-                      ${selectedPatientId === p.patientId 
-                        ? 'bg-[#5c4535] text-white border-[#5c4535]' 
+                      ${selectedPatientId === p.patientId
+                        ? 'bg-[#5c4535] text-white border-[#5c4535]'
                         : 'bg-white text-[#8a7560] border-[#e8dcc8] hover:bg-[#f5ede0]'
                       }
                     `}
@@ -174,10 +209,40 @@ export default function CaregiverDashboard() {
               </div>
             )}
 
+            {/* Notification Banner for Pending Items (#B4) */}
+            {(pendingApprovalsCount > 0 || pendingQuestionsCount > 0) && (
+              <div className="mb-6 p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-900 font-bold flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl animate-bounce">🔔</span>
+                  <div>
+                    <div className="text-sm">Action Required by Caregiver</div>
+                    <div className="text-xs font-normal text-amber-800">
+                      {pendingApprovalsCount > 0 && `${pendingApprovalsCount} change proposal(s) waiting for approval. `}
+                      {pendingQuestionsCount > 0 && `${pendingQuestionsCount} agent question(s) need your answer.`}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Approvals, Questions, Activity, Journal, and Memory Panels */}
+            {selectedPatientId && (
+              <>
+                <ApprovalsPanel patientId={selectedPatientId} onUpdate={setPendingApprovalsCount} />
+                <PrescriptionReviewPanel patientId={selectedPatientId} />
+                <QuestionsPanel patientId={selectedPatientId} onUpdate={setPendingQuestionsCount} />
+                <ActivityPanel patientId={selectedPatientId} />
+                <JournalPanel patientId={selectedPatientId} />
+                <LifeNotesEditor patientId={selectedPatientId} />
+                <RoutineProfileEditor patientId={selectedPatientId} />
+                <CallinSimulator patientId={selectedPatientId} />
+              </>
+            )}
+
             {/* ─── MAIN CALENDAR DASHBOARD ─── */}
             {selectedPatient && (
               <div className="bg-white rounded-[24px] p-8 border-[1.5px] border-[#e8dcc8] shadow-[0_2px_16px_rgba(90,60,30,0.08)]">
-                
+
                 <div className="flex justify-between items-start mb-6">
                   <div>
                     <h2 className="text-[28px] text-[#2d2418] font-bold leading-none" style={{ fontFamily: "'Lora', serif" }}>
@@ -197,12 +262,12 @@ export default function CaregiverDashboard() {
                   {weekDays.map((d, index) => {
                     const isSelected = selectedDateStr === d.fullDateStr;
                     return (
-                      <div 
+                      <div
                         key={index}
                         onClick={() => setSelectedDateStr(d.fullDateStr)}
                         className={`flex-1 min-w-[80px] py-4 rounded-xl text-center cursor-pointer transition-all border-[1.5px]
-                          ${isSelected 
-                            ? 'bg-[#f5ede0] border-[#5c4535] text-[#5c4535]' 
+                          ${isSelected
+                            ? 'bg-[#f5ede0] border-[#5c4535] text-[#5c4535]'
                             : 'bg-[#fdf8f0] border-transparent text-[#2d2418] hover:border-[#e8dcc8]'
                           }
                         `}
@@ -244,17 +309,17 @@ export default function CaregiverDashboard() {
                           const isTaken = reminder.status === 'taken';
                           const isSkipped = reminder.status === 'skipped';
                           const isMissed = reminder.status === 'missed' || reminder.status === 'alerted';
-                          
+
                           return (
                             <tr key={reminder._id}>
                               <td className="py-5 border-b border-[#fdf8f0] text-[14px] text-[#2d2418] font-medium">
                                 {new Date(reminder.scheduledTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </td>
                               <td className="py-5 border-b border-[#fdf8f0] text-[14px] text-[#2d2418]">
-                                {reminder.medicine?.name || 'Unknown'} 
+                                {reminder.medicine?.name || 'Unknown'}
                                 <span className="bg-[#c5dff0] text-[#1a3e5a] px-2.5 py-1 rounded-full text-[11px] font-bold ml-2">
                                   {reminder.medicine?.dosage}
-                               </span>
+                                </span>
                               </td>
                               <td className="py-5 border-b border-[#fdf8f0] text-[14px] text-[#2d2418] capitalize">
                                 {reminder.medicine?.mealTiming || 'Anytime'} Food

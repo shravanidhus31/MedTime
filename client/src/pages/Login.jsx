@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { setCredentials } from '../redux/authSlice';
 import api from '../utils/api';
@@ -21,10 +21,11 @@ export default function Login() {
     try {
       const response = await api.post('/auth/login', { phone, password });
       
-      // Dispatch to Redux store
+      // Dispatch to Redux store (#11: include refreshToken)
       useDispatchhook(setCredentials({
         user: response.data.user,
-        accessToken: response.data.accessToken
+        accessToken: response.data.accessToken,
+        refreshToken: response.data.refreshToken
       }));
 
       // Route based on role
@@ -90,6 +91,13 @@ export default function Login() {
             {isLoading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
+
+        <div className="mt-6 text-center text-sm text-gray-500">
+          Don't have an account?{' '}
+          <Link to="/register" className="font-semibold text-blue-600 hover:text-blue-700">
+            Sign up
+          </Link>
+        </div>
 
       </div>
     </div>

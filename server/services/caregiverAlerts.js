@@ -12,6 +12,7 @@ const mongoose = require('mongoose');
 const Patient = require('../models/Patient');
 const CaregiverAlert = require('../models/CaregiverAlert');
 const twilio = require('../utils/twilioClient'); // module object, so checks can stub makeAlertCall
+const { listCaregivers } = require('./caregiverLinks');
 
 const REASONS = ['red_flag', 'missed_dose', 'unsure_dose', 'handover', 'other'];
 const MAX_MESSAGE_CHARS = 300;
@@ -30,16 +31,16 @@ async function notifyCaregivers({ patientId, reason, message, runId }) {
   const body = cleanMessage(message);
   if (!body) return { ok: false, error: 'message is empty' };
 
-  const patient = await Patient.findById(patientId).populate('user', 'name').populate('caregivers.user', 'name phone');
+  const patient = await Patient.findById(patientId).populate('user', 'name');
   if (!patient) return { ok: false, error: 'Patient not found' };
 
   const patientName = (patient.user && patient.user.name) || 'your family member';
   const spoken = `This is Med Time, about ${patientName}. ${body} Please check on them.`;
 
-  let recipients = (patient.caregivers || [])
-    .filter((c) => c.user && c.user.phone && c.role !== 'doctor')
-    .sort((a, b) => (a.role === 'primary' ? -1 : 0) - (b.role === 'primary' ? -1 : 0))
-    .map((c) => ({ userId: c.user._id, name: c.user.name, relation: c.role, phone: c.user.phone }));
+  // Active CaregiverAccess links (Person B's C3), plus not-yet-migrated Patient.caregivers.
+  let recipients = (await listCaregivers(patient._id))
+    .filter((c) => c.phone && c.role !== 'doctor')
+    .map((c) => ({ userId: c.userId, name: c.name, relation: c.role, phone: c.phone }));
   if (recipients.length === 0 && patient.emergencyContact) {
     recipients = [{ userId: null, name: 'emergency contact', relation: 'emergency_contact', phone: patient.emergencyContact }];
   }

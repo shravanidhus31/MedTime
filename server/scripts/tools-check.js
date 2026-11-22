@@ -28,6 +28,7 @@ const Medicine = require('../models/Medicine');
 const Reminder = require('../models/Reminder');
 const AgentRun = require('../models/AgentRun');
 const CaregiverAlert = require('../models/CaregiverAlert');
+const CaregiverAccess = require('../models/CaregiverAccess');
 const events = require('../events');
 const { markDose } = require('../services/doseService');
 const { initAgent } = require('../agent');
@@ -154,6 +155,33 @@ const tool = (name) => getTool(name);
     const twiml = await (await fetch(`http://127.0.0.1:${server.address().port}/api/v1/webhooks/voice/alert?alertId=${alerts[0]._id}`, { method: 'POST' })).text();
     check('alert webhook: Twilio gets the spoken message', /<Say[^>]*>This is Med Time, about Amma/.test(twiml) && /<Hangup\/>/.test(twiml));
 
+    // ── 5b. caregivers from Person B's CaregiverAccess (integration) ──
+    const nani = await mkUser(`Nani ${TAG}`, 'patient');
+    const meera = await mkUser(`Meera ${TAG}`, 'caregiver'); // active link, CaregiverAccess only
+    const ravi = await mkUser(`Ravi ${TAG}`, 'caregiver'); // old-style link, but access revoked since
+    const sunil = await mkUser(`Sunil ${TAG}`, 'caregiver'); // link request still pending
+    const asha = await mkUser(`Asha ${TAG}`, 'caregiver'); // old-style link, never migrated
+    const drK = await mkUser(`Dr Kale ${TAG}`, 'doctor'); // active doctor link
+    const linked = await Patient.create({
+      user: nani._id, emergencyContact: '+910000000005',
+      caregivers: [{ user: ravi._id, role: 'primary' }, { user: asha._id, role: 'approve' }],
+    });
+    made.patients.push(linked._id);
+    await CaregiverAccess.create([
+      { patient: linked._id, user: meera._id, role: 'primary', status: 'active' },
+      { patient: linked._id, user: ravi._id, role: 'primary', status: 'revoked' },
+      { patient: linked._id, user: sunil._id, role: 'approve', status: 'pending' },
+      { patient: linked._id, user: drK._id, role: 'doctor', status: 'active' },
+    ]);
+    const lctx = { patientId: String(linked._id), runId: undefined, flow: 'dose', now: new Date() };
+    const lnc = await tool('notify_caregiver').run({ reason: 'unsure_dose', message: 'Nani is not sure she took her pills.' }, lctx);
+    const called = lnc.ok ? lnc.data.alerts.map((a) => a.name.split(' ')[0]) : [];
+    check('caregivers: CaregiverAccess primary called first, unmigrated old link too; revoked, pending and doctor not called',
+      lnc.ok && called.join(',') === 'Meera,Asha', called.join(', '));
+    const lpc = await tool('get_patient_context').run({}, lctx);
+    const names = lpc.ok ? lpc.data.caregivers.map((c) => c.name.split(' ')[0]).sort().join(',') : '';
+    check('get_patient_context: caregivers from CaregiverAccess, no revoked or pending ones', names === 'Asha,Dr,Meera', names);
+
     // ── 6. red flag on a call → caregiver alert ──
     orch.registerFlow(`check-${TAG}`, { start: async () => [{ type: 'listen' }], turn: async () => [{ type: 'listen' }] });
     const { sessionId } = await orch.startSession({ flow: `check-${TAG}`, patientId: patient._id });
@@ -194,6 +222,7 @@ const tool = (name) => getTool(name);
   } finally {
     if (server) server.close();
     await CaregiverAlert.deleteMany({ patient: { $in: made.patients } });
+    await CaregiverAccess.deleteMany({ patient: { $in: made.patients } });
     await AgentRun.deleteMany({ patient: { $in: made.patients } });
     await Reminder.deleteMany({ patient: { $in: made.patients } });
     await Medicine.deleteMany({ _id: { $in: made.medicines } });
