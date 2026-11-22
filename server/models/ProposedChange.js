@@ -35,7 +35,8 @@ const proposedChangeSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'approved', 'rejected', 'expired'],
+      // 'escalated': sent to the doctor (prescription review); was missing, so escalating failed
+      enum: ['pending', 'approved', 'rejected', 'expired', 'escalated'],
       default: 'pending',
       index: true,
     },

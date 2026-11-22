@@ -13,6 +13,15 @@ import PrescriptionReviewPanel from '../components/prescription/PrescriptionRevi
 import RoutineProfileEditor from '../components/prescription/RoutineProfileEditor';
 import WeeklyReviewPanel from '../components/agent/WeeklyReviewPanel';
 import CaregiverCopilotPanel from '../components/agent/CaregiverCopilotPanel';
+import FollowUpsPanel from '../components/agent/FollowUpsPanel';
+import AttentionStrip from '../components/agent/AttentionStrip';
+import CareSettings from '../components/CareSettings';
+import { Tabs, Card, SectionTitle } from '../components/ui';
+
+// UI pass (22 Nov): the dashboard is tabs under a "Needs attention" strip, instead of ten panels in
+// one long page. The tab is remembered on this device.
+const TAB_KEY = 'medtime.caregiver.tab';
+const readTab = () => { try { return localStorage.getItem(TAB_KEY) || 'today'; } catch { return 'today'; } };
 
 export default function CaregiverDashboard() {
   const { user } = useSelector((state) => state.auth);
@@ -23,9 +32,12 @@ export default function CaregiverDashboard() {
   const [patients, setPatients] = useState([]);
   const [selectedPatientId, setSelectedPatientId] = useState(null);
   const [patientHistory, setPatientHistory] = useState([]);
-  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
-  const [pendingQuestionsCount, setPendingQuestionsCount] = useState(0);
+  const [, setPendingApprovalsCount] = useState(0); // the panels report counts; the attention strip shows them
+  const [, setPendingQuestionsCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [tab, setTabState] = useState(readTab);
+  const [attention, setAttention] = useState(null);
+  const setTab = (t) => { setTabState(t); try { localStorage.setItem(TAB_KEY, t); } catch { /* private mode */ } };
 
   // Link Patient State
   const [linkPhone, setLinkPhone] = useState('');
@@ -114,6 +126,29 @@ export default function CaregiverDashboard() {
 
   const selectedPatient = patients.find(p => p.patientId === selectedPatientId);
 
+  const linkForm = (
+    <>
+          <form onSubmit={handleLinkPatient} className="flex gap-3 items-center flex-wrap md:flex-nowrap">
+            <input
+              type="text"
+              placeholder="Enter patient's registered phone number (e.g. 9876543210)"
+              value={linkPhone}
+              onChange={(e) => setLinkPhone(e.target.value)}
+              className="flex-1 px-4 py-[13px] bg-white border-[1.5px] border-[#e8dcc8] rounded-xl outline-none focus:border-[#5c4535] font-sans transition-colors w-full"
+              required
+            />
+            <button type="submit" className="bg-[#5c4535] text-white px-6 py-[13px] rounded-xl font-bold hover:bg-[#4a3628] transition-colors border-[1.5px] border-[#5c4535] w-full md:w-auto whitespace-nowrap">
+              Link Patient
+            </button>
+          </form>
+          {linkMessage && (
+            <p className={`text-sm mt-3 font-bold ${linkMessage.type === 'success' ? 'text-[#7da876]' : 'text-[#e8a090]'}`}>
+              {linkMessage.text}
+            </p>
+          )}
+    </>
+  );
+
   return (
     <div className="min-h-screen bg-[#fdf8f0] text-[#2d2418] font-sans pb-12" style={{ fontFamily: "'Nunito', sans-serif" }}>
 
@@ -155,39 +190,15 @@ export default function CaregiverDashboard() {
         </div>
       </nav>
 
-      <div className="max-w-[1180px] mx-auto px-7 mt-10">
-
-        {/* ─── LINK NEW PATIENT SECTION ─── */}
-        <div className="bg-white rounded-[18px] p-6 border-[1.5px] border-[#f5ede0] shadow-[0_2px_16px_rgba(90,60,30,0.08)] mb-8">
-          <h2 className="text-[22px] text-[#5c4535] mb-4" style={{ fontFamily: "'Lora', serif" }}>
-            Link a Family Member
-          </h2>
-          <form onSubmit={handleLinkPatient} className="flex gap-3 items-center flex-wrap md:flex-nowrap">
-            <input
-              type="text"
-              placeholder="Enter patient's registered phone number (e.g. 9876543210)"
-              value={linkPhone}
-              onChange={(e) => setLinkPhone(e.target.value)}
-              className="flex-1 px-4 py-[13px] bg-white border-[1.5px] border-[#e8dcc8] rounded-xl outline-none focus:border-[#5c4535] font-sans transition-colors w-full"
-              required
-            />
-            <button type="submit" className="bg-[#5c4535] text-white px-6 py-[13px] rounded-xl font-bold hover:bg-[#4a3628] transition-colors border-[1.5px] border-[#5c4535] w-full md:w-auto whitespace-nowrap">
-              Link Patient
-            </button>
-          </form>
-          {linkMessage && (
-            <p className={`text-sm mt-3 font-bold ${linkMessage.type === 'success' ? 'text-[#7da876]' : 'text-[#e8a090]'}`}>
-              {linkMessage.text}
-            </p>
-          )}
-        </div>
+      <div className="max-w-[1180px] mx-auto px-4 md:px-7 mt-6 md:mt-10">
 
         {patients.length === 0 ? (
           /* ─── EMPTY STATE IF NO PATIENTS ARE LINKED ─── */
           <div className="text-center py-16 bg-white rounded-[24px] border-2 border-dashed border-[#e8dcc8]">
             <div className="text-4xl mb-4">🩺</div>
             <h3 className="text-xl font-bold text-[#5c4535] mb-2" style={{ fontFamily: "'Lora', serif" }}>No Patients Found</h3>
-            <p className="text-[#8a7560] font-medium">Enter your family member's registered phone number above to start monitoring their medications.</p>
+            <p className="text-[#8a7560] font-medium mb-6">Enter your family member's registered phone number to send a link request.</p>
+            <div className="max-w-xl mx-auto text-left">{linkForm}</div>
           </div>
         ) : (
           <>
@@ -211,46 +222,64 @@ export default function CaregiverDashboard() {
               </div>
             )}
 
-            {/* Notification Banner for Pending Items (#B4) */}
-            {(pendingApprovalsCount > 0 || pendingQuestionsCount > 0) && (
-              <div className="mb-6 p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-900 font-bold flex items-center justify-between shadow-sm">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl animate-bounce">🔔</span>
-                  <div>
-                    <div className="text-sm">Action Required by Caregiver</div>
-                    <div className="text-xs font-normal text-amber-800">
-                      {pendingApprovalsCount > 0 && `${pendingApprovalsCount} change proposal(s) waiting for approval. `}
-                      {pendingQuestionsCount > 0 && `${pendingQuestionsCount} agent question(s) need your answer.`}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Approvals, Questions, Activity, Journal, and Memory Panels */}
             {selectedPatientId && (
               <>
-                <ApprovalsPanel patientId={selectedPatientId} onUpdate={setPendingApprovalsCount} />
-                <PrescriptionReviewPanel patientId={selectedPatientId} />
-                <QuestionsPanel patientId={selectedPatientId} onUpdate={setPendingQuestionsCount} />
-                <ActivityPanel patientId={selectedPatientId} />
-                <JournalPanel patientId={selectedPatientId} />
-                <LifeNotesEditor patientId={selectedPatientId} />
-                <RoutineProfileEditor patientId={selectedPatientId} />
-                <WeeklyReviewPanel patientId={selectedPatientId} />
-                <CaregiverCopilotPanel patientId={selectedPatientId} />
-                <CallinSimulator patientId={selectedPatientId} />
+                <AttentionStrip patientId={selectedPatientId} onOpen={setTab} onCounts={setAttention} />
+                <Tabs
+                  active={tab}
+                  onChange={setTab}
+                  tabs={[
+                    { id: 'today', label: 'Today' },
+                    { id: 'approvals', label: 'Approvals', count: attention ? attention.pendingApprovals + attention.pendingQuestions : 0 },
+                    { id: 'activity', label: 'Agent activity' },
+                    { id: 'insights', label: 'Insights' },
+                    { id: 'copilot', label: 'Copilot' },
+                    { id: 'setup', label: 'Setup' },
+                  ]}
+                />
+                {tab === 'approvals' && (
+                  <div className="space-y-6">
+                    <ApprovalsPanel patientId={selectedPatientId} onUpdate={setPendingApprovalsCount} />
+                    <PrescriptionReviewPanel patientId={selectedPatientId} />
+                    <QuestionsPanel patientId={selectedPatientId} onUpdate={setPendingQuestionsCount} />
+                  </div>
+                )}
+                {tab === 'activity' && (
+                  <div className="space-y-6">
+                    <ActivityPanel patientId={selectedPatientId} />
+                    <CallinSimulator patientId={selectedPatientId} />
+                  </div>
+                )}
+                {tab === 'insights' && (
+                  <div className="space-y-6">
+                    <WeeklyReviewPanel patientId={selectedPatientId} />
+                    <FollowUpsPanel patientId={selectedPatientId} />
+                  </div>
+                )}
+                {tab === 'copilot' && <CaregiverCopilotPanel patientId={selectedPatientId} />}
+                {tab === 'setup' && (
+                  <div className="space-y-6">
+                    <CareSettings patientId={selectedPatientId} />
+                    <RoutineProfileEditor patientId={selectedPatientId} />
+                    <LifeNotesEditor patientId={selectedPatientId} />
+                    <Card>
+                      <SectionTitle title="Link another family member" subtitle="Send a link request to another patient's registered phone number." />
+                      {linkForm}
+                    </Card>
+                  </div>
+                )}
               </>
             )}
 
             {/* ─── MAIN CALENDAR DASHBOARD ─── */}
-            {selectedPatient && (
-              <div className="bg-white rounded-[24px] p-8 border-[1.5px] border-[#e8dcc8] shadow-[0_2px_16px_rgba(90,60,30,0.08)]">
+            {selectedPatient && tab === 'today' && (
+              <div className="space-y-6">
+              <div className="bg-white rounded-[24px] p-5 md:p-8 border-[1.5px] border-[#e8dcc8] shadow-[0_2px_16px_rgba(90,60,30,0.08)]">
 
                 <div className="flex justify-between items-start mb-6">
                   <div>
                     <h2 className="text-[28px] text-[#2d2418] font-bold leading-none" style={{ fontFamily: "'Lora', serif" }}>
-                      Weekly Clinical Calendar
+                      Doses this week
                     </h2>
                     <p className="text-[13px] text-[#8a7560] mt-2 font-bold tracking-wider uppercase">
                       Patient: <span className="text-[#5c4535]">{selectedPatient.name}</span> • 📞 {selectedPatient.phone}
@@ -353,6 +382,8 @@ export default function CaregiverDashboard() {
                   </table>
                 </div>
 
+              </div>
+              <JournalPanel patientId={selectedPatientId} />
               </div>
             )}
           </>

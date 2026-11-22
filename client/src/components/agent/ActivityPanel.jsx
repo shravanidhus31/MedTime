@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
+import { runTitle, stepText, stepKind } from './activityText';
 
 // live: refresh every 2 s and keep the newest run open (beside the voice call, for the demo).
 export default function ActivityPanel({ patientId, live = false }) {
@@ -65,24 +66,6 @@ export default function ActivityPanel({ patientId, live = false }) {
     }
   };
 
-  const getTriggerTitle = (trigger) => {
-    switch (trigger) {
-      case 'dose':
-      case 'dose_due': // Person A's scheduler hand-off (A2.6)
-        return 'Scheduled Dose Call';
-      case 'simulate': // Person A's text simulated call (A2.7)
-        return 'Simulated Dose Call';
-      case 'callin':
-        return 'Patient Inbound Call ("Did I take my pills?")';
-      case 'prescription':
-        return 'Prescription-to-Schedule Run';
-      case 'journal':
-        return 'Evening Care Journal Synthesis';
-      default:
-        return 'Agent Run';
-    }
-  };
-
   return (
     <div className="bg-white rounded-[20px] p-6 border-[1.5px] border-[#e8dcc8] shadow-[0_2px_16px_rgba(90,60,30,0.08)] mb-8">
       <div className="flex items-center justify-between mb-4">
@@ -90,10 +73,10 @@ export default function ActivityPanel({ patientId, live = false }) {
           <span className="text-2xl">🤖</span>
           <div>
             <h2 className="text-xl font-bold text-[#5c4535]" style={{ fontFamily: "'Lora', serif" }}>
-              Agent Activity & Decision Timeline
+              What the agent did
             </h2>
             <p className="text-xs text-[#8a7560]">
-              Audited step-by-step reasoning, perceptions, and tool execution history (Contract C2).
+              Every call and background task, step by step: what she said, what the agent checked, and what it decided.
             </p>
           </div>
         </div>
@@ -129,7 +112,7 @@ export default function ActivityPanel({ patientId, live = false }) {
               >
                 <div className="flex items-center gap-3">
                   <span className="text-base font-bold text-gray-900">
-                    {getTriggerTitle(run.trigger)}
+                    {runTitle(run)}
                   </span>
                   <span className="text-xs text-gray-400">
                     {dateStr} at {timeStr}
@@ -176,15 +159,19 @@ export default function ActivityPanel({ patientId, live = false }) {
 
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
-                            {getLabelBadge(step.label)}
-                            <span className="font-mono text-xs text-gray-500 font-semibold">
-                              {step.tool} ({step.ms}ms)
+                            {getLabelBadge(stepKind(step))}
+                            <span className="text-[10px] text-gray-400">
+                              {step.at ? new Date(step.at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Kolkata' }) : ''}
                             </span>
                           </div>
 
-                          <div className="text-xs text-gray-800 bg-gray-50/70 p-2.5 rounded-lg border border-gray-100">
-                            {step.summaryText || JSON.stringify(step.input || {})}
+                          <div className="text-sm text-[#2d2418] leading-snug">
+                            {stepText(step)}
                           </div>
+                          <details className="text-[10px] text-gray-400">
+                            <summary className="cursor-pointer select-none">Details</summary>
+                            <pre className="mt-1 whitespace-pre-wrap break-all bg-gray-50 p-2 rounded border border-gray-100">{`${step.tool} · ${step.ms || 0} ms`}<br />{JSON.stringify({ input: step.input, output: step.output }, null, 1).slice(0, 1500)}</pre>
+                          </details>
                         </div>
                       </div>
                     ))}
@@ -192,8 +179,8 @@ export default function ActivityPanel({ patientId, live = false }) {
 
                   {/* Run metadata footer */}
                   <div className="pt-2 text-[11px] text-gray-400 flex items-center justify-between border-t border-gray-100">
-                    <span>Model: {run.model || 'groq/gpt-oss-20b'}</span>
-                    <span>Prompt v{run.promptVersion || '1.0.0'}</span>
+                    <span>{run.model ? `Model: ${run.model}` : 'Rules only (no model)'}</span>
+                    <span>{run.promptVersion || ''}</span>
                   </div>
                 </div>
               )}

@@ -273,4 +273,48 @@ router.get('/patients/:patientId/history', verifyToken, async (req, res) => {
   }
 });
 
+// ─── GET /api/v1/caregiver/patients/:patientId/attention ───────────────────
+// What needs the caregiver now (the dashboard's "Needs attention" strip): today's red flags,
+// missed and unconfirmed doses, approvals and questions waiting, open follow-ups, and weekly-review
+// changes worth mentioning. Requires 'view' access.
+router.get('/patients/:patientId/attention', verifyToken, async (req, res) => {
+  try {
+    const mongoose = require('mongoose');
+    const { patientId } = req.params;
+    if (!mongoose.isValidObjectId(patientId)) return res.status(400).json({ message: 'Not a valid patient id' });
+    if (!(await canAccess(req.user.id, patientId, 'view'))) return res.status(403).json({ message: 'Forbidden: insufficient access.' });
+    const AgentRun = require('../models/AgentRun');
+    const ProposedChange = require('../models/ProposedChange');
+    const AgentQuestion = require('../models/AgentQuestion');
+    const FollowUp = require('../models/FollowUp');
+    const WeeklyReview = require('../models/WeeklyReview');
+    const now = new Date();
+    const ist = new Date(now.getTime() + 5.5 * 3600000);
+    const dayStart = new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate()) - 5.5 * 3600000);
+
+    const flagRuns = await AgentRun.find({ patient: patientId, startedAt: { $gte: dayStart }, 'steps.tool': 'safety_screen' }).select('steps startedAt').lean();
+    const redFlags = flagRuns.flatMap((r) => (r.steps || []).filter((s) => s.tool === 'safety_screen' && s.output && s.output.verdict === 'redflag')
+      .map((s) => ({ category: s.output.category, at: s.at || r.startedAt, runId: String(r._id), words: s.input && s.input.transcript ? String(s.input.transcript).slice(0, 120) : null })));
+    const doses = await Reminder.find({ patient: patientId, scheduledTime: { $gte: dayStart, $lte: now } }).populate('medicine', 'name').lean();
+    const missed = doses.filter((d) => d.status === 'missed');
+    const unconfirmed = doses.filter((d) => d.status === 'alerted' || (d.status === 'pending' && now - d.scheduledTime > 15 * 60000));
+    const review = await WeeklyReview.findOne({ patient: patientId }).sort({ createdAt: -1 }).lean();
+
+    res.json({
+      redFlags,
+      missed: missed.map((d) => ({ medicine: d.medicine && d.medicine.name, at: d.scheduledTime, caregiverAlerted: !!d.caregiverAlerted })),
+      unconfirmed: unconfirmed.map((d) => ({ medicine: d.medicine && d.medicine.name, at: d.scheduledTime })),
+      takenToday: doses.filter((d) => d.status === 'taken').length,
+      dueSoFarToday: doses.length,
+      pendingApprovals: await ProposedChange.countDocuments({ patient: patientId, status: { $in: ['pending', 'escalated'] } }),
+      pendingQuestions: await AgentQuestion.countDocuments({ patient: patientId, status: 'pending' }),
+      openFollowUps: await FollowUp.countDocuments({ patient: patientId, status: 'open' }),
+      weeklyFlags: review ? (review.summaryLines || []).filter((l) => l.kind === 'flag' || l.kind === 'sundowning').length : 0,
+      weeklyReviewAt: review ? review.createdAt : null,
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 module.exports = router;

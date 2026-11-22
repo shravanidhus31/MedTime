@@ -72,6 +72,14 @@ router.get('/runs', verifyToken, async (req, res) => {
       return res.status(403).json({ message: 'You do not have access to this patient.' });
     }
 
+    // A call whose page was closed (or a server restart mid-call) never tells us it ended: after
+    // 30 minutes without finishing, a call run is closed as "ended" (UI pass, 22 Nov: old browser
+    // calls showed "Running" forever).
+    await AgentRun.updateMany(
+      { patient, status: 'running', startedAt: { $lt: new Date(Date.now() - 30 * 60 * 1000) }, flow: { $in: ['dose', 'callin', 'chat'] } },
+      { $set: { status: 'finished', outcome: 'ended', fallbackReason: 'no_hangup_signal', endedAt: new Date() } },
+    ).catch(() => {});
+
     const filter = { patient };
     if (from || to) {
       filter.startedAt = {};

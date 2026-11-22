@@ -123,8 +123,12 @@ router.get('/', verifyToken, async (req, res) => {
     const medicinesWithStatus = await Promise.all(medicines.map(async (med) => {
       // The current dose: the latest one due in the last 24 hours, else the next one today.
       // Its escalation state is per dose (A1.3), so the badges come from the dose, not the medicine.
+      // UI pass (22 Nov): only TODAY's dose (IST) can be "due"; yesterday's unanswered dose used to
+      // show "Due Now" all day. A dose more than an hour late is "overdue" (not confirmed yet).
+      const ist = new Date(now.getTime() + 5.5 * 3600000);
+      const dayStart = new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate()) - 5.5 * 3600000);
       const currentReminder =
-        (await Reminder.findOne({ medicine: med._id, scheduledTime: { $lte: now, $gte: new Date(now - 24 * 3600 * 1000) } }).sort({ scheduledTime: -1 }).lean()) ||
+        (await Reminder.findOne({ medicine: med._id, scheduledTime: { $lte: now, $gte: dayStart } }).sort({ scheduledTime: -1 }).lean()) ||
         (await Reminder.findOne({ medicine: med._id, scheduledTime: { $gt: now, $lte: new Date(+now + 24 * 3600 * 1000) } }).sort({ scheduledTime: 1 }).lean());
 
       let displayStatus = 'upcoming';
@@ -132,7 +136,7 @@ router.get('/', verifyToken, async (req, res) => {
         if (currentReminder.status === 'taken') displayStatus = 'taken';
         else if (currentReminder.status === 'skipped') displayStatus = 'skipped';
         else if (currentReminder.status === 'missed') displayStatus = 'missed';
-        else displayStatus = 'due';
+        else displayStatus = now - currentReminder.scheduledTime > 60 * 60 * 1000 ? 'overdue' : 'due';
       }
 
       // A1.4: the dose to send to POST /doses/:id/status, and its own escalation state. These

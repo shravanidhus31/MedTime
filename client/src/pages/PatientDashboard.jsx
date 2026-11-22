@@ -322,8 +322,8 @@ export default function PatientDashboard() {
                     ? 'bg-[#e8f5e9] border-[#a5d6a7]'         // green — taken
                     : med.status === 'skipped'
                       ? 'bg-[#ffebee] border-[#ef9a9a]'          // light red — skipped
-                      : med.status === 'due'
-                        ? 'bg-[#fffef5] border-amber2'             // warm yellow — due
+                      : med.status === 'due' || med.status === 'overdue'
+                        ? 'bg-[#fffef5] border-amber2'             // warm yellow — due / not confirmed
                         : 'bg-white border-sand';                  // default — upcoming
 
               return (
@@ -379,14 +379,19 @@ export default function PatientDashboard() {
                     {!isMissed && !isSnoozed && med.status === 'due' && (
                       <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amberSoft text-[#7a5a10] animate-pulse">● Due Now</span>
                     )}
+                    {!isMissed && !isSnoozed && med.status === 'overdue' && (
+                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amberSoft text-[#7a5a10]">⏰ Not confirmed yet</span>
+                    )}
                     {!isMissed && !isSnoozed && med.status === 'upcoming' && (
-                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-500">⏳ Upcoming</span>
+                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-500">
+                        ⏳ Upcoming{med.doseTime ? ` · ${new Date(med.doseTime).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' })}` : ''}
+                      </span>
                     )}
                   </div>
 
                   <div className="flex gap-2 mt-2">
                     {/* Take / Skip Buttons (Only show if due!) */}
-                    {med.status === 'due' && (
+                    {(med.status === 'due' || med.status === 'overdue') && (
                       <>
                         <button
                           onClick={() => handleStatusUpdate(med, 'taken')}

@@ -63,7 +63,7 @@ export default function WeeklyReviewPanel({ patientId }) {
     <div className="bg-white rounded-2xl border border-[#e8dcc8] p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="text-lg font-bold text-[#2d2418]">📊 Weekly Cognitive & Behavioral Review</h2>
+          <h2 className="text-lg font-bold text-[#2d2418]">📊 Weekly review</h2>
           <p className="text-xs text-[#8a7560] mt-0.5">
             Changes in how her calls go, compared with her own first 4 weeks; harder evenings (sundowning)
           </p>
