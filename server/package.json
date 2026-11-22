@@ -22,7 +22,8 @@
     "followup:check": "node scripts/followup-check.js",
     "weekly:check": "node scripts/weekly-check.js",
     "chat:check": "node scripts/chat-check.js",
-    "copilot:check": "node scripts/copilot-check.js"
+    "copilot:check": "node scripts/copilot-check.js",
+    "steps:check": "node scripts/steps-check.js"
   },
   "keywords": [],
   "author": "",

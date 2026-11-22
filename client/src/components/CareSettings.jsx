@@ -64,6 +64,22 @@ export default function CareSettings({ patientId }) {
             <input
               type="checkbox"
               className="mt-1 h-5 w-5 accent-[#5c4535]"
+              checked={!!settings.guidedSteps}
+              disabled={saving}
+              onChange={(e) => save({ guidedSteps: e.target.checked })}
+            />
+            <span>
+              <span className="block text-sm font-semibold text-[#2d2418]">Step-by-step guidance</span>
+              <span className="block text-xs text-[#8a7560]">
+                Dose calls walk her through it one step at a time: where the medicines are, the pillbox, food if needed, water,
+                swallowing. A simpler hint if she gets stuck; if she is stuck twice, the family is called. Calls take a little longer.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-1 h-5 w-5 accent-[#5c4535]"
               checked={!!settings.weeklyChat}
               disabled={saving}
               onChange={(e) => save({ weeklyChat: e.target.checked })}

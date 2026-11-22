@@ -52,6 +52,9 @@ const ObservationSchema = new mongoose.Schema({
       'mtld', 'hdd', 'brunetW', 'cttr', // length-corrected vocabulary
       'nounShare', 'verbShare',         // English only
       'wordCount',                      // how much she said
+      // step-by-step guidance (Feature 4)
+      'stepCorrections',                // steps that needed a simpler hint
+      'stepSeconds',                    // average time to do a step
     ],
   },
   value: {

@@ -63,6 +63,27 @@ const LINES = {
   'followup.visit': 'Last time you said someone was coming to visit. Did they come?',
   'followup.glad': "I'm glad to hear that. Goodbye for now.",
   'followup.noted': "Thank you for telling me. I'll let {caregiver} know. Goodbye for now.",
+
+  // Step-by-step guidance (Feature 4, A6.1): a step, and a simpler version after a miss.
+  'steps.greet': "Hello {name}. It's time for your {slot} medicine, {medicine}. Let's do it together, one step at a time.",
+  'step.good': 'Good.',
+  'step.again': "That's all right. Let's try it this way.",
+  'step.go': "First, go to the {location}. Tell me when you're there.",
+  'step.go_simple': "Your medicines are kept at the {location}. Walk there slowly. Tell me when you're there.",
+  'step.box': "Open your pillbox: {box}. Tell me when it's open.",
+  'step.box_simple': "Find the part of your pillbox marked {box}, and open just that one. Tell me when it's open.",
+  'step.find': "Take out your {medicine}. It looks like this: {pill}. Tell me when it's in your hand.",
+  'step.find_simple': "Look for the {pill}. That one is your {medicine}. Tell me when you're holding it.",
+  'step.find_generic': "Take out one {medicine} tablet. Tell me when it's in your hand.",
+  'step.find_generic_simple': "Your {medicine} is with your other medicines. Take out just one tablet. Tell me when you have it.",
+  'step.food_with': "This one is taken with food. Have a little to eat with it. Tell me when you're ready.",
+  'step.food_after': "This one is taken after food. If you haven't eaten yet, have a little something first. Tell me when you're ready.",
+  'step.food_before': "This one is taken before food, so take it before you eat. Tell me when you're ready.",
+  'step.food_simple': "Have a small snack ready, like a biscuit. Tell me when you have it.",
+  'step.water': "Now pour a glass of water. Tell me when you have it.",
+  'step.water_simple': "Get a glass of water from the kitchen. Tell me when it's in your hand.",
+  'step.swallow': "Put the tablet in your mouth and swallow it with some water. Tell me when it's done.",
+  'step.swallow_simple': "Put the one tablet in your mouth, then drink some water. Tell me when it's done.",
 };
 
 // The same lines in Hindi (Patient.language 'hi'; core scenario 9: "replies in Hindi, same
@@ -104,6 +125,25 @@ const LINES_HI = {
   'followup.visit': 'पिछली बार आपने कहा था कि कोई आपसे मिलने आने वाला है। क्या वे आए?',
   'followup.glad': 'यह सुनकर अच्छा लगा। फिर बात करेंगे।',
   'followup.noted': 'बताने के लिए धन्यवाद। मैं {caregiver} को बता दूँगी। फिर बात करेंगे।',
+  'steps.greet': 'नमस्ते {name} जी। {slot} की दवा, {medicine}, लेने का समय हो गया है। चलिए, एक-एक कदम करके साथ में करते हैं।',
+  'step.good': 'बहुत अच्छा।',
+  'step.again': 'कोई बात नहीं। चलिए, ऐसे करके देखते हैं।',
+  'step.go': 'पहले {location} के पास जाइए। वहाँ पहुँचकर मुझे बताइए।',
+  'step.go_simple': 'आपकी दवाइयाँ {location} पर रखी हैं। धीरे-धीरे वहाँ जाइए। पहुँचकर मुझे बताइए।',
+  'step.box': 'अपना पिलबॉक्स खोलिए: {box}। खुल जाए तो मुझे बताइए।',
+  'step.box_simple': 'पिलबॉक्स में {box} वाला खाना ढूँढिए, और बस वही खोलिए। खुल जाए तो मुझे बताइए।',
+  'step.find': 'अपनी {medicine} निकालिए। वह ऐसी दिखती है: {pill}। हाथ में आ जाए तो मुझे बताइए।',
+  'step.find_simple': '{pill} ढूँढिए। वही आपकी {medicine} है। हाथ में ले लें तो मुझे बताइए।',
+  'step.find_generic': '{medicine} की एक गोली निकालिए। हाथ में आ जाए तो मुझे बताइए।',
+  'step.find_generic_simple': 'आपकी {medicine} बाकी दवाइयों के साथ रखी है। बस एक गोली निकालिए। मिल जाए तो मुझे बताइए।',
+  'step.food_with': 'यह दवा खाने के साथ ली जाती है। साथ में थोड़ा कुछ खा लीजिए। तैयार हों तो मुझे बताइए।',
+  'step.food_after': 'यह दवा खाने के बाद ली जाती है। अगर अभी तक नहीं खाया है, तो पहले थोड़ा कुछ खा लीजिए। तैयार हों तो मुझे बताइए।',
+  'step.food_before': 'यह दवा खाने से पहले ली जाती है, तो खाने से पहले ले लीजिए। तैयार हों तो मुझे बताइए।',
+  'step.food_simple': 'थोड़ा कुछ खाने को रख लीजिए, जैसे एक बिस्किट। हो जाए तो मुझे बताइए।',
+  'step.water': 'अब एक गिलास पानी ले लीजिए। हो जाए तो मुझे बताइए।',
+  'step.water_simple': 'रसोई से एक गिलास पानी ले आइए। हाथ में आ जाए तो मुझे बताइए।',
+  'step.swallow': 'गोली मुँह में रखिए और पानी के साथ निगल लीजिए। हो जाए तो मुझे बताइए।',
+  'step.swallow_simple': 'बस एक गोली मुँह में रखिए, फिर थोड़ा पानी पी लीजिए। हो जाए तो मुझे बताइए।',
 };
 const BANKS = { en: LINES, hi: LINES_HI };
 

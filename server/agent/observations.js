@@ -68,6 +68,13 @@ function computeCallMeasures({ patientLines = [], steps = [] } = {}) {
   // browser calls: time before answering, from the voice pipeline's timings (phones have none)
   const lat = steps.filter((s) => s.tool === 'patient_said' && s.input && s.input.timing && Number.isFinite(s.input.timing.latencyMs)).map((s) => s.input.timing.latencyMs);
   if (lat.length) add('latencyMs', lat.reduce((a, b) => a + b, 0) / lat.length);
+  // step-by-step guidance (Feature 4, A6.1): corrections needed, and time per step
+  const guided = steps.filter((s) => s.tool === 'guided_step' && s.output);
+  if (guided.length) {
+    add('stepCorrections', guided.filter((s) => s.output.outcome !== 'done').length);
+    const doneMs = guided.filter((s) => s.output.outcome === 'done').map((s) => s.output.ms).filter((x) => Number.isFinite(x));
+    if (doneMs.length) add('stepSeconds', doneMs.reduce((a, b) => a + b, 0) / doneMs.length / 1000);
+  }
   const conf = steps.filter((s) => s.tool === 'patient_said' && s.input && typeof s.input.asrConfidence === 'number').map((s) => s.input.asrConfidence);
   if (conf.length) add('asrConfidence', conf.reduce((a, b) => a + b, 0) / conf.length);
   return out.map((o) => ({ ...o, wordCount: totalWords }));

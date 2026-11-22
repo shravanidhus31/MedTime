@@ -34,6 +34,8 @@ const { classifyAnswer, CONCERN_WORDS } = require('./followups');
 const { planFollowUps } = require('../planner');
 const { logCallObservations } = require('../observations');
 const MAX_FOLLOWUP_ASKS = 3;
+const { buildSteps, classifyStepAnswer } = require('./steps');
+const STEP_NAMES = { go: 'going to where the medicines are kept', box: 'opening the pillbox', find: 'finding the tablet', food: 'the food', water: 'getting water', swallow: 'swallowing the tablet' };
 const FOLLOWUP_REASK_MS = 20 * 3600 * 1000; // not better: asked again on a later day
 
 // Person B's ask_caregiver tool (C6): a question on the caregiver's dashboard.
@@ -173,6 +175,8 @@ function caregiverWords(s, why) {
       return { message: `${name} couldn't confirm which tablet was taken for the ${when} ${medicine}, and was asked not to take any more. Please check.` };
     case 'refused':
       return { message: `${name} didn't want to take the ${when} ${medicine}. It is recorded as skipped.` };
+    case 'steps_stuck':
+      return { message: `${name} needed help with the ${when} ${medicine} and got stuck at ${s.stuckStep || 'one of the steps'}, even with a simpler hint. ${name} was asked not to take anything until you call. Please call to help.` };
     case 'tried_again':
       return { message: `${name} was about to take the ${when} ${medicine} again, but it is already recorded as taken. ${name} was asked not to take another one. Please check.` };
     default:
@@ -238,6 +242,45 @@ async function answerFollowUp(session, said) {
   return say(session, [answer === 'better' ? 'followup.glad' : 'followup.noted'], 'hangup');
 }
 
+// ── step-by-step guidance (Feature 4, A6.1) ─────────────────────────────────
+
+async function guideStep(session, said) {
+  const s = session.state;
+  const step = s.steps[s.stepIndex];
+  let kind = classifyStepAnswer(said);
+  if (kind === null && said) {
+    const label = await understand(session, said);
+    if (['taken', 'yes', 'taking_now'].includes(label.intent)) kind = 'done';
+    else if (['cant_find', 'unsure', 'unclear', 'no'].includes(label.intent)) kind = 'trouble';
+    else if (label.intent === 'question') return say(session, ['dose.redirect', step.line], 'listen'); // the same step again
+    else return null; // already took / later / refuse: the dose rules decide
+  }
+  const ms = Date.now() - (s.stepSaidAt || Date.now());
+  if (kind === 'done') {
+    await log(session, { tool: 'guided_step', input: { step: step.id, text: said }, output: { ok: true, outcome: 'done', corrections: s.stepFails, ms }, ms, at: new Date(), label: 'agent_noticed', summaryText: `Step done: ${STEP_NAMES[step.id]}${s.stepFails ? ' (after a simpler hint)' : ''}.` });
+    s.stepIndex += 1;
+    s.stepFails = 0;
+    s.stepSaidAt = Date.now();
+    if (s.stepIndex < s.steps.length) return say(session, ['step.good', s.steps[s.stepIndex].line], 'listen');
+    s.policy = { ...s.policy, phase: 'check' }; // all steps done: the usual check question
+    return say(session, ['dose.check_question'], 'listen');
+  }
+  // trouble: a simpler version once, then the caregiver
+  s.stepFails += 1;
+  const handover = s.stepFails >= 2 || session.maxTurns - session.turns <= 0;
+  await log(session, { tool: 'guided_step', input: { step: step.id, text: said }, output: { ok: true, outcome: handover ? 'handover' : 'corrected', corrections: s.stepFails, ms }, ms, at: new Date(), label: 'agent_noticed', summaryText: handover ? `Stuck at ${STEP_NAMES[step.id]}: handing over to the family.` : `Needed help with ${STEP_NAMES[step.id]}: a simpler hint.` });
+  s.stepSaidAt = Date.now();
+  if (handover) {
+    s.stuckStep = STEP_NAMES[step.id];
+    const informed = await runDecisionTools(session, [{ name: 'notify_caregiver', input: { reason: 'handover', why: 'steps_stuck' } }]);
+    if (informed) await noteCaregiverInformed(s.reminderId);
+    s.settled = true;
+    s.ending = { outcome: 'done', fallbackReason: 'steps_handover' };
+    return say(session, ['dose.handover'], 'hangup');
+  }
+  return say(session, ['step.again', step.simpler], 'listen');
+}
+
 // ── the flow ────────────────────────────────────────────────────────────────
 
 const doseFlow = {
@@ -249,6 +292,13 @@ const doseFlow = {
       s.ending = { outcome: 'done' };
       s.settled = true;
       return say(session, ['dose.already_done'], 'hangup');
+    }
+    // Step-by-step guidance (Feature 4): the greeting leads into the first step
+    if (s.guided && s.steps.length) {
+      s.policy = { ...s.policy, phase: 'steps' };
+      s.stepSaidAt = Date.now();
+      await log(session, { tool: 'plan_steps', input: {}, output: { ok: true, steps: s.steps.map((x) => x.id) }, ms: 0, at: new Date(), label: 'agent_noticed', summaryText: `Guiding step by step: ${s.steps.map((x) => STEP_NAMES[x.id]).join(', ')}.` });
+      return say(session, ['steps.greet', s.steps[0].line], 'listen');
     }
     return say(session, [policy.greetLine(s.attempt)], 'listen');
   },
@@ -262,6 +312,13 @@ const doseFlow = {
     // Her answer to the follow-up question (A4.3): recorded, never advised on, then goodbye.
     if (s.policy.phase === 'followup') return answerFollowUp(session, said);
     s.planLines.push(said);
+
+    // Step-by-step guidance (Feature 4): done -> praise and the next step; trouble -> a simpler
+    // version, and after two misses on one step the caregiver; anything else -> the dose rules.
+    if (s.policy.phase === 'steps') {
+      const handled = await guideStep(session, said, input);
+      if (handled) return handled;
+    }
 
     // Keypad: 1 = taken (the check question still follows), 2 = later.
     let label;
@@ -393,6 +450,13 @@ async function loadDoseState(reminderId) {
     slots: buildSlots({ med, patient, caregiver, scheduledTime: reminder.scheduledTime }),
     expected: { medicine: med.name, pill: med.pillDescription || '' },
     info: { hasLocation: !!med.locationHint, hasPillbox: !!med.pillboxSlot, hasPill: !!med.pillDescription },
+    // Step-by-step guidance (Feature 4): on per patient (Patient.guidedSteps)
+    guided: !!patient.guidedSteps,
+    steps: buildSteps({ hasLocation: !!med.locationHint, hasPillbox: !!med.pillboxSlot, hasPill: !!med.pillDescription, food: med.mealTiming }),
+    stepIndex: 0,
+    stepFails: 0,
+    stepSaidAt: null,
+    stuckStep: null,
     policy: policy.newState(),
     promptVersion,
     transcript: [],

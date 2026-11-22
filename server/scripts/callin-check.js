@@ -73,7 +73,10 @@ const spoken = (actions) => (actions || []).filter((a) => a.text).map((a) => a.t
     const losDose = await dose(los, new Date(Math.min(+now + 5 * 3600000, +istToday(23, 50))));
     const tel = await mkMed('Telmisartan'); // no dose today
     await dose(ator, istToday(0, 5), { status: 'taken', confirmedBy: 'app', confirmedAt: istToday(0, 6) }); // just after midnight
-    await dose(ator, istToday(21), {}); // 9:00 PM
+    // the evening dose, not yet due when the check runs (at 9 pm a 9:00 PM dose would be due now)
+    const istHourNow = new Date(now.getTime() + 5.5 * 3600000).getUTCHours();
+    const eveningAt = istHourNow < 20 ? [21, 0, /0?9:00 ?pm/i, '9:00 PM'] : [23, 30, /11:30 ?pm/i, '11:30 PM'];
+    await dose(ator, istToday(eveningAt[0], eveningAt[1]), {});
 
     const app = express();
     app.use(express.json());
@@ -124,7 +127,7 @@ const spoken = (actions) => (actions || []).filter((a) => a.text).map((a) => a.t
 
     // 5. the part of the day she asks about
     r = await say(c.callId, 'Did I take my evening Atorvastatin?');
-    check('"evening" picks the evening dose (9:00 PM), not the one just after midnight', /0?9:00 ?pm/i.test(spoken(r.actions)) && !/12:0/.test(spoken(r.actions)), spoken(r.actions));
+    check(`"evening" picks the evening dose (${eveningAt[3]}), not the one just after midnight`, eveningAt[2].test(spoken(r.actions)) && !/12:0/.test(spoken(r.actions)), spoken(r.actions));
 
     // 6. not covered: exactly one follow-up, then the caregiver; no invented answer
     c = await start();
