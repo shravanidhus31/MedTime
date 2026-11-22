@@ -7,8 +7,8 @@
 // What happens:
 //   1. an AgentRun is started (trigger 'dose_due') for the due Reminder
 //   2. check_double_dose runs: already taken (e.g. confirmed in the app) → no call
-//   3. otherwise placeCall() runs: the scheduler's own call. Until the phone adapter (A3.5) and the
-//      dose flow (A4.1) exist, that is today's keypad call; they plug in here later.
+//   3. otherwise placeCall() runs: the scheduler's own call, which runs the speech agent on the
+//      phone (A3.5, routes/voiceAgentRoutes.js); the keypad menu stays as its fallback.
 // The decision is a fixed rule, so it runs as code, not through the LLM: the model would add
 // nothing yet and would cost a request per dose. The LLM takes over when the conversation starts.
 //
@@ -18,6 +18,9 @@ const Reminder = require('../models/Reminder');
 const { getTool } = require('./tools');
 const { startRun, addStep, finishRun } = require('./runs');
 
+// The call the scheduler places for dementia-mode patients: the speech agent (A3.5), unless
+// VOICE_AGENT_CALLS=off puts it back on the keypad menu.
+const CHANNEL = () => (String(process.env.VOICE_AGENT_CALLS || 'on').toLowerCase() === 'off' ? 'keypad' : 'phone_agent');
 const LOOKBACK_MS = 15 * 60 * 1000; // a due reminder scheduled up to 15 min ago
 const LOOKAHEAD_MS = 60 * 1000;
 
@@ -61,12 +64,12 @@ async function handleDoseDue({ medicine, patient, reminder: givenReminder, attem
     const { output, at, ms } = await timed(async () => {
       try {
         const ok = await placeCall();
-        return ok === false ? { ok: false, error: 'call not placed' } : { ok: true, data: { channel: 'keypad', attempt } };
+        return ok === false ? { ok: false, error: 'call not placed' } : { ok: true, data: { channel: CHANNEL(), attempt } };
       } catch (err) {
         return { ok: false, error: err.message };
       }
     });
-    await log({ tool: 'place_call', input: { channel: 'keypad', attempt }, output, ms, at, approvalLevel: 0 });
+    await log({ tool: 'place_call', input: { channel: CHANNEL(), attempt }, output, ms, at, approvalLevel: 0 });
     return { called: output.ok, reason, runId: runId ? String(runId) : null };
   };
 
@@ -95,7 +98,7 @@ async function handleDoseDue({ medicine, patient, reminder: givenReminder, attem
 
     const r = await call(check.output.ok ? 'not_taken' : 'check_failed');
     await finish({
-      text: r.called ? `${medicine.name} not taken yet. Called the patient (keypad menu).` : `${medicine.name} not taken yet. The call could not be placed.`,
+      text: r.called ? `${medicine.name} not taken yet. Called the patient (${CHANNEL() === 'keypad' ? 'keypad menu' : 'speech agent'}).` : `${medicine.name} not taken yet. The call could not be placed.`,
       outcome: r.called ? 'done' : 'fallback',
       fallbackReason: r.called ? undefined : 'call_failed',
     });

@@ -40,7 +40,8 @@ router.post('/incoming', verifyTwilioSignature, async (req, res) => {
 
   try {
     // Look up registered patient by phone
-    const user = await User.findOne({ phone: normalizedPhone }).lean();
+    // numbers are stored with or without +91
+    const user = await User.findOne({ phone: { $in: [normalizedPhone, `+91${normalizedPhone}`, `91${normalizedPhone}`] }, role: 'patient' }).lean();
     if (!user || user.role !== 'patient') {
       // Not a registered patient
       return res.type('text/xml').send(`<?xml version="1.0" encoding="UTF-8"?>
@@ -59,27 +60,16 @@ router.post('/incoming', verifyTwilioSignature, async (req, res) => {
 </Response>`);
     }
 
-    // Start an AgentRun record for this call
-    const agentRun = await AgentRun.create({
-      trigger: 'callin',
-      patient: patient._id,
-      flow: 'callin',
-      status: 'running',
-      model: 'callin_flow',
-      steps: [{
-        step: 'call_received',
-        summary: `Incoming call from registered patient ${user.name} (${normalizedPhone})`,
-      }],
-    });
-
-    // Start the call-in flow with Twilio Gather
-    return res.type('text/xml').send(`<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Gather input="speech" action="/api/v1/voice/twilio-turn?runId=${agentRun._id}&amp;patientId=${patient._id}" speechTimeout="3" language="en-IN">
-    <Say voice="woman" language="en-IN">Hello! This is MedTime. How can I help you today?</Say>
-  </Gather>
-  <Say voice="woman" language="en-IN">I didn't hear anything. Please call back when you're ready. Goodbye!</Say>
-</Response>`);
+    // The call-in runs on the agent runtime (A3.5 + fix 4), the same flow as the browser call:
+    // dose questions from the log, a due dose handed to the dose flow in this call, one follow-up,
+    // red flags. Before, this path used its own run and a fixed Gather loop.
+    const { initAgent } = require('../agent');
+    initAgent();
+    const { startCallinCall } = require('../agent/flows/callin');
+    const { openingTwiml } = require('./voiceAgentRoutes');
+    const call = await startCallinCall({ patientId: patient._id, trigger: 'callin', channel: 'phone' });
+    console.log(`📞 [VoiceIncoming] Call-in from ${user.name} (run ${call.runId}, CallSid ${req.body.CallSid || '-'}).`);
+    return res.type('text/xml').send(await openingTwiml({ sessionId: call.sessionId, actions: call.actions, callSid: req.body.CallSid }));
   } catch (err) {
     console.error('[VoiceIncoming] Error handling incoming call:', err.message);
     return res.type('text/xml').send(`<?xml version="1.0" encoding="UTF-8"?>

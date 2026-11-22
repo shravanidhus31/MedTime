@@ -98,15 +98,21 @@ const sendCaregiverSMS = async (toPhone, messageBody) => {
 // Twilio fetches the call's TwiML from our server: trial accounts reject the
 // inline `twiml` parameter but accept a `url` pointing at our own server.
 // ─────────────────────────────────────────────────────────────────────────────
-const makePatientCall = async (toPhone, medName, medicineId, reminderId) => {
+// { agent: true } (A3.5): the call runs the dose agent by speech (routes/voiceAgentRoutes.js)
+// instead of the keypad menu, and Twilio reports the end of the call so the run is closed.
+// VOICE_AGENT_CALLS=off in .env puts every call back on the keypad menu.
+const agentCallsOn = () => String(process.env.VOICE_AGENT_CALLS || 'on').toLowerCase() !== 'off';
+
+const makePatientCall = async (toPhone, medName, medicineId, reminderId, { agent = false } = {}) => {
   const formattedTo = withCountryCode(toPhone);
+  const useAgent = agent && !!reminderId && agentCallsOn();
   const query = new URLSearchParams({ medicineId: String(medicineId) });
   if (reminderId) query.set('reminderId', String(reminderId));
-  const path = `/api/v1/webhooks/voice/prompt?${query}`;
+  const path = useAgent ? `/api/v1/voice/agent/dose?reminderId=${encodeURIComponent(reminderId)}` : `/api/v1/webhooks/voice/prompt?${query}`;
   const client = getClient();
 
   if (!client) {
-    console.log(`[SIMULATION] Voice Call → ${formattedTo} for "${medName}" (medicineId: ${medicineId}, reminderId: ${reminderId || '-'})`);
+    console.log(`[SIMULATION] Voice Call → ${formattedTo} for "${medName}" (${useAgent ? 'speech agent' : 'keypad menu'}; medicineId: ${medicineId}, reminderId: ${reminderId || '-'})`);
     return true;
   }
 
@@ -115,6 +121,7 @@ const makePatientCall = async (toPhone, medName, medicineId, reminderId) => {
       url: callbackUrl(path),
       to: formattedTo,
       from: process.env.TWILIO_PHONE_NUMBER,
+      ...(useAgent ? { statusCallback: callbackUrl('/api/v1/voice/agent/status'), statusCallbackEvent: ['completed'], statusCallbackMethod: 'POST' } : {}),
     });
     console.log(`📞 Voice call initiated to ${formattedTo}. Call SID: ${call.sid}`);
     return call;

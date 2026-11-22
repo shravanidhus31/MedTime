@@ -96,13 +96,14 @@ async function ensureDueReminders(now) {
 // then call. If the call can't be placed the clock is disarmed again, so the
 // caregiver isn't alerted about a call that never reached the patient.
 // ─────────────────────────────────────────────────────────────────────────────
-async function callPatient(reminder, patientPhone, medName, now) {
+// agent: true for dementia-mode patients: the call runs the speech agent (A3.5).
+async function callPatient(reminder, patientPhone, medName, now, { agent = false } = {}) {
   await Reminder.updateOne(
     { _id: reminder._id },
     { $set: { caregiverAlertTime: new Date(now.getTime() + ESCALATE_AFTER_MS), lastCallAt: now, callError: null }, $inc: { attempts: 1 } },
   );
   try {
-    await makePatientCall(patientPhone, medName, String(reminder.medicine._id || reminder.medicine), String(reminder._id));
+    await makePatientCall(patientPhone, medName, String(reminder.medicine._id || reminder.medicine), String(reminder._id), { agent });
   } catch (err) {
     await Reminder.updateOne({ _id: reminder._id }, { $set: { caregiverAlertTime: null, callError: err.message } });
     throw err;
@@ -212,7 +213,7 @@ async function runTick(now = new Date()) {
           // MAX_CALL_ATTEMPTS calls in all, 10 minutes apart; the agent's tone gets firmer each time.
           if (patient.dementiaMode && (claimed.attempts || 0) < MAX_CALL_ATTEMPTS) {
             console.log(`   🔁 [A] NO ANSWER: calling ${patientName} again for ${doseLabel} (call ${(claimed.attempts || 0) + 1} of ${MAX_CALL_ATTEMPTS}).`);
-            const r = await handleDoseDue({ medicine, patient, reminder: claimed, attempt: 'retry', now, placeCall: () => callPatient(claimed, patientPhone, medName, now) });
+            const r = await handleDoseDue({ medicine, patient, reminder: claimed, attempt: 'retry', now, placeCall: () => callPatient(claimed, patientPhone, medName, now, { agent: true }) });
             console.log(`      🤖 Agent handover (retry): ${r.called ? 'called' : 'no call'} — ${r.reason} (run ${r.runId}).`);
             continue;
           }
@@ -238,7 +239,7 @@ async function runTick(now = new Date()) {
           if (!claimed) continue;
           console.log(`   ⏰ [B] SNOOZE OVER: calling ${patientName} again for ${doseLabel}.`);
           if (patient.dementiaMode) {
-            const r = await handleDoseDue({ medicine, patient, reminder, attempt: 'retry', now, placeCall: () => callPatient(reminder, patientPhone, medName, now) });
+            const r = await handleDoseDue({ medicine, patient, reminder, attempt: 'retry', now, placeCall: () => callPatient(reminder, patientPhone, medName, now, { agent: true }) });
             console.log(`      🤖 Agent handover (re-call): ${r.called ? 'called' : 'no call'} — ${r.reason} (run ${r.runId}).`);
           } else {
             await callPatient(reminder, patientPhone, medName, now);
@@ -250,7 +251,7 @@ async function runTick(now = new Date()) {
         // ── [C] FIRST CALL ──────────────────────────────────────────────────
         console.log(`   🔔 [C] FIRST CALL: calling ${patientName} for ${doseLabel}.`);
         if (patient.dementiaMode) {
-          const r = await handleDoseDue({ medicine, patient, reminder, attempt: 'initial', now, placeCall: () => callPatient(reminder, patientPhone, medName, now) });
+          const r = await handleDoseDue({ medicine, patient, reminder, attempt: 'initial', now, placeCall: () => callPatient(reminder, patientPhone, medName, now, { agent: true }) });
           // "already taken" (confirmed in the app since this tick started) means no call;
           // the dose is no longer 'pending', so it isn't picked up again.
           console.log(`      🤖 Agent handover: ${r.called ? 'called' : 'no call'} — ${r.reason} (run ${r.runId}).`);

@@ -55,6 +55,7 @@ app.use('/api/v1/doses', require('./routes/doseRoutes')); // A1.4 taken/skipped 
 app.use('/api/v1/proposals', require('./routes/proposalRoutes')); // B4 approvals (Person B)
 app.use('/api/v1/journal', require('./routes/journalRoutes')); // B8 daily care journal (Person B)
 app.use('/api/v1/life-notes', require('./routes/lifeNoteRoutes')); // B9 life notes (Person B)
+app.use('/api/v1/voice/agent', require('./routes/voiceAgentRoutes')); // A3.5 Twilio phone adapter (Person A)
 app.use('/api/v1/voice', require('./routes/voiceIncoming')); // B11 call-in agent (Person B)
 app.use('/api/v1/weekly-review', require('./routes/weeklyReviewRoutes')); // B14 weekly review (Person B)
 app.use('/api/v1/copilot', require('./routes/copilotRoutes')); // B15 caregiver copilot (Person B)

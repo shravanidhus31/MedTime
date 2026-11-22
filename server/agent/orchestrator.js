@@ -140,6 +140,17 @@ function endSession(sessionId) {
   sessions.delete(sessionId);
 }
 
+// The caller hung up (a phone status callback, or the browser call closed): run the flow's onEnd so
+// the AgentRun is closed rather than left "running", then forget the session.
+async function closeSession(sessionId) {
+  const session = sessions.get(sessionId);
+  if (!session) return false;
+  session.ended = true;
+  await callOnEnd(session);
+  sessions.delete(sessionId);
+  return true;
+}
+
 // ── turns ───────────────────────────────────────────────────────────────────
 
 class TurnError extends Error {
@@ -312,6 +323,7 @@ module.exports = {
   handleTurn,
   getSession,
   endSession,
+  closeSession,
   setEmergencyHandler,
   isValidActions,
   TurnError,
