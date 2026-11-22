@@ -30,20 +30,29 @@ try {
  * @param {string} text - Cleaned utterance
  * @returns {{ category: string, responseLineId: string } | null}
  */
+// Text made comparable: lower case, one kind of apostrophe, single spaces.
+const norm = (t) => String(t || '').toLowerCase().replace(/[‘’ʼ]/g, "'").replace(/\s+/g, ' ').trim();
+const escapeRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// A phrase matches only as whole words: "fall" is not found inside "fallout", and Devanagari vowel
+// signs count as part of a word.
+const WORD = '[\\p{L}\\p{M}\\p{N}]';
+const phraseRe = (phrase) => new RegExp(`(^|[^\\p{L}\\p{M}\\p{N}])${escapeRe(norm(phrase))}(?!${WORD})`, 'u');
+
 function checkKeywords(text) {
   if (!text) return null;
-  const normalized = text.toLowerCase().trim();
+  const normalized = norm(text);
 
   for (const [category, data] of Object.entries(redFlags)) {
     const { keywords, responseLineId } = data;
+    // Harmless phrases for this category ("fell asleep", "slipped my mind") are taken out first, so
+    // they can't trigger it; a real red flag elsewhere in the sentence still does.
+    let t = normalized;
     for (const lang of ['en', 'hi', 'mr']) {
-      const list = keywords[lang] || [];
-      for (const phrase of list) {
-        const pNorm = phrase.toLowerCase().trim();
-        // Word boundary / substring match
-        if (normalized.includes(pNorm)) {
-          return { category, responseLineId };
-        }
+      for (const harmless of (data.benign && data.benign[lang]) || []) t = t.replace(phraseRe(harmless), '$1 ');
+    }
+    for (const lang of ['en', 'hi', 'mr']) {
+      for (const phrase of keywords[lang] || []) {
+        if (phraseRe(phrase).test(t)) return { category, responseLineId };
       }
     }
   }

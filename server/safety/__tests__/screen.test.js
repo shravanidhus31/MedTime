@@ -61,8 +61,10 @@ async function runTests() {
     { text: "My arm won't move when I try to lift it", expected: 'sudden_confusion' },
     { text: "I cannot move my leg at all", expected: 'sudden_confusion' },
     { text: "Everything is spinning and I cannot see", expected: 'sudden_confusion' },
-    { text: "Who are you and what is this place", expected: 'sudden_confusion' },
-    { text: "Where am I, this is not my room", expected: 'sudden_confusion' },
+    // For a dementia patient these are everyday questions, not an emergency (review, 22 Nov):
+    // only stroke signs count as sudden confusion.
+    { text: "Who are you and what is this place", expected: null },
+    { text: "Where am I, this is not my room", expected: null },
     { text: "My face feels numb and drooping", expected: 'sudden_confusion' },
 
     // Financial Scam / Cognitive Decline Override (8-14)
@@ -118,6 +120,20 @@ async function runTests() {
 
     // Safe Everyday Remarks / Negative Controls (47-50) — Must be 'ok'!
     { text: "Good morning, I had tea and toast today", expected: null },
+    // Everyday sentences that the old substring matching raised as emergencies (review, 22 Nov)
+    { text: "I fell asleep after lunch", expected: null },
+    { text: "It slipped my mind", expected: null },
+    { text: "The pills are on the floor", expected: null },
+    { text: "My hair is falling out", expected: null },
+    { text: "Should I take another one?", expected: null },
+    { text: "I took my cough syrup for my cold", expected: null },
+    { text: "I cannot see the tablet", expected: null },
+    { text: "My son manages my bank account", expected: null },
+    { text: "din mein do baar dawai leni hai", expected: null },
+    // ...while real red flags in the same words still count
+    { text: "I fell asleep and then I fell in the bathroom", expected: 'fall' },
+    { text: "I took another one already", expected: 'extra_pills' },
+    { text: "My face is drooping on one side", expected: 'sudden_confusion' },
     { text: "My knee feels slightly stiff from yesterday's walk", expected: null },
     { text: "I took my morning white pill with water already", expected: null },
     { text: "Priya said she will visit this Saturday evening", expected: null },
