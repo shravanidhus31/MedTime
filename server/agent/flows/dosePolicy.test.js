@@ -225,3 +225,18 @@ test('rules: Hindi "where is my medicine" is cant_find; "found it" / "मिल 
   assert.equal(P.ruleLabel('Yes, I found it.', ex).intent, 'taking_now');
   assert.equal(P.ruleLabel('नहीं मिल रही', ex).intent, 'cant_find');
 });
+
+// Hindi phone test (22 Nov): "I took it" in Hindi was not recorded. Hindi speech recognition writes
+// the medicine name in Devanagari, and may write Hindi in English letters.
+test('pill match: the name in Devanagari (by sound), Hindi colours in English letters; short names excluded', () => {
+  const m = (said, medicine, pill = '') => P.matchesExpected(said, { medicine, pill });
+  assert.equal(m('एम्लोडिपिन ली', 'Amlodipine'), true);
+  assert.equal(m('क्रोसिन', 'Crocin'), true);
+  assert.equal(m('पैरासिटामोल', 'Paracetamol'), true);
+  assert.equal(m('डोनेपेज़िल', 'Donepezil'), true);
+  assert.equal(m('मैंने पानी पिया', 'Paracetamol'), false);
+  assert.equal(m('दिल में दर्द', 'dolo'), false, 'two sounds: never matched by sound');
+  assert.equal(m('chhoti safed wali', 'juju', 'small white'), true);
+  assert.equal(m('छोटी सफेद', 'juju', 'small white'), true);
+  assert.equal(m('peeli goli', 'juju', 'small white'), false);
+});

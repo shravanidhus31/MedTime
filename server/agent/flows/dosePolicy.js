@@ -25,13 +25,42 @@ const has = (t, words) => words.some((w) => t.includes(w));
 
 // Hindi words for how a pill looks, read as the English words the caregiver typed (core scenario 9).
 const HINDI_LOOKS = { 'सफ़ेद': 'white', 'सफेद': 'white', 'छोटी': 'small', 'छोटा': 'small', 'बड़ी': 'large', 'बड़ा': 'large', 'बडी': 'large', 'गोल': 'round', 'पीली': 'yellow', 'पीला': 'yellow', 'गुलाबी': 'pink', 'लाल': 'red', 'नीली': 'blue', 'नीला': 'blue', 'लंबी': 'oval', 'हरी': 'green', 'नारंगी': 'orange' };
-const fromHindi = (text) => String(text || '').replace(/[\u0900-\u0963\u0966-\u097F]+/g, (w) => HINDI_LOOKS[w] || w).replace(/[\u0964\u0965]/g, ' ');
+// The same words as Hindi speech recognition may write them in English letters ("chhoti safed").
+const HINGLISH_LOOKS = { safed: 'white', safaid: 'white', sufaid: 'white', chhoti: 'small', choti: 'small', chhota: 'small', chota: 'small', badi: 'large', bada: 'large', badee: 'large', gol: 'round', peeli: 'yellow', pili: 'yellow', peela: 'yellow', laal: 'red', lal: 'red', neeli: 'blue', nili: 'blue', neela: 'blue', gulabi: 'pink', hari: 'green', narangi: 'orange' };
+const fromHindi = (text) => String(text || '')
+  .replace(/[\u0900-\u0963\u0966-\u097F]+/g, (w) => HINDI_LOOKS[w] || w)
+  .replace(/[\u0964\u0965]/g, ' ')
+  .replace(/\b[a-z]+\b/gi, (w) => HINGLISH_LOOKS[w.toLowerCase()] || w);
+
+// The consonant sound-skeleton of a word, in Latin or Devanagari, so a medicine name written in
+// Devanagari by Hindi speech recognition matches the English name ("\u090F\u092E\u094D\u0932\u094B\u0921\u093F\u092A\u093F\u0928" = Amlodipine \u2192
+// "mldpn"; "\u0915\u094D\u0930\u094B\u0938\u093F\u0928" = Crocin \u2192 "krsn"). Vowels and h are dropped; similar sounds merge.
+const DEVA = {
+  '\u0915': 'k', '\u0916': 'k', '\u0917': 'g', '\u0918': 'g', '\u091A': 'c', '\u091B': 'c', '\u091C': 'j', '\u091D': 'j', '\u091F': 't', '\u0920': 't', '\u0921': 'd', '\u0922': 'd',
+  '\u0923': 'n', '\u0924': 't', '\u0925': 't', '\u0926': 'd', '\u0927': 'd', '\u0928': 'n', '\u092A': 'p', '\u092B': 'f', '\u092C': 'b', '\u092D': 'b', '\u092E': 'm', '\u092F': 'y',
+  '\u0930': 'r', '\u0932': 'l', '\u0935': 'v', '\u0936': 's', '\u0937': 's', '\u0938': 's', '\u0902': 'n', '\u0901': 'n',
+};
+function soundSkeleton(word) {
+  const w = String(word || '').toLowerCase();
+  let out;
+  if (/[\u0900-\u097F]/.test(w)) {
+    out = [...w.normalize('NFD')].map((ch) => DEVA[ch] || '').join('');
+  } else {
+    out = w.replace(/ph/g, 'f').replace(/ch/g, 'c').replace(/c(?=[eiy])/g, 's').replace(/c/g, 'k').replace(/q/g, 'k')
+      .replace(/x/g, 'ks').replace(/z/g, 'j').replace(/w/g, 'v').replace(/[^a-z]/g, '').replace(/[aeiouyh]/g, '');
+  }
+  return out.replace(/(.)\1+/g, '$1'); // "tt" \u2192 "t"
+}
 
 // Does the text name the expected medicine, or describe the pill? expected = { medicine, pill }
 function matchesExpected(text, expected = {}) {
   const t = ` ${fromHindi(text).toLowerCase()} `;
   const name = String(expected.medicine || '').toLowerCase().split(/\s+/)[0];
   if (name && name.length >= 3 && t.includes(name)) return true;
+  // The name as it sounds (Devanagari, or a misspelling). Three sounds at least: a two-sound name
+  // ("dolo" \u2192 "dl") could match an everyday word ("\u0926\u093F\u0932", heart).
+  const nameSkel = soundSkeleton(name);
+  if (nameSkel.length >= 3 && String(text || '').split(/[\s,.!?\u0964]+/).some((w) => soundSkeleton(w) === nameSkel)) return true;
   const describe = String(expected.pill || '').toLowerCase().split(/[\s,]+/).filter((w) => w.length >= 3 && !['the', 'and', 'one', 'pill', 'tablet'].includes(w));
   return describe.length > 0 && describe.some((w) => t.includes(` ${w} `) || t.includes(` ${w},`) || t.includes(` ${w}.`));
 }

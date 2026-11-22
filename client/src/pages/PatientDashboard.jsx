@@ -474,8 +474,8 @@ export default function PatientDashboard() {
 
       {/* --- ADD MEDICINE MODAL --- */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-[#2d2418]/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[24px] p-6 sm:p-8 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto overscroll-contain">
+        <div className="fixed inset-0 bg-[#2d2418]/60 backdrop-blur-sm z-50 overflow-y-auto p-4" style={{ overflowY: 'auto' }}>
+          <div className="bg-white rounded-[24px] p-6 sm:p-8 w-full max-w-lg shadow-2xl mx-auto my-4" style={{ maxHeight: 'calc(100vh - 2rem)', overflowY: 'auto' }}>
             <h2 className="font-serif text-2xl text-brown2 mb-6">Add New Medication</h2>
             {/* Change accept="image/*,application/pdf" to strictly images */}
             <input type="file" accept="image/png, image/jpeg" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
@@ -574,8 +574,8 @@ export default function PatientDashboard() {
 
       {/* --- EDIT MEDICINE MODAL --- */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 bg-[#2d2418]/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[24px] p-6 sm:p-8 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto overscroll-contain">
+        <div className="fixed inset-0 bg-[#2d2418]/60 backdrop-blur-sm z-50 overflow-y-auto p-4" style={{ overflowY: 'auto' }}>
+          <div className="bg-white rounded-[24px] p-6 sm:p-8 w-full max-w-lg shadow-2xl mx-auto my-4" style={{ maxHeight: 'calc(100vh - 2rem)', overflowY: 'auto' }}>
             <h2 className="font-serif text-2xl text-brown2 mb-6">Edit Medication</h2>
             <form onSubmit={handleEditSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
