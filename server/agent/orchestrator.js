@@ -150,9 +150,9 @@ async function handleTurn({ sessionId, flow, transcript, isFinal = true, asrConf
 
   // 1. emergencies first: keypad 9, or a red flag in what she said
   if (key === '9') return emergency(session, { verdict: 'redflag', category: 'help_key' }, text);
+  let verdict; // passed on to the flow, so it can handle 'unsafe' (e.g. a request to change a dose)
   if (text) {
     const started = Date.now();
-    let verdict;
     try {
       verdict = await screen(text, { patientId: session.patientId, flow: session.flow, isFinal });
     } catch (err) {
@@ -174,7 +174,7 @@ async function handleTurn({ sessionId, flow, transcript, isFinal = true, asrConf
 
   // 3. the flow
   const handler = flows.get(session.flow);
-  const input = { transcript: text, isFinal, asrConfidence, dtmf: key || undefined };
+  const input = { transcript: text, isFinal, asrConfidence, dtmf: key || undefined, safety: verdict };
   const work = runHandler(session, () => handler.turn(session, input));
   const actions = await withinBudget(work, session.turnBudgetMs);
   if (actions) return finishActions(session, actions);

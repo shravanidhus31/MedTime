@@ -273,6 +273,8 @@ Implement the PRD call flow and section 6.1 of the plan:
 - **Keypad fallback** on any agent failure.
 - **Turn budget:** the whole flow (greeting, steps, check question, praise, one follow-up) must fit in **8 turns** for phone mode (A3.5).
 
+**A4.1 as built (22 Nov):** the model only labels each turn (`agent/prompts/dose_label.md`: intent, pill mentioned, match, confidence); the rules are code (`agent/flows/dosePolicy.js`, unit-tested); every line is a fixed line with an id (`agent/flows/doseLines.js`, the seed of the A5.1 catalogue). If the model is unavailable, a rule-based labeller takes over. Retries: dementiaMode doses are called up to 3 times, 10 minutes apart, before the caregiver. Steps (Feature 4) are still the simple version; follow-ups (A4.3) come next.
+
 **A4.2 · Call tools** (`agent/tools/call.js`)
 - `place_call`, `play_clip`, `speak`/`listen`, and `log_observation` (fields per the PRD's Observation model: `metric, value, method, version, source, timeBlock, asrConfidence, wordCount`).
 
@@ -403,6 +405,7 @@ In order, top to bottom:
 - [ ] A1.4 #14 dose endpoint and dashboard update
 - [ ] A3.1–A3.4 voice pipeline, browser call screen, emergency reflex (Media Streams only after an upgrade)
 - [ ] A3.5 Twilio phone adapter (turn by turn, trial-compatible)
-- [ ] A4.1–A4.4 dose flow, call tools, Planner follow-ups, real recordings
+- [x] A4.1 dose flow (fixed lines, per-turn label, rules in code, retries)
+- [ ] A4.2–A4.4 call tools, Planner follow-ups, real recordings
 - [ ] A5.1–A5.5 phrase bank, consent, rendering, approval, player
 - [ ] A6.1–A6.4 step-by-step guidance, chat call, live tests, backup recording

@@ -65,4 +65,27 @@ async function markDose(reminderId, status, source) {
   return { ok: true, reminder: updated, changed: true };
 }
 
-module.exports = { markDose, STATUSES, SOURCES };
+// Snooze one open dose: call again in `minutes`, caregiver clock paused till then (same as keypad 2).
+// Returns true if the dose was still open and is now snoozed.
+async function snoozeDose(reminderId, minutes = 10, now = new Date()) {
+  if (!mongoose.isValidObjectId(reminderId)) return false;
+  const r = await Reminder.updateOne(
+    { _id: reminderId, status: { $in: ['pending', 'alerted'] } },
+    { $set: { snoozeUntil: new Date(now.getTime() + minutes * 60 * 1000), caregiverAlertTime: null } },
+  );
+  return r.modifiedCount > 0;
+}
+
+// The agent has already phoned the caregiver about this dose (unsure, hand-over, "took it but it
+// isn't recorded"): disarm its escalation clock so they don't also get a "missed dose" call.
+// The dose itself stays open: nothing is recorded as taken or missed.
+async function noteCaregiverInformed(reminderId, now = new Date()) {
+  if (!mongoose.isValidObjectId(reminderId)) return false;
+  const r = await Reminder.updateOne(
+    { _id: reminderId, status: { $in: ['pending', 'alerted'] } },
+    { $set: { caregiverAlertTime: null, snoozeUntil: null, caregiverNotified: true, caregiverNotifiedAt: now } },
+  );
+  return r.modifiedCount > 0;
+}
+
+module.exports = { markDose, snoozeDose, noteCaregiverInformed, STATUSES, SOURCES };

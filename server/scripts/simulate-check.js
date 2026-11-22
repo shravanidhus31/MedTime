@@ -24,6 +24,7 @@ const mongoose = require('mongoose');
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const CaregiverAccess = require('../models/CaregiverAccess');
+const AgentQuestion = require('../models/AgentQuestion');
 const User = require('../models/User');
 const Patient = require('../models/Patient');
 const Medicine = require('../models/Medicine');
@@ -66,6 +67,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const med = await Medicine.create({
       patient: patient._id, name: 'Amlodipine', dosage: '5mg', type: 'tablet', frequency: 'once',
       scheduledTimes: ['08:00'], mealTiming: 'after', startDate: new Date(), notificationType: 'call',
+      pillDescription: 'small white round', locationHint: 'on the kitchen table', // C10 (Person B)
     });
     made.medicines.push(med._id);
     const newDose = (status = 'pending') => Reminder.create({ medicine: med._id, patient: patient._id, scheduledTime: new Date(), status, ...(status === 'taken' ? { confirmedBy: 'app', confirmedAt: new Date() } : {}) });
@@ -86,9 +88,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const spoken = (actions) => actions.filter((a) => a.type === 'neutral' || a.type === 'play').map((a) => a.text || a.lineId).join(' ');
 
     // Plays a call: the patient's lines are used in order, the last one repeated if the agent asks more.
-    // Groq's free plan allows 8,000 input tokens a minute and one call uses ~7,000, so calls are
-    // spaced a minute apart. Set CHECK_PACE_MS=0 on a paid plan or with Claude.
-    const PACE_MS = Number(process.env.CHECK_PACE_MS ?? 62000);
+    // Groq's free plan allows 8,000 input tokens a minute. Since A4.1 the model only labels each
+    // turn (~500 tokens), so a short gap is enough. Set CHECK_PACE_MS=0 on a paid plan or with Claude.
+    const PACE_MS = Number(process.env.CHECK_PACE_MS ?? 15000);
     let calls = 0;
     async function playCall(label, reminder, lines) {
       if (calls++ > 0 && PACE_MS > 0) {
@@ -112,7 +114,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       console.log(`   → ${last.ended ? `call ended (${last.actions.map((a) => a.type).join(', ')})` : 'call still open'}`);
       await sleep(300);
       const { run } = await getRun(start.body.runId);
-      if (run) console.log(`   Activity: ${run.steps.map((s) => s.tool).join(' → ')}  [${run.outcome}${run.fallbackReason ? `/${run.fallbackReason}` : ''}${run.error && run.error.message ? ` (${run.error.message})` : ''}, ${run.llmCalls} model calls, ${run.usage.inputTokens} tokens in]`);
+      if (run) console.log(`   Activity: ${run.steps.map((s) => (s.tool === 'understand' && s.output ? `understand[${s.output.intent}/${s.output.source}${s.output.fallbackReason ? `: ${String(s.output.fallbackReason).slice(0, 80)}` : ''}]` : s.tool)).join(' → ')}  [${run.outcome}${run.fallbackReason ? `/${run.fallbackReason}` : ''}${run.error && run.error.message ? ` (${run.error.message})` : ''}, ${run.llmCalls} model calls, ${run.usage.inputTokens} tokens in]`);
       return { start: start.body, last, run, callId: start.body.callId };
     }
 
@@ -122,6 +124,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const r1 = await Reminder.findById(d1._id).lean();
     check('call 1: dose recorded as taken by the agent', r1.status === 'taken' && r1.confirmedBy === 'agent');
     check('call 1: agent ended the call', c1.last.ended && c1.last.actions.some((a) => a.type === 'hangup'));
+    // "I am taking it now" must not record the dose; it is recorded only after the check question.
+    const said1 = c1.run ? c1.run.steps.map((st) => (st.tool === 'agent_said' ? (st.input.lines || []).join('+') : st.tool)) : [];
+    const markAt = said1.indexOf('mark_dose');
+    const checkAt = said1.findIndex((x) => /dose\.check_question/.test(x));
+    check('call 1: "taking it now" not recorded; recorded only after the check question (A4.1)', checkAt > -1 && markAt > checkAt, said1.join(' → '));
+    check('call 1: every reply is a fixed line (play + lineId), never free model text',
+      [c1.start.actions, c1.last.actions].flat().filter((a) => a.type !== 'listen' && a.type !== 'hangup').every((a) => a.type === 'play' && /^dose\./.test(a.lineId)));
     check('call 1: run finished, shows the whole conversation (Phase 1 gate)',
       c1.run && c1.run.status === 'finished' && c1.run.outcome === 'done' && c1.run.steps.some((s) => s.tool === 'patient_said') &&
         c1.run.steps.some((s) => s.tool === 'agent_said') && c1.run.steps.some((s) => s.tool === 'mark_dose') && c1.run.trigger === 'simulate');
@@ -131,6 +140,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const c2 = await playCall('Call 2: already taken', d2, ['Should I take one now?']);
     const changed2 = c2.run && c2.run.steps.some((s) => s.tool === 'mark_dose' && s.output && s.output.data && s.output.data.changed);
     check('call 2: no second dose recorded, call ended', !changed2 && c2.last.ended && (await Reminder.findById(d2._id).lean()).confirmedBy === 'app');
+    check('call 2: told not to take another one', /don't take another one/.test(spoken(c2.start.actions)), spoken(c2.start.actions));
 
     // 3. "I already took it" but nothing recorded → don't take another, caregiver called, not recorded
     const d3 = await newDose();
@@ -139,6 +149,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const alerts3 = await CaregiverAlert.find({ patient: patient._id, reason: 'unsure_dose' }).lean();
     check('call 3: not recorded as taken (her word alone is not proof)', r3.status !== 'taken');
     check('call 3: caregiver asked to check', alerts3.length >= 1, alerts3[0] && alerts3[0].message);
+    const q3 = await AgentQuestion.find({ patient: patient._id }).lean();
+    check('call 3: told not to take another; question on the caregiver dashboard; no "missed" call later',
+      /don't take another one/i.test(spoken(c3.last.actions)) && q3.length === 1 && r3.caregiverNotified && !r3.caregiverAlertTime, q3[0] && q3[0].question);
 
     // 4. red flag mid-call → neutral emergency reply, caregiver called, agent skipped
     const d4 = await newDose();
@@ -152,7 +165,36 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     check('call 4: red flag handled before the agent, caregiver called', c4.last.emergency === 'fall' && red.length === 1 && c4.run.steps.some((s) => s.tool === 'safety_screen'),
       `emergency=${c4.last.emergency}, ${red.length} red-flag alert(s); flagged: ${flaggedSteps.join(' | ') || '(none)'}`);
 
-    // 5. access and input checks
+    // 5. can't find it → location hint → still can't → hand-over (A4.1)
+    const d5 = await newDose();
+    const c5 = await playCall("Call 5: can't find it", d5, ["I can't find my tablets.", 'I still cannot find them.']);
+    const r5 = await Reminder.findById(d5._id).lean();
+    const lines5 = c5.run ? c5.run.steps.filter((st) => st.tool === 'agent_said').flatMap((st) => st.input.lines || []) : [];
+    check("call 5: can't find → hint with where the pills are, then hand-over; not recorded",
+      lines5.includes('dose.hint_location') && lines5.includes('dose.handover') && r5.status !== 'taken' && c5.last.ended
+        && (await CaregiverAlert.countDocuments({ patient: patient._id, reason: 'handover' })) >= 1, lines5.join(' → '));
+
+    // 6. wrong pill at the check question → hint → wrong again → hand-over, not recorded (A4.1)
+    const d6 = await newDose();
+    const c6 = await playCall('Call 6: wrong pill', d6, ['Yes, I took it.', 'The big yellow one.', 'The big yellow one, I said.']);
+    const r6 = await Reminder.findById(d6._id).lean();
+    const lines6 = c6.run ? c6.run.steps.filter((st) => st.tool === 'agent_said').flatMap((st) => st.input.lines || []) : [];
+    check("call 6: wrong pill → hint, then 'don't take any more', caregiver called; not recorded",
+      lines6.includes('dose.check_hint') && lines6.includes('dose.handover_unsure') && r6.status !== 'taken', lines6.join(' → '));
+
+    // 7. "later" → snoozed, she is called again in 10 minutes (A4.1)
+    const d7 = await newDose();
+    const c7 = await playCall('Call 7: later', d7, ['Not now, I will take it after lunch.']);
+    const r7 = await Reminder.findById(d7._id).lean();
+    check('call 7: later → snoozed for a re-call, not recorded', c7.last.ended && !!r7.snoozeUntil && r7.status !== 'taken' && r7.status !== 'skipped');
+
+    // 8. refuses → recorded as skipped, family told (A4.1)
+    const d8 = await newDose();
+    const c8 = await playCall('Call 8: refuses', d8, ["I don't want to take it today."]);
+    const r8 = await Reminder.findById(d8._id).lean();
+    check('call 8: refuses → recorded as skipped, no pressure, family told', c8.last.ended && r8.status === 'skipped' && r8.confirmedBy === 'agent');
+
+    // 9. access and input checks
     check('stranger cannot start a call on this patient', (await post('/simulate/call', { reminderId: String(d1._id) }, stranger)).status === 404);
     check('stranger cannot speak into the call', (await post(`/simulate/call/${c4.callId}/say`, { text: 'hi' }, stranger)).status === 404);
     check('bad input is rejected', (await post('/simulate/call', { reminderId: 'nope' })).status === 400 && (await post(`/simulate/call/${c4.callId}/say`, {})).status === 400);
@@ -164,6 +206,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     if (server) server.close();
     await CaregiverAlert.deleteMany({ patient: { $in: made.patients } });
     await CaregiverAccess.deleteMany({ patient: { $in: made.patients } });
+    await AgentQuestion.deleteMany({ patient: { $in: made.patients } });
     await AgentRun.deleteMany({ patient: { $in: made.patients } });
     await Reminder.deleteMany({ patient: { $in: made.patients } });
     await Medicine.deleteMany({ _id: { $in: made.medicines } });
