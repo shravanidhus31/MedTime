@@ -64,6 +64,10 @@ export default function CaregiverCopilotPanel({ patientId }) {
         text: data.reply,
         citations: data.citations || [],
         proposedAction: data.proposedAction,
+        released: data.released !== false,
+        reviews: data.reviews || null,
+        source: data.source,
+        urgent: data.urgent,
       };
 
       setMessages(prev => [...prev, botMsg]);
@@ -158,7 +162,18 @@ export default function CaregiverCopilotPanel({ patientId }) {
                   {getModeBadge(m.mode)}
                 </div>
               )}
-              <div className="whitespace-pre-line">{m.text}</div>
+              <div className={`whitespace-pre-line ${m.urgent ? 'font-semibold text-[#7a2a1a]' : ''}`}>{m.text}</div>
+
+              {/* fix 9: how the answer was checked before it was shown */}
+              {m.sender === 'copilot' && m.reviews && (
+                <div className="mt-2 text-[10px] text-[#8a7560]">
+                  {m.reviews.safety && m.reviews.grounding
+                    ? `${m.released ? '✓ Checked before showing' : '✗ Not shown: failed the checks'} · safety risk ${m.reviews.safety.score}/5 · made-up facts risk ${m.reviews.grounding.score}/5`
+                    : m.reviews.note === 'basic answer (model unavailable)'
+                      ? 'Basic answer from the guidance library and her records (the assistant is busy right now).'
+                      : m.reviews.note === 'fixed safety reply' ? 'A fixed safety reply.' : ''}
+                </div>
+              )}
 
               {/* Citations */}
               {m.citations && m.citations.length > 0 && (
@@ -175,10 +190,8 @@ export default function CaregiverCopilotPanel({ patientId }) {
               {/* Proposed Action */}
               {m.proposedAction && (
                 <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-[11px]">
-                  <strong>Suggested Action:</strong> {m.proposedAction.description}
-                  <div className="mt-1">
-                    <span className="font-semibold text-[#5c4535]">Check your Approvals Panel to review schedule adjustments.</span>
-                  </div>
+                  <strong>For the doctor:</strong> {m.proposedAction.question || m.proposedAction.description}
+                  <div className="mt-1 text-[#5c4535]">Write this down to ask at her next visit.</div>
                 </div>
               )}
             </div>

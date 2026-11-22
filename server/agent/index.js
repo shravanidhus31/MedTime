@@ -17,6 +17,12 @@ function initAgent() {
   started = true;
 
   require('./tools/core'); // registers the five core tools
+  // the caregiver copilot's tools (fix 9): the guidance library, care notes, and B's life notes
+  require('./tools/copilotTools');
+  {
+    const { getTool, registerTool } = require('./tools');
+    if (!getTool('lookup_life_notes')) registerTool(require('./tools/lookupLifeNotes'));
+  }
   require('./flows/dose'); // registers the 'dose' flow (A4.1) and B's ask_caregiver tool
   require('./flows/callin'); // registers the 'callin' flow (Feature 7, plan 6.2)
   require('./flows/chat'); // registers the 'chat' flow (weekly chat call, Feature 1)
