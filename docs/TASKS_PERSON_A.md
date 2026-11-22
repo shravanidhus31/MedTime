@@ -404,7 +404,7 @@ In order, top to bottom:
 - [x] A1.1 #4 webhook signatures
 - [x] A1.2 #10 `PUBLIC_BASE_URL` and `TWILIO_ENABLED`
 - [x] A1.3 #13 per-dose escalation and `doseService`
-- [ ] A1.4 #14 dose endpoint and dashboard update
+- [x] A1.4 #14 dose endpoint and dashboard update (+ medicine ownership fix in `middleware/access.js`)
 - [x] A3.1 voice pipeline, browser first (Pipecat, Silero, Whisper base, cached neutral voice, barge-in)
 - [x] A3.2 browser call screen (`/call`)
 - [ ] A3.3 Twilio Media Streams (only after an upgrade)

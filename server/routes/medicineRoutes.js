@@ -3,7 +3,7 @@
  *
  * Changes vs. original:
  *  - PUT /:id and DELETE /:id require requirePatientAccess('approve')
- *  - POST /:id/status requires requirePatientAccess('view') (patient can mark their own)
+ *  - Taken/skipped moved to POST /api/v1/doses/:id/status (A1.4, routes/doseRoutes.js)
  *  - PUT /:id whitelists updatable fields; prevents overwriting patient, _id, escalation fields
  *  - DELETE /:id is a SOFT DELETE: sets isActive=false, deletedAt, deletedBy;
  *      keeps past Reminders (for history), deletes only future ones
@@ -98,19 +98,30 @@ router.get('/', verifyToken, async (req, res) => {
     const now = new Date();
 
     const medicinesWithStatus = await Promise.all(medicines.map(async (med) => {
-      const currentReminder = await Reminder.findOne({
-        medicine: med._id,
-        scheduledTime: { $lte: now },
-      }).sort({ scheduledTime: -1 });
+      // The current dose: the latest one due in the last 24 hours, else the next one today.
+      // Its escalation state is per dose (A1.3), so the badges come from the dose, not the medicine.
+      const currentReminder =
+        (await Reminder.findOne({ medicine: med._id, scheduledTime: { $lte: now, $gte: new Date(now - 24 * 3600 * 1000) } }).sort({ scheduledTime: -1 }).lean()) ||
+        (await Reminder.findOne({ medicine: med._id, scheduledTime: { $gt: now, $lte: new Date(+now + 24 * 3600 * 1000) } }).sort({ scheduledTime: 1 }).lean());
 
       let displayStatus = 'upcoming';
-      if (currentReminder) {
+      if (currentReminder && currentReminder.scheduledTime <= now) {
         if (currentReminder.status === 'taken') displayStatus = 'taken';
         else if (currentReminder.status === 'skipped') displayStatus = 'skipped';
+        else if (currentReminder.status === 'missed') displayStatus = 'missed';
         else displayStatus = 'due';
       }
 
-      return { ...med, status: displayStatus };
+      // A1.4: the dose to send to POST /doses/:id/status, and its own escalation state. These
+      // replace the old Medicine-level snoozeUntil / caregiverAlerted, which no longer change.
+      return {
+        ...med,
+        status: displayStatus,
+        todayReminderId: currentReminder ? String(currentReminder._id) : null,
+        doseTime: currentReminder ? currentReminder.scheduledTime : null,
+        caregiverAlerted: !!(currentReminder && currentReminder.caregiverAlerted),
+        snoozeUntil: currentReminder && currentReminder.snoozeUntil && currentReminder.snoozeUntil > now ? currentReminder.snoozeUntil : null,
+      };
     }));
 
     res.status(200).json(medicinesWithStatus);
@@ -119,36 +130,9 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
-// ─── POST /api/v1/medicines/:id/status ─────────────────────────────────────
-// Manually mark a dose taken or skipped from the web UI.
-// Requires at least 'view' access (the patient themselves, or any linked caregiver).
-// NOTE: Person A will move this handler to doseRoutes.js on Friday (section 0.2).
-//       The ownership check below stays; A imports it from this file or keeps it.
-router.post(
-  '/:id/status',
-  verifyToken,
-  requirePatientAccess('view'),   // #1: ownership check added
-  async (req, res) => {
-    try {
-      const { status } = req.body; // 'taken' or 'skipped'
-
-      const recentReminder = await Reminder.findOne({
-        medicine: req.params.id,
-        scheduledTime: { $lte: new Date() },
-      }).sort({ scheduledTime: -1 });
-
-      if (recentReminder) {
-        recentReminder.status = status;
-        await recentReminder.save();
-        res.status(200).json({ message: `Medicine marked as ${status}` });
-      } else {
-        res.status(404).json({ message: 'No pending reminder found to update right now.' });
-      }
-    } catch (error) {
-      res.status(500).json({ message: 'Server error', error: error.message });
-    }
-  }
-);
+// POST /api/v1/medicines/:id/status was removed in A1.4: taken / skipped now goes to
+// POST /api/v1/doses/:id/status (routes/doseRoutes.js), one dose at a time, through markDose,
+// which also disarms that dose's caregiver alert.
 
 // ─── PUT /api/v1/medicines/:id ──────────────────────────────────────────────
 // Edit an existing medicine.

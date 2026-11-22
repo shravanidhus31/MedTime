@@ -66,8 +66,11 @@ async function canAccess(userId, patientId, minRole) {
  *
  * It resolves the patient document from:
  *   1. req.params.patientId
- *   2. A Medicine / Reminder lookup keyed by req.params.id  (for medicine routes)
- *   3. req.body.patientId
+ *   2. the record named by req.params.id: a Medicine, or else a Reminder (a dose)
+ *   3. req.body.patientId, only when the URL names no record
+ * The record in the URL always decides whose data it is (A1.4 fix): before, a body patientId was
+ * checked first, so a user could name their own patient in the body and then edit or delete
+ * another patient's medicine by its id.
  *
  * After passing, req.patientDoc is available to the handler.
  */
@@ -75,15 +78,25 @@ function requirePatientAccess(minRole) {
   return async (req, res, next) => {
     try {
       // --- resolve patientId ---
-      let patientId = req.params.patientId || req.body.patientId;
+      let patientId = req.params.patientId;
 
       if (!patientId && req.params.id) {
-        // For medicine/reminder routes keyed by :id, look up the medicine
+        // Routes keyed by :id: the medicine, or else the dose (Reminder), names the patient.
+        const mongoose = require('mongoose');
+        if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ message: 'Not found.' });
         const Medicine = require('../models/Medicine');
-        const med = await Medicine.findById(req.params.id).select('patient');
-        if (!med) return res.status(404).json({ message: 'Medicine not found.' });
-        patientId = med.patient.toString();
+        const Reminder = require('../models/Reminder');
+        const rec = (await Medicine.findById(req.params.id).select('patient')) || (await Reminder.findById(req.params.id).select('patient'));
+        if (!rec) return res.status(404).json({ message: 'Not found.' });
+        patientId = rec.patient.toString();
+        // A body patientId can't point the check at a different patient.
+        const bodyPatient = req.body && req.body.patientId;
+        if (bodyPatient && String(bodyPatient) !== patientId) {
+          return res.status(403).json({ message: 'Forbidden: insufficient access.' });
+        }
       }
+
+      if (!patientId) patientId = req.body && req.body.patientId;
 
       if (!patientId) {
         return res.status(400).json({ message: 'patientId required.' });

@@ -51,12 +51,16 @@ export default function PatientDashboard() {
   }, []);
 
   // --- 2. ACTION FUNCTIONS (These must be OUTSIDE useEffect!) ---
-  const handleStatusUpdate = async (id, newStatus) => {
+  // A1.4: taken / skipped for this one dose. The server records it through markDose, which also
+  // stops that dose's re-call and caregiver alert. A dose already taken stays taken.
+  const handleStatusUpdate = async (med, newStatus) => {
+    if (!med.todayReminderId) return;
     try {
-      await api.post(`/medicines/${id}/status`, { status: newStatus });
+      const { data } = await api.post(`/doses/${med.todayReminderId}/status`, { status: newStatus });
+      const recorded = data?.reminder?.status || newStatus;
       // Instantly update UI to feel fast!
-      setMedicines(medicines.map(med =>
-        med._id === id ? { ...med, status: newStatus } : med
+      setMedicines((meds) => meds.map((m) =>
+        m._id === med._id ? { ...m, status: recorded, caregiverAlerted: false, snoozeUntil: null } : m
       ));
     } catch (error) {
       console.error(`Failed to mark as ${newStatus}:`, error);
@@ -280,10 +284,11 @@ export default function PatientDashboard() {
             {/* EXACTLY ONE CLEAN MAP LOOP HERE */}
             {medicines.map((med) => {
               // ── Escalation Engine Visual State (priority order) ─────────────
+              // Per dose (A1.4): these come from the current dose, not the medicine.
               // 1. caregiverAlerted → solid red (missed, caregiver was notified)
               // 2. snoozeUntil set → amber (patient snoozed, awaiting re-call)
               // 3. Reminder-based status fallback (taken / skipped / due / upcoming)
-              const isMissed = !!med.caregiverAlerted;
+              const isMissed = !!med.caregiverAlerted || med.status === 'missed';
               const isSnoozed = !isMissed && !!med.snoozeUntil;
 
               const cardClass = isMissed
@@ -334,7 +339,7 @@ export default function PatientDashboard() {
                     {/* Dynamic Badges — escalation states take priority */}
                     {isMissed && (
                       <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#ffcdd2] text-[#b71c1c] animate-pulse">
-                        🚨 Missed – Caregiver Alerted
+                        {med.caregiverAlerted ? '🚨 Missed – Caregiver Alerted' : '🚨 Missed'}
                       </span>
                     )}
                     {isSnoozed && (
@@ -361,13 +366,13 @@ export default function PatientDashboard() {
                     {med.status === 'due' && (
                       <>
                         <button
-                          onClick={() => handleStatusUpdate(med._id, 'taken')}
+                          onClick={() => handleStatusUpdate(med, 'taken')}
                           className="flex-1 bg-sage2 text-[#1e3a1d] py-2 rounded-lg font-bold text-sm border-2 border-sage2 hover:bg-sage transition-colors shadow-sm"
                         >
                           ✓ Take
                         </button>
                         <button
-                          onClick={() => handleStatusUpdate(med._id, 'skipped')}
+                          onClick={() => handleStatusUpdate(med, 'skipped')}
                           className="flex-1 bg-blush2 text-[#7a2a1a] py-2 rounded-lg font-bold text-sm border-2 border-blush2 hover:bg-blush transition-colors shadow-sm"
                         >
                           ✗ Skip

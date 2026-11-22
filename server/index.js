@@ -51,6 +51,7 @@ app.use('/api/v1/agent/questions', require('./routes/agentQuestionRoutes')); // 
 app.use('/api/v1/agent', require('./routes/agentRoutes')); // A2.3 agent runs (C2) + A2.4 /agent/turn (Person A)
 require('./agent').initAgent(); // A2.5 core tools + red-flag caregiver alerts; wires B's C3/C9 (Person A)
 app.use('/api/v1/simulate', require('./routes/simulateRoutes')); // A2.7 text simulated calls (Person A)
+app.use('/api/v1/doses', require('./routes/doseRoutes')); // A1.4 taken/skipped for one dose (Person A)
 app.use('/api/v1/proposals', require('./routes/proposalRoutes')); // B4 approvals (Person B)
 app.use('/api/v1/journal', require('./routes/journalRoutes')); // B8 daily care journal (Person B)
 app.use('/api/v1/life-notes', require('./routes/lifeNoteRoutes')); // B9 life notes (Person B)
