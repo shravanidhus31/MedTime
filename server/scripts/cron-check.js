@@ -107,6 +107,7 @@ const alertsFor = (patientId) => CaregiverAlert.find({ patient: patientId }).lea
     const f = await mkPatient('AlertFails', { emergencyContact: '+910000009999' }); // caregiver call can't be placed
     const g = await mkPatient('OldCall'); // call placed before A1.3: webhook URL has medicineId only
     const h = await mkPatient('LongAgo'); // a dose due an hour ago that was never called
+    const r = await mkPatient('DementiaNoAnswer', { dementiaMode: true }); // never answers (A4.1 retries)
 
     const remA = await mkDose(a, now);
     const remB = await mkDose(b, now);
@@ -116,6 +117,7 @@ const alertsFor = (patientId) => CaregiverAlert.find({ patient: patientId }).lea
     const remF = await mkDose(f, now);
     const remG = await mkDose(g, now);
     const remH = await mkDose(h, later(-60));
+    const remR = await mkDose(r, now);
 
     // Every caregiver alert call to f's number fails, as if Twilio refused it.
     twilio.makeAlertCall = async (phone, alertId) => {
@@ -185,6 +187,13 @@ const alertsFor = (patientId) => CaregiverAlert.find({ patient: patientId }).lea
       a3.status === 'alerted' && !a3.caregiverAlerted && a3.attempts === 2 && !a3.snoozeUntil && !!a3.caregiverAlertTime
         && runsA2.length === 2 && tools(runsA2[1]) === 'check_double_dose → place_call' && runsA2[1].steps[1].input.attempt === 'retry');
 
+    const r1 = await dose(remR._id);
+    const runsR1 = await runsFor(r.patient._id);
+    check('dementia, no answer: NOT escalated after 10 min; called again (2nd of 3), log checked first, no caregiver call',
+      r1.status === 'alerted' && r1.attempts === 2 && !!r1.caregiverAlertTime && (await alertsFor(r.patient._id)).length === 0
+        && runsR1.length === 2 && tools(runsR1[1]) === 'check_double_dose → place_call',
+      `attempts=${r1.attempts}, ${runsR1.length} runs`);
+
     const f1 = await dose(remF._id);
     check('caregiver call could not be placed: not swallowed; alertFailed, try 1 recorded',
       f1.status === 'missed' && f1.alertFailed && f1.alertAttempts === 1 && !f1.caregiverAlerted && /simulated Twilio failure|Every alert call failed/.test(f1.alertError || ''),
@@ -204,6 +213,9 @@ const alertsFor = (patientId) => CaregiverAlert.find({ patient: patientId }).lea
     await tick(later(30));
     const e1c = await dose(remE1._id);
     const e2c = await dose(remE2._id);
+    const r2 = await dose(remR._id);
+    check('dementia, still no answer: 3rd and last call', r2.attempts === 3 && r2.status === 'alerted' && (await alertsFor(r.patient._id)).length === 0);
+
     check('the 2nd dose gets its own first call; the 1st is not called again',
       e2c.attempts === 1 && !!e2c.caregiverAlertTime && e2c.status === 'alerted' && e1c.attempts === 1 && (await Reminder.countDocuments({ medicine: e.medicine._id })) === 2);
 
@@ -221,6 +233,11 @@ const alertsFor = (patientId) => CaregiverAlert.find({ patient: patientId }).lea
       a4.status === 'taken' && !a4.caregiverAlerted && (await alertsFor(a.patient._id)).length === 0
         && e2e.status === 'taken' && (await alertsFor(e.patient._id)).length === 1,
       `${(await alertsFor(e.patient._id)).length} alert(s) for the twice-a-day patient (expected 1, for the 1st dose)`);
+    const r3 = await dose(remR._id);
+    const rAlerts = await alertsFor(r.patient._id);
+    check('dementia, 3 unanswered calls: then marked missed and the caregiver phoned (once)',
+      r3.status === 'missed' && r3.caregiverAlerted && r3.attempts === 3 && rAlerts.length === 1 && rAlerts[0].reason === 'missed_dose',
+      `${r3.status}, ${rAlerts.length} alert(s)`);
     check('keypad 2 on an already-taken dose does not snooze it', /already recorded as taken/.test((await press({ reminderId: String(remE2._id) }, '2')).text) && !(await dose(remE2._id)).snoozeUntil);
   } catch (err) {
     check('check ran without crashing', false, err.stack);

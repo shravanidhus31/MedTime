@@ -15,7 +15,8 @@
  *      → call again, re-arm caregiverAlertTime.
  *
  *  [A] ESCALATION     — caregiverAlertTime <= now and still not confirmed
- *      → markDose(missed), then PHONE the caregivers (services/caregiverAlerts.js;
+ *      → dementiaMode and fewer than 3 calls so far: call again (A4.1, unanswered ≠ missed)
+ *      → otherwise markDose(missed), then PHONE the caregivers (services/caregiverAlerts.js;
  *        trial SMS can't carry custom text). If no call could be placed the dose
  *        gets alertFailed and the next ticks retry, up to 3 tries in all.
  *
@@ -35,6 +36,7 @@ const { makePatientCall } = require('../utils/twilioClient');
 const { handleDoseDue } = require('../agent/doseDue');
 const { markDose } = require('../services/doseService');
 const { notifyCaregivers } = require('../services/caregiverAlerts');
+const { MAX_CALL_ATTEMPTS } = require('../agent/flows/dosePolicy');
 
 const MINUTE = 60 * 1000;
 const ESCALATE_AFTER_MS = 10 * MINUTE;  // unconfirmed this long after a call → caregiver
@@ -205,6 +207,16 @@ async function runTick(now = new Date()) {
             { returnDocument: 'after' },
           );
           if (!claimed) continue;
+
+          // Dementia mode (A4.1): an unanswered call is not a missed dose. Call again, up to
+          // MAX_CALL_ATTEMPTS calls in all, 10 minutes apart; the agent's tone gets firmer each time.
+          if (patient.dementiaMode && (claimed.attempts || 0) < MAX_CALL_ATTEMPTS) {
+            console.log(`   🔁 [A] NO ANSWER: calling ${patientName} again for ${doseLabel} (call ${(claimed.attempts || 0) + 1} of ${MAX_CALL_ATTEMPTS}).`);
+            const r = await handleDoseDue({ medicine, patient, reminder: claimed, attempt: 'retry', now, placeCall: () => callPatient(claimed, patientPhone, medName, now) });
+            console.log(`      🤖 Agent handover (retry): ${r.called ? 'called' : 'no call'} — ${r.reason} (run ${r.runId}).`);
+            continue;
+          }
+
           console.log(`   🚨 [A] ESCALATION: ${patientName} did not confirm ${doseLabel} in time.`);
           await markDose(reminder._id, 'missed', 'scheduler');
           await alertCaregivers(claimed, patient, medName, now);

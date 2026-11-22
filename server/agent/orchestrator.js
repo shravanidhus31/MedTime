@@ -33,11 +33,12 @@ const MAX_TURNS = 8;
 const SESSION_TTL_MS = 30 * 60 * 1000;
 const ACTION_TYPES = new Set(['play', 'neutral', 'listen', 'wait', 'fallback', 'hangup']);
 
-const HOLD_ACTIONS = [{ type: 'neutral', text: 'Let me check that for you.' }, { type: 'wait' }];
-const TURN_LIMIT_ACTIONS = [
-  { type: 'neutral', text: 'Thank you. Someone from your family will call you soon. Goodbye.' },
-  { type: 'hangup' },
-];
+const HOLD_TEXT = 'Let me check that for you.';
+// After a red flag the call stays in emergency mode: this, in the neutral voice, on every turn.
+const STAY_TEXT = "I'm still here with you, and your family has been told. Please stay on the line.";
+const TURN_LIMIT_TEXT = 'Thank you. Someone from your family will call you soon. Goodbye.';
+const HOLD_ACTIONS = [{ type: 'neutral', text: HOLD_TEXT }, { type: 'wait' }];
+const TURN_LIMIT_ACTIONS = [{ type: 'neutral', text: TURN_LIMIT_TEXT }, { type: 'hangup' }];
 
 const flows = new Map();
 const sessions = new Map();
@@ -150,9 +151,9 @@ async function handleTurn({ sessionId, flow, transcript, isFinal = true, asrConf
 
   // 1. emergencies first: keypad 9, or a red flag in what she said
   if (key === '9') return emergency(session, { verdict: 'redflag', category: 'help_key' }, text);
+  let verdict; // passed on to the flow, so it can handle 'unsafe' (e.g. a request to change a dose)
   if (text) {
     const started = Date.now();
-    let verdict;
     try {
       verdict = await screen(text, { patientId: session.patientId, flow: session.flow, isFinal });
     } catch (err) {
@@ -160,6 +161,15 @@ async function handleTurn({ sessionId, flow, transcript, isFinal = true, asrConf
       verdict = { verdict: 'ok' }; // the keypad 9 path still works
     }
     if (verdict && verdict.verdict === 'redflag') return emergency(session, verdict, text, Date.now() - started);
+  }
+
+  // Emergency mode (A3.4, plan 6.1): once a red flag has been raised, the call is no longer about
+  // the dose. She is reassured in the neutral voice and the agent keeps listening; the flow never
+  // runs again in this call. Found in the first live voice test: after "I have fallen down", her
+  // "Okay, bye" went back to the dose flow and was answered "Well done. Which tablet did you take?"
+  if (session.emergency) {
+    if (!isFinal) return { actions: [] };
+    return { actions: [{ type: 'neutral', text: STAY_TEXT }, { type: 'listen' }], inEmergency: session.emergency.category };
   }
 
   // 2. partial transcripts only get the safety check
@@ -174,7 +184,7 @@ async function handleTurn({ sessionId, flow, transcript, isFinal = true, asrConf
 
   // 3. the flow
   const handler = flows.get(session.flow);
-  const input = { transcript: text, isFinal, asrConfidence, dtmf: key || undefined };
+  const input = { transcript: text, isFinal, asrConfidence, dtmf: key || undefined, safety: verdict };
   const work = runHandler(session, () => handler.turn(session, input));
   const actions = await withinBudget(work, session.turnBudgetMs);
   if (actions) return finishActions(session, actions);
@@ -214,8 +224,11 @@ function limitActions(session) {
 }
 
 async function emergency(session, verdict, text, screenMs) {
-  const first = !session.emergency;
-  session.emergency = { category: verdict.category, at: new Date() };
+  // The family is phoned once per kind of emergency in a call (a fall, then chest pain: twice).
+  const alerted = (session.emergency && session.emergency.alerted) || new Set();
+  const first = !alerted.has(verdict.category);
+  alerted.add(verdict.category);
+  session.emergency = { category: verdict.category, at: new Date(), alerted };
   session.pending = null; // whatever the agent was doing no longer matters
   const response = responseFor(verdict);
 
@@ -234,7 +247,9 @@ async function emergency(session, verdict, text, screenMs) {
       .catch((err) => console.error('[agent:orchestrator] emergency handler failed:', err.message));
   }
 
-  // Neutral voice only, then keep listening (A3.4: stay on the line).
+  // Neutral voice only, then keep listening (A3.4: stay on the line). `emergency` is set only when
+  // the family was alerted just now; a repeat of the same red flag is reassured, not re-alerted.
+  if (!first) return { actions: [{ type: 'neutral', text: STAY_TEXT }, { type: 'listen' }], inEmergency: verdict.category };
   return { actions: [{ type: 'neutral', text: response.neutralText }, { type: 'listen' }], emergency: verdict.category };
 }
 
@@ -293,5 +308,8 @@ module.exports = {
   TurnError,
   TURN_BUDGET_MS,
   MAX_TURNS,
+  HOLD_TEXT,
+  TURN_LIMIT_TEXT,
+  STAY_TEXT,
   _reset,
 };
