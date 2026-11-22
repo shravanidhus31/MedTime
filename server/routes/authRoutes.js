@@ -19,10 +19,14 @@ const generateRefreshToken = (user) => {
 // POST /api/v1/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { name, phone, password, role } = req.body;
+    const { name, password, role } = req.body;
+    // the same number however it is typed ("+91 93264 50209" = "9326450209")
+    const { normalizePhone, phoneVariants } = require('../utils/phone');
+    const phone = normalizePhone(req.body.phone);
+    if (!/^\d{10}$/.test(phone)) return res.status(400).json({ message: 'Please enter a 10-digit mobile number.' });
 
     // Check if user exists
-    const existingUser = await User.findOne({ phone });
+    const existingUser = await User.findOne({ phone: { $in: phoneVariants(phone) } });
     if (existingUser) return res.status(400).json({ message: 'Phone number already registered.' });
 
     // PRD Spec: Hash password with 12 salt rounds
@@ -46,9 +50,11 @@ router.post('/register', async (req, res) => {
 // POST /api/v1/auth/login
 router.post('/login', async (req, res) => {
   try {
-    const { phone, password } = req.body;
+    const { password } = req.body;
+    const { phoneVariants } = require('../utils/phone');
 
-    const user = await User.findOne({ phone });
+    // matched however the number was typed, now or at registration
+    const user = await User.findOne({ phone: { $in: phoneVariants(req.body.phone) } });
     if (!user) return res.status(400).json({ message: 'Invalid credentials.' });
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);

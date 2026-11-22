@@ -38,7 +38,8 @@ router.post('/link', verifyToken, requireRole(['caregiver']), async (req, res) =
     }
 
     // Find the target patient by phone
-    const targetUser = await User.findOne({ phone: patientPhone });
+    const { phoneVariants } = require('../utils/phone');
+    const targetUser = await User.findOne({ phone: { $in: phoneVariants(patientPhone) }, role: 'patient' });
     if (!targetUser) {
       return res.status(404).json({ message: 'No account found with that phone number.' });
     }
