@@ -1,0 +1,80 @@
+import React, { useEffect, useState } from 'react';
+import api from '../utils/api';
+
+/**
+ * CareSettings — how MedTime phones the patient (A3.5).
+ *  - Talking assistant (dementia mode): dose calls are a spoken conversation with the agent
+ *    (it checks the dose log, asks which tablet, calls again, tells the family). Off: the
+ *    keypad menu ("press 1 if you have taken it").
+ *  - Language the assistant speaks and listens in.
+ * patientId: for a caregiver (primary access); the patient leaves it out.
+ */
+export default function CareSettings({ patientId }) {
+  const [settings, setSettings] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const query = patientId ? `?patientId=${patientId}` : '';
+
+  useEffect(() => {
+    let live = true;
+    api.get(`/users/care-settings${query}`)
+      .then((res) => { if (live) setSettings(res.data); })
+      .catch((err) => { if (live) setMsg({ type: 'error', text: err?.response?.data?.message || 'Could not load call settings.' }); });
+    return () => { live = false; };
+  }, [query]);
+
+  const save = async (change) => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await api.put('/users/care-settings', { ...(patientId ? { patientId } : {}), ...change });
+      setSettings(res.data);
+      setMsg({ type: 'success', text: 'Saved.' });
+    } catch (err) {
+      setMsg({ type: 'error', text: err?.response?.data?.message || 'Could not save.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border border-[#e8dcc8] p-6 space-y-4">
+      <h2 className="text-lg font-bold text-[#2d2418]">📞 How MedTime calls</h2>
+      {!settings ? (
+        <p className="text-sm text-[#8a7560]">{msg ? msg.text : 'Loading…'}</p>
+      ) : (
+        <>
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-1 h-5 w-5 accent-[#5c4535]"
+              checked={settings.dementiaMode}
+              disabled={saving}
+              onChange={(e) => save({ dementiaMode: e.target.checked })}
+            />
+            <span>
+              <span className="block text-sm font-semibold text-[#2d2418]">Talking assistant (dementia mode)</span>
+              <span className="block text-xs text-[#8a7560]">
+                Dose calls become a spoken conversation: the assistant checks the dose log, asks which tablet was taken,
+                calls again if there is no answer, and tells the family when it can't confirm. Off: a keypad menu.
+              </span>
+            </span>
+          </label>
+          <label className="block">
+            <span className="block text-sm font-semibold text-[#2d2418] mb-1">Language on calls</span>
+            <select
+              className="border border-[#e8dcc8] rounded-lg px-3 py-2 text-sm"
+              value={settings.language}
+              disabled={saving}
+              onChange={(e) => save({ language: e.target.value })}
+            >
+              <option value="en">English</option>
+              <option value="hi">हिन्दी (Hindi)</option>
+            </select>
+          </label>
+          {msg && <p className={`text-xs ${msg.type === 'success' ? 'text-[#2a4a28]' : 'text-[#7a2a1a]'}`}>{msg.text}</p>}
+        </>
+      )}
+    </div>
+  );
+}

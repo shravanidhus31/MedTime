@@ -35,13 +35,38 @@ function verifyTwilioSignature(req, res, next) {
   }
 
   const signature = req.get('X-Twilio-Signature');
-  const url = base + req.originalUrl;
   const params = req.body && typeof req.body === 'object' ? req.body : {};
-  if (!signature || !twilio.validateRequest(authToken, signature, url, params)) {
-    console.warn(`🚫 [Twilio] Rejected webhook with a missing or bad signature: ${where}`);
+  const urls = candidateUrls(base, req);
+  const matched = signature && urls.find((u) => twilio.validateRequest(authToken, signature, u, params));
+  if (!matched) {
+    // The URLs are our own public address, not secrets: logged so a mismatch can be seen.
+    console.warn(`🚫 [Twilio] Rejected webhook with a ${signature ? 'bad' : 'missing'} signature: ${where}. Checked against: ${urls.join(' , ')}`);
     return forbid(res);
   }
+  if (matched !== urls[0] && !warnedBase) {
+    warnedBase = true;
+    console.warn(`⚠️  [Twilio] Twilio signed ${matched.split('/api/')[0]} but PUBLIC_BASE_URL is ${base}. Set PUBLIC_BASE_URL to the https address.`);
+  }
   return next();
+}
+
+// The URL Twilio signed is our public address plus the path. It is normally PUBLIC_BASE_URL; the
+// https form is also accepted (found on the first real call, 22 Nov: an http:// PUBLIC_BASE_URL
+// is redirected to https by Render, and Twilio signs the https URL it ends up at). The signature
+// still needs our auth token; only the scheme of our own address may differ.
+// Also accepted: Render's own address for this service (RENDER_EXTERNAL_URL), and the https address
+// the request arrived on (Render's proxy sets X-Forwarded-Host/Proto). A forged request still fails:
+// without the auth token no URL gives a valid signature.
+let warnedBase = false;
+function candidateUrls(base, req) {
+  const path = req.originalUrl;
+  const out = [base + path];
+  if (/^http:\/\//i.test(base)) out.push(base.replace(/^http:/i, 'https:') + path);
+  const render = (process.env.RENDER_EXTERNAL_URL || '').trim().replace(/\/+$/, '');
+  if (render) out.push(render + path);
+  const host = String(req.get('x-forwarded-host') || req.get('host') || '').split(',')[0].trim();
+  if (host) out.push(`https://${host}${path}`);
+  return [...new Set(out)];
 }
 
 module.exports = { verifyTwilioSignature };

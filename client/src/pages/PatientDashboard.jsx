@@ -4,6 +4,7 @@ import api from '../utils/api';
 import { useNavigate } from 'react-router-dom';
 import { logoutUser } from '../redux/authSlice';
 import DoctorSettings from '../components/DoctorSettings';
+import CareSettings from '../components/CareSettings';
 
 
 export default function PatientDashboard() {
@@ -233,7 +234,7 @@ export default function PatientDashboard() {
             onClick={() => setIsDoctorPanelOpen(true)}
             className="px-4 py-2 rounded-lg text-sm font-semibold text-textLight hover:bg-cream hover:text-textDark transition-colors flex items-center gap-1.5"
           >
-            <span className="text-base">🩺</span> My Doctor
+            <span className="text-base">⚙️</span> Settings
           </button>
           <button
             onClick={() => navigate('/caregiver/access')}
@@ -432,8 +433,8 @@ export default function PatientDashboard() {
               <span className="text-xl">🩺</span>
             </div>
             <div>
-              <h2 className="font-serif text-lg text-brown2 font-semibold leading-tight">My Doctor</h2>
-              <p className="text-xs text-textLight">Link physician &amp; automate monthly reports</p>
+              <h2 className="font-serif text-lg text-brown2 font-semibold leading-tight">Settings</h2>
+              <p className="text-xs text-textLight">Calls, your doctor &amp; monthly reports</p>
             </div>
           </div>
           <button
@@ -447,6 +448,7 @@ export default function PatientDashboard() {
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto">
+          <div className="p-4"><CareSettings /></div>
           <DoctorSettings />
         </div>
       </div>

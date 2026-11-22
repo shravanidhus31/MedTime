@@ -99,3 +99,22 @@ test('TWILIO_ENABLED=false skips the check locally even with credentials, and re
   process.env.RENDER = 'true'; // Render sets this on every service
   assert.equal((await post('/api/v1/webhooks/voice', { Digits: '1' })).status, 403);
 });
+
+// First real call (22 Nov): Twilio's request was rejected although the auth token was right
+// (the same token had just placed the call). The signed URL can differ from PUBLIC_BASE_URL in
+// the scheme (an http:// value redirected to https) or be Render's own address.
+test('an http:// PUBLIC_BASE_URL accepts the https URL Twilio signed', async () => {
+  process.env.PUBLIC_BASE_URL = BASE.replace('https:', 'http:');
+  const path = '/api/v1/webhooks/voice/prompt?reminderId=abc';
+  const r = await post(path, {}, { sign: BASE + path });
+  assert.equal(r.status, 200);
+});
+
+test("Render's own address (RENDER_EXTERNAL_URL) is accepted; any other host is not", async () => {
+  process.env.PUBLIC_BASE_URL = BASE;
+  process.env.RENDER_EXTERNAL_URL = 'https://medtime-api.onrender.example';
+  const path = '/api/v1/webhooks/voice/alert';
+  assert.equal((await post(path, {}, { sign: 'https://medtime-api.onrender.example' + path })).status, 200);
+  assert.equal((await post(path, {}, { sign: 'https://someone-else.example' + path })).status, 403);
+  delete process.env.RENDER_EXTERNAL_URL;
+});

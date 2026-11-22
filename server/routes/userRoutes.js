@@ -75,4 +75,56 @@ router.get('/doctor-settings', verifyToken, async (req, res) => {
   }
 });
 
+// ─── Call settings (A3.5) ─────────────────────────────────────────────────────
+// GET /api/v1/users/care-settings[?patientId=]   → { patientId, dementiaMode, language }
+// PUT /api/v1/users/care-settings  { patientId?, dementiaMode?, language? }
+// dementiaMode on: dose calls run the speech agent (retries, check question, caregiver hand-over);
+// off: the keypad menu. language: what the agent speaks and listens for (en, hi; mr not written yet).
+// The patient changes their own; a caregiver needs primary access to that patient.
+const mongoose = require('mongoose');
+const Patient = require('../models/Patient');
+const { canAccess } = require('../middleware/access');
+
+async function carePatient(req) {
+  const patientId = req.query.patientId || (req.body && req.body.patientId);
+  if (patientId) {
+    if (!mongoose.isValidObjectId(patientId)) return { status: 400, message: 'Not a valid patient id' };
+    if (!(await canAccess(req.user.id, patientId, 'primary'))) return { status: 403, message: 'Forbidden: only the patient or their primary caregiver can change call settings.' };
+    const p = await Patient.findById(patientId);
+    return p ? { patient: p } : { status: 404, message: 'Patient not found' };
+  }
+  const p = await Patient.findOne({ user: req.user.id });
+  return p ? { patient: p } : { status: 404, message: 'No patient profile for this account.' };
+}
+const careView = (p) => ({ patientId: String(p._id), dementiaMode: !!p.dementiaMode, language: p.language || 'en' });
+
+router.get('/care-settings', verifyToken, async (req, res) => {
+  try {
+    const r = await carePatient(req);
+    if (!r.patient) return res.status(r.status).json({ message: r.message });
+    res.json(careView(r.patient));
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+router.put('/care-settings', verifyToken, async (req, res) => {
+  try {
+    const r = await carePatient(req);
+    if (!r.patient) return res.status(r.status).json({ message: r.message });
+    const { dementiaMode, language } = req.body || {};
+    const set = {};
+    if (dementiaMode !== undefined) set.dementiaMode = !!dementiaMode;
+    if (language !== undefined) {
+      if (!['en', 'hi', 'mr'].includes(language)) return res.status(400).json({ message: 'language must be en, hi or mr' });
+      set.language = language;
+    }
+    // only these two fields (older patient records may not pass full validation on save)
+    const updated = await Patient.findByIdAndUpdate(r.patient._id, { $set: set }, { new: true });
+    res.json(careView(updated));
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
 module.exports = router;

@@ -73,6 +73,7 @@ const said = (xml) => [...xml.matchAll(/<Say[^>]*>([^<]*)<\/Say>/g)].map((m) => 
     app.use(express.json());
     app.use('/api/v1/voice/agent', require('../routes/voiceAgentRoutes'));
     app.use('/api/v1/voice', require('../routes/voiceIncoming'));
+    app.use('/api/v1/users', require('../routes/userRoutes'));
     server = app.listen(0);
     const base = `http://127.0.0.1:${server.address().port}`;
     const twilio = async (path, form = {}) => {
@@ -151,6 +152,21 @@ const said = (xml) => [...xml.matchAll(/<Say[^>]*>([^<]*)<\/Say>/g)].map((m) => 
     await makePatientCall('9000000000', 'Amlodipine', d1.medicine, d1._id);
     console.log = realLog;
     check('scheduler: agent call for dementia mode, keypad menu otherwise', /speech agent/.test(logs[0] || '') && /keypad menu/.test(logs[1] || ''), logs.join(' | '));
+
+    // 9. call settings: she (or her primary caregiver) turns the talking assistant on, picks a language
+    if (!process.env.JWT_SECRET) process.env.JWT_SECRET = 'phone-check-local-secret';
+    const jwt = require('jsonwebtoken');
+    const tok = (id) => ({ Authorization: `Bearer ${jwt.sign({ id: String(id), role: 'patient' }, process.env.JWT_SECRET)}`, 'Content-Type': 'application/json' });
+    const api = async (method, path, user, body) => { const x = await fetch(base + path, { method, headers: tok(user), body: body ? JSON.stringify(body) : undefined }); return { status: x.status, body: await x.json() }; };
+    let cs = await api('PUT', '/api/v1/users/care-settings', kamala.user, { dementiaMode: false, language: 'hi' });
+    const k2 = await Patient.findById(kamala._id).lean();
+    check('settings: the patient turns dementia mode off and picks Hindi (saved)', cs.status === 200 && cs.body.dementiaMode === false && cs.body.language === 'hi' && k2.dementiaMode === false && k2.language === 'hi', JSON.stringify(cs.body));
+    const link = await CaregiverAccess.findOne({ patient: kamala._id }).lean();
+    cs = await api('PUT', '/api/v1/users/care-settings', link.user, { patientId: String(kamala._id), dementiaMode: true });
+    const stranger = await api('PUT', '/api/v1/users/care-settings', sita.user, { patientId: String(kamala._id), dementiaMode: false });
+    const bad = await api('PUT', '/api/v1/users/care-settings', kamala.user, { language: 'fr' });
+    check('settings: the primary caregiver can turn it on; another patient cannot (403); unknown language refused (400)',
+      cs.status === 200 && cs.body.dementiaMode === true && stranger.status === 403 && bad.status === 400 && (await Patient.findById(kamala._id).lean()).dementiaMode === true, `${cs.status}/${stranger.status}/${bad.status}`);
   } catch (err) {
     check('check ran without crashing', false, err.stack);
   } finally {
