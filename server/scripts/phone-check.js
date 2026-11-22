@@ -11,7 +11,8 @@ require('dotenv').config({ quiet: true });
 for (const v of ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'RENDER']) delete process.env[v];
 process.env.TWILIO_ENABLED = 'false';
 process.env.PUBLIC_BASE_URL = 'https://medtime.example.test';
-process.env.LLM_PROVIDER = 'none'; // the rules understand her: no Groq tokens, same decisions
+process.env.LLM_PROVIDER = 'none';
+process.env.VOICE_IDLE_MS = '3000'; // a silent line counts as hung up after 3 s here (2 min live) // the rules understand her: no Groq tokens, same decisions
 if (process.env.NODE_ENV === 'production') process.env.NODE_ENV = 'development';
 
 const dbName = (() => { try { return new URL(process.env.MONGO_URI).pathname.replace(/^\//, ''); } catch { return ''; } })();
@@ -74,6 +75,7 @@ const said = (xml) => [...xml.matchAll(/<Say[^>]*>([^<]*)<\/Say>/g)].map((m) => 
     app.use('/api/v1/voice/agent', require('../routes/voiceAgentRoutes'));
     app.use('/api/v1/voice', require('../routes/voiceIncoming'));
     app.use('/api/v1/users', require('../routes/userRoutes'));
+    app.use('/api/v1/medicines', require('../routes/medicineRoutes'));
     server = app.listen(0);
     const base = `http://127.0.0.1:${server.address().port}`;
     const twilio = async (path, form = {}) => {
@@ -167,6 +169,22 @@ const said = (xml) => [...xml.matchAll(/<Say[^>]*>([^<]*)<\/Say>/g)].map((m) => 
     const bad = await api('PUT', '/api/v1/users/care-settings', kamala.user, { language: 'fr' });
     check('settings: the primary caregiver can turn it on; another patient cannot (403); unknown language refused (400)',
       cs.status === 200 && cs.body.dementiaMode === true && stranger.status === 403 && bad.status === 400 && (await Patient.findById(kamala._id).lean()).dementiaMode === true, `${cs.status}/${stranger.status}/${bad.status}`);
+
+    // 10. she hangs up without a word: no status callback on the trial, so the idle timer closes it
+    const d10 = await mkDose(kamala, 'Telmisartan');
+    r = await twilio(`/api/v1/voice/agent/dose?reminderId=${d10._id}`, { CallSid: 'CA-test-10' });
+    await new Promise((x) => setTimeout(x, 4000));
+    const run10 = await AgentRun.findOne({ patient: kamala._id, reminder: d10._id, trigger: 'phone_call' }).lean();
+    check('hang-up with no status callback (trial): the run is closed after the idle time', run10 && run10.status !== 'running', `run ${run10 && run10.status}`);
+
+    // 11. the same medicine at the same time twice (a double click) → 409; on purpose → allowed
+    const med = { name: 'Shelcal', dosage: '500mg', type: 'tablet', frequency: 'once', scheduledTimes: ['21:00'], startDate: new Date(), notificationType: 'call' };
+    const a1 = await api('POST', '/api/v1/medicines', kamala.user, med);
+    const a2 = await api('POST', '/api/v1/medicines', kamala.user, { ...med, name: 'shelcal' });
+    const a3 = await api('POST', '/api/v1/medicines', kamala.user, { ...med, allowDuplicate: true });
+    for (const x of [a1, a3]) if (x.body.medicine) made.medicines.push(x.body.medicine._id);
+    check('duplicate medicine (same name, any case, same time) → 409 with a message; allowDuplicate adds it',
+      a1.status === 201 && a2.status === 409 && /already in the list/.test(a2.body.message) && a3.status === 201, `${a1.status}/${a2.status}/${a3.status}`);
   } catch (err) {
     check('check ran without crashing', false, err.stack);
   } finally {

@@ -58,7 +58,26 @@ router.post('/', verifyToken, requireRole(['patient', 'caregiver']), async (req,
       await patient.save();
     }
 
-    // 2. Create the Medicine document
+    // 2. The same medicine at the same time already active? (22 Nov: the Save button could be pressed
+    //    twice while the server was slow, making two medicines and so two reminder calls, a
+    //    double-dose risk.) Refused unless the person confirms it is wanted (allowDuplicate).
+    if (!req.body.allowDuplicate && name) {
+      const escaped = String(name).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // the name, literally
+      const same = await Medicine.findOne({
+        patient: patient._id,
+        isActive: true,
+        name: { $regex: `^${escaped}$`, $options: 'i' },
+        scheduledTimes: { $in: Array.isArray(scheduledTimes) ? scheduledTimes : [] },
+      }).lean();
+      if (same) {
+        return res.status(409).json({
+          message: `${same.name} at ${(same.scheduledTimes || []).join(', ')} is already in the list.`,
+          duplicateOf: same._id,
+        });
+      }
+    }
+
+    // 3. Create the Medicine document
     const newMedicine = new Medicine({
       patient: patient._id,
       name, dosage, type, frequency,
@@ -75,7 +94,7 @@ router.post('/', verifyToken, requireRole(['patient', 'caregiver']), async (req,
 
     await newMedicine.save();
 
-    // 3. Auto-generate reminders for the next 7 days (B12 #5, #7)
+    // 4. Auto-generate reminders for the next 7 days (B12 #5, #7)
     const { created } = await generateRemindersForMedicine(newMedicine);
     const routine = await RoutineProfile.findOne({ patient: patient._id }).lean();
 
@@ -159,7 +178,7 @@ router.put(
       const updatedMed = await Medicine.findByIdAndUpdate(
         req.params.id,
         safeUpdate,
-        { new: true, runValidators: true }
+        { returnDocument: 'after', runValidators: true }
       );
 
       if (!updatedMed) return res.status(404).json({ message: 'Medicine not found.' });

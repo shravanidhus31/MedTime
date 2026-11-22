@@ -121,7 +121,11 @@ const makePatientCall = async (toPhone, medName, medicineId, reminderId, { agent
       url: callbackUrl(path),
       to: formattedTo,
       from: process.env.TWILIO_PHONE_NUMBER,
-      ...(useAgent ? { statusCallback: callbackUrl('/api/v1/voice/agent/status'), statusCallbackEvent: ['completed'], statusCallbackMethod: 'POST' } : {}),
+      // The trial rejects status callbacks ("trial accounts have limited parameter access", first
+      // real call, 22 Nov), so the voice agent closes a silent call itself (idle timer). On a paid
+      // account TWILIO_STATUS_CALLBACK=on also reports the hang-up at once.
+      ...(useAgent && String(process.env.TWILIO_STATUS_CALLBACK || '').toLowerCase() === 'on'
+        ? { statusCallback: callbackUrl('/api/v1/voice/agent/status'), statusCallbackMethod: 'POST' } : {}),
     });
     console.log(`📞 Voice call initiated to ${formattedTo}. Call SID: ${call.sid}`);
     return call;

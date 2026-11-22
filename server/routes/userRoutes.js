@@ -31,7 +31,7 @@ router.put('/doctor-settings', verifyToken, async (req, res) => {
           'linkedDoctor.autoSendMonthly': Boolean(autoSendMonthly)
         }
       },
-      { new: true, runValidators: true, select: '-passwordHash -refreshToken' }
+      { returnDocument: 'after', runValidators: true, select: '-passwordHash -refreshToken' }
     );
 
     if (!updatedUser) {
@@ -120,7 +120,7 @@ router.put('/care-settings', verifyToken, async (req, res) => {
       set.language = language;
     }
     // only these two fields (older patient records may not pass full validation on save)
-    const updated = await Patient.findByIdAndUpdate(r.patient._id, { $set: set }, { new: true });
+    const updated = await Patient.findByIdAndUpdate(r.patient._id, { $set: set }, { returnDocument: 'after' });
     res.json(careView(updated));
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: err.message });

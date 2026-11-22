@@ -7,7 +7,8 @@
 //     (SpeechResult, Confidence, Digits) → handleTurn() (C8) → TwiML again
 //   'wait' (the agent is still working) → a hold line and <Redirect> to /turn?collect=1
 //   'hangup' → <Hangup/>; 'fallback' (the agent failed) → <Redirect> to the keypad menu
-//   the call ends (she hangs up) → POST /api/v1/voice/agent/status → the call's AgentRun is closed
+//   she hangs up → no post for 2 min (the idle timer; the trial refuses status callbacks) → the
+//     call's AgentRun is closed. On a paid account TWILIO_STATUS_CALLBACK=on → POST /status at once.
 //   a patient phones in → /api/v1/voice/incoming (voiceIncoming.js) → startCallinCall() → here
 //
 // Speech: en-IN by default. Hindi patients get hi-IN with Twilio's experimental_conversations
@@ -31,6 +32,30 @@ const { startDoseCall } = require('../agent/flows/dose');
 
 const BASE = '/api/v1/voice/agent';
 const callSessions = new Map(); // Twilio CallSid → our sessionId, to close the run on hang-up
+
+// She hung up: Twilio's trial can't tell us (status callbacks are refused), but every Gather posts
+// back even on silence (actionOnEmptyResult), so no post for IDLE_MS means the line is gone. Then
+// the session and its AgentRun are closed, as a hang-up would.
+const IDLE_MS = Number(process.env.VOICE_IDLE_MS || 120000);
+const idleTimers = new Map();
+function armIdle(sessionId) {
+  clearTimeout(idleTimers.get(sessionId));
+  const t = setTimeout(() => {
+    idleTimers.delete(sessionId);
+    closeSession(sessionId).then((closed) => { if (closed) console.log(`📞 [Voice agent] No answer for ${IDLE_MS / 1000} s: call ${sessionId} treated as ended; run closed.`); }).catch(() => {});
+  }, IDLE_MS);
+  if (t.unref) t.unref();
+  idleTimers.set(sessionId, t);
+}
+function disarmIdle(sessionId) {
+  clearTimeout(idleTimers.get(sessionId));
+  idleTimers.delete(sessionId);
+}
+// After each reply: keep waiting while the call goes on, stop once it has ended.
+function track(sessionId, actions) {
+  if (actions.some((a) => a.type === 'hangup' || a.type === 'fallback')) disarmIdle(sessionId);
+  else armIdle(sessionId);
+}
 
 const escapeXml = (s) => String(s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -93,6 +118,7 @@ async function callContext(session) {
 // Exported for voiceIncoming.js (call-in) and the tests: TwiML for a session's opening actions.
 async function openingTwiml({ sessionId, actions, callSid }) {
   if (callSid) callSessions.set(callSid, sessionId);
+  track(sessionId, actions);
   const session = getSession(sessionId);
   const ctx = session ? await callContext(session) : { lang: 'en', hints: [] };
   return toTwiml(actions, { sessionId, ...ctx });
@@ -132,8 +158,9 @@ router.post('/turn', verifyTwilioSignature, async (req, res) => {
     const digits = collecting ? undefined : (req.body.Digits || undefined);
     const confidence = req.body.Confidence !== undefined ? Number(req.body.Confidence) : undefined;
     // A redirect to collect a slow turn must not count as a silent answer.
-    if (collecting && !session.pending) return sendTwiml(res, toTwiml([{ type: 'listen' }], { sessionId, ...ctx }));
+    if (collecting && !session.pending) { armIdle(sessionId); return sendTwiml(res, toTwiml([{ type: 'listen' }], { sessionId, ...ctx })); }
     const r = await handleTurn({ sessionId, transcript, isFinal: true, asrConfidence: confidence, dtmf: digits });
+    track(sessionId, r.actions);
     return sendTwiml(res, toTwiml(r.actions, { sessionId, ...ctx }));
   } catch (err) {
     console.error('[Voice agent] Turn failed:', err instanceof TurnError ? err.message : err.stack);
@@ -148,6 +175,7 @@ router.post('/status', verifyTwilioSignature, async (req, res) => {
   if (sessionId && ['completed', 'busy', 'no-answer', 'failed', 'canceled'].includes(CallStatus)) {
     callSessions.delete(CallSid);
     const session = getSession(sessionId);
+    disarmIdle(sessionId);
     if (session && !session.ended) {
       await closeSession(sessionId);
       console.log(`📞 [Voice agent] Call ${CallSid} ended (${CallStatus}); run closed.`);

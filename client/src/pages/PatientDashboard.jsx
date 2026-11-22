@@ -23,7 +23,10 @@ export default function PatientDashboard() {
   // Data States
   const [medicines, setMedicines] = useState([]);
   const [editingMedId, setEditingMedId] = useState(null);
-  const [notificationType, setNotificationType] = useState('sms');
+  // Calls are the default (they run the assistant); SMS to Indian numbers is limited on the trial.
+  const [notificationType, setNotificationType] = useState('call');
+  const [saving, setSaving] = useState(false); // one save at a time (double clicks made duplicates)
+  const savingRef = useRef(false);
   const [formData, setFormData] = useState({
     name: '',
     dosage: '',
@@ -116,14 +119,26 @@ export default function PatientDashboard() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (savingRef.current) return; // a second click while the first save is still running
+    savingRef.current = true;
+    setSaving(true);
+    const body = {
+      ...formData,
+      scheduledTimes: [formData.time],
+      type: 'tablet',
+      startDate: new Date(),
+      notificationType: notificationType
+    };
     try {
-      const response = await api.post('/medicines', {
-        ...formData,
-        scheduledTimes: [formData.time],
-        type: 'tablet',
-        startDate: new Date(),
-        notificationType: notificationType
-      });
+      let response;
+      try {
+        response = await api.post('/medicines', body);
+      } catch (err) {
+        // The same medicine at the same time is already in the list: add it again only if meant.
+        if (err?.response?.status !== 409) throw err;
+        if (!window.confirm(`${err.response.data.message}\n\nAdd it again anyway? Two entries mean two reminders.`)) return;
+        response = await api.post('/medicines', { ...body, allowDuplicate: true });
+      }
       setMedicines([...medicines, response.data.medicine]);
       setIsModalOpen(false);
       setFormData({
@@ -137,9 +152,13 @@ export default function PatientDashboard() {
         pillboxSlot: '',
         locationHint: ''
       });
-      setNotificationType('sms');
+      setNotificationType('call');
     } catch (error) {
       console.error('Failed to save medicine:', error);
+      alert(error?.response?.data?.message || 'Could not save the medicine. Please try again.');
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   };
 
@@ -316,7 +335,7 @@ export default function PatientDashboard() {
                     <div>
                       <div className="text-[18px] font-bold text-textDark">{med.name} {med.dosage}</div>
                       <div className="text-xs text-textLight mt-0.5 capitalize">
-                        {med.mealTiming} Food • Scheduled: {med.scheduledTimes?.join(', ')}
+                        {med.mealTiming} Food • Scheduled: {med.scheduledTimes?.join(', ')} • {med.notificationType === 'call' ? '📞 Call' : '💬 SMS'}
                       </div>
                       {/* C10 Step-by-Step Guidance Badges */}
                       {(med.pillDescription || med.locationHint || med.pillboxSlot) && (
@@ -545,7 +564,7 @@ export default function PatientDashboard() {
                 </div>
               </div>
               <div className="flex gap-3 pt-4">
-                <button type="submit" className="flex-[2] bg-brown2 text-white py-3 rounded-lg font-bold hover:bg-[#4a3628]">Schedule & Save</button>
+                <button type="submit" disabled={saving} className="flex-[2] bg-brown2 text-white py-3 rounded-lg font-bold hover:bg-[#4a3628] disabled:opacity-60 disabled:cursor-wait">{saving ? 'Saving…' : 'Schedule & Save'}</button>
                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 bg-white border-2 border-sand text-textDark py-3 rounded-lg font-bold hover:bg-cream">Cancel</button>
               </div>
             </form>

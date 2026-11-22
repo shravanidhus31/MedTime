@@ -242,7 +242,7 @@ router.post('/routine', async (req, res) => {
         pillbox: pillbox || { type: 'none', slots: [] },
         confirmed: true,
       },
-      { upsert: true, new: true, runValidators: true }
+      { upsert: true, returnDocument: 'after', runValidators: true }
     );
     return res.status(200).json({ status: 'success', message: 'Routine profile saved', data: profile });
   } catch (err) {
