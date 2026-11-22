@@ -18,6 +18,7 @@ function initAgent() {
 
   require('./tools/core'); // registers the five core tools
   require('./flows/dose'); // registers the 'dose' flow (A4.1) and B's ask_caregiver tool
+  require('./flows/callin'); // registers the 'callin' flow (Feature 7, plan 6.2)
 
   setAccessChecker(require('../middleware/access').canAccess); // C3 (Person B)
   setSafetyScreen(require('../safety/screen').screen); // C9 (Person B)

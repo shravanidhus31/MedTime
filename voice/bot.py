@@ -200,7 +200,8 @@ class AgentBridge(FrameProcessor):
         await self.push_frame(RTVIServerMessageFrame(data=data))
 
     async def _post_turn(self, transcript: str) -> dict:
-        body = {"sessionId": self._call_id, "flow": "dose", "transcript": transcript, "isFinal": True}
+        # No flow name: the session knows its flow, and a call-in can switch to the dose flow mid-call.
+        body = {"sessionId": self._call_id, "transcript": transcript, "isFinal": True}
         async with self._http.post(f"{AGENT_API_BASE}/agent/turn", json=body, timeout=aiohttp.ClientTimeout(total=TURN_TIMEOUT_S)) as r:
             data = await r.json(content_type=None)
             if r.status != 200:

@@ -28,6 +28,8 @@ export default function CallSimulator() {
   const [patientId, setPatientId] = useState('');
   const [doses, setDoses] = useState(null);
   const [medicineId, setMedicineId] = useState('');
+  // 'dose': MedTime calls the patient about one dose. 'callin': the patient calls MedTime (Feature 7).
+  const [mode, setMode] = useState('dose');
   const [status, setStatus] = useState('idle'); // idle | starting | live | ending | ended | error
   const [error, setError] = useState('');
   const [lines, setLines] = useState([]); // { who: 'agent' | 'patient' | 'system', text, lineId?, emergency? }
@@ -64,12 +66,13 @@ export default function CallSimulator() {
   // instant after that), checking progress every 2 seconds.
   useEffect(() => {
     const med = doses?.medicines.find((m) => m.medicineId === medicineId);
-    if (!med?.lines?.length) { setPrep(null); return undefined; }
+    const lines = mode === 'callin' ? doses?.callinLines : med?.lines;
+    if (!lines?.length) { setPrep(null); return undefined; }
     let stopped = false;
     let timer;
     const poll = async () => {
       try {
-        const r = await fetch(`${VOICE_URL}/api/prepare`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lines: med.lines }) });
+        const r = await fetch(`${VOICE_URL}/api/prepare`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lines }) });
         const p = await r.json();
         if (stopped) return;
         setPrep(p);
@@ -81,7 +84,7 @@ export default function CallSimulator() {
     setPrep(null);
     poll();
     return () => { stopped = true; clearTimeout(timer); };
-  }, [doses, medicineId]);
+  }, [doses, medicineId, mode]);
 
   // Braces: newer Chrome returns a Promise from scrollIntoView, and an effect may only return a
   // clean-up function (returning it crashed the page).
@@ -102,7 +105,9 @@ export default function CallSimulator() {
     setStatus('starting');
     try {
       // 1. the agent's opening turn, from the API
-      const { data: call } = await api.post('/simulate/call', { medicineId, channel: 'voice' });
+      const { data: call } = mode === 'callin'
+        ? await api.post('/simulate/callin', { patient: doses?.patient?.id, channel: 'voice' })
+        : await api.post('/simulate/call', { medicineId, channel: 'voice' });
       add({ who: 'system', text: `Call started (run ${call.runId || '-'}).` });
 
       // 2. the voice connection to this laptop's voice server
@@ -152,12 +157,21 @@ export default function CallSimulator() {
   return (
     <div className="min-h-screen bg-[#faf6ef] p-6">
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-2xl font-bold text-[#5c4535]" style={{ fontFamily: "'Lora', serif" }}>Voice dose call</h1>
+        <h1 className="text-2xl font-bold text-[#5c4535]" style={{ fontFamily: "'Lora', serif" }}>Voice call</h1>
         <p className="text-sm text-[#8a7560] mt-1">
-          A spoken dose call with the agent. Speak normally; you can interrupt it. This records real doses for the patient.
+          A spoken call with the agent: MedTime calling about a dose, or the patient calling in with a question. Speak normally; you can interrupt it. This records real doses for the patient.
         </p>
 
-        <div className="mt-5 bg-white rounded-[18px] border-[1.5px] border-[#e8dcc8] p-5 flex flex-wrap gap-3 items-end">
+        <div className="mt-5 inline-flex rounded-xl border-[1.5px] border-[#e8dcc8] bg-white p-1 text-sm font-bold">
+          {[['dose', '📞 MedTime calls the patient'], ['callin', '☎️ Patient calls MedTime']].map(([m, label]) => (
+            <button key={m} disabled={busy} onClick={() => setMode(m)}
+              className={`px-4 py-2 rounded-lg ${mode === m ? 'bg-[#f5ede0] text-[#5c4535]' : 'text-[#8a7560]'} disabled:opacity-60`}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-3 bg-white rounded-[18px] border-[1.5px] border-[#e8dcc8] p-5 flex flex-wrap gap-3 items-end">
           {isCaregiver && (
             <label className="flex flex-col text-xs font-bold text-[#5c4535]">
               Patient
@@ -168,7 +182,7 @@ export default function CallSimulator() {
               </select>
             </label>
           )}
-          <label className="flex flex-col text-xs font-bold text-[#5c4535]">
+          {mode === 'dose' && <label className="flex flex-col text-xs font-bold text-[#5c4535]">
             Medicine
             <select className="mt-1 border rounded-lg px-3 py-2 text-sm font-normal min-w-[220px]" value={medicineId} disabled={busy || !meds.length}
               onChange={(e) => setMedicineId(e.target.value)}>
@@ -179,9 +193,14 @@ export default function CallSimulator() {
                 </option>
               ))}
             </select>
-          </label>
+          </label>}
+          {mode === 'callin' && (
+            <p className="text-xs text-[#8a7560] max-w-[260px]">
+              {doses?.patient?.firstName || 'The patient'} calls and asks, for example, "Did I take my morning pills?"
+            </p>
+          )}
           {!busy ? (
-            <button onClick={startCall} disabled={!medicineId || !prep || prep.error || prep.preparing}
+            <button onClick={startCall} disabled={(mode === 'dose' && !medicineId) || !doses || !prep || prep.error || prep.preparing}
               className="bg-sage2 text-[#1e3a1d] px-5 py-2 rounded-lg font-bold text-sm border-2 border-sage2 disabled:opacity-50">
               📞 Start call
             </button>

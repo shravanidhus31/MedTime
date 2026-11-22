@@ -23,6 +23,7 @@ const { registerTool, getTool } = require('../tools');
 const { chat } = require('../llm');
 const { loadPrompt } = require('../prompts');
 const { startRun, addStep, finishRun } = require('../runs');
+const AgentRun = require('../../models/AgentRun');
 const { listCaregivers } = require('../../services/caregiverLinks');
 const { notifyCaregivers } = require('../../services/caregiverAlerts');
 const { snoozeDose, noteCaregiverInformed } = require('../../services/doseService');
@@ -181,7 +182,7 @@ async function runDecisionTools(session, tools) {
 
 // ── the flow ────────────────────────────────────────────────────────────────
 
-registerFlow('dose', {
+const doseFlow = {
   start: async (session) => {
     const s = session.state;
     await runTool(session, 'get_patient_context', {});
@@ -260,7 +261,8 @@ registerFlow('dose', {
       ms: Date.now() - session.createdAt,
     }).catch((err) => console.error('[flow:dose] could not finish run:', err.message));
   },
-});
+};
+registerFlow('dose', doseFlow);
 
 // The slot values for this patient's lines (doseLines.js). patient.user must be populated.
 // Free text from the medicine form, made speakable: trimmed, no trailing full stop, and a lower-case
@@ -292,8 +294,8 @@ async function doseLineTexts({ med, patient, scheduledTime = new Date() }) {
   return Object.keys(LINES).map((id) => render(id, slots));
 }
 
-// Starts a dose call for one Reminder. Returns { sessionId, runId, patientId, actions }.
-async function startDoseCall({ reminderId, trigger = 'simulate', channel = 'text', turnBudgetMs }) {
+// Everything a dose call needs about one dose: { reminder, patient, promptVersion, state }.
+async function loadDoseState(reminderId) {
   if (!mongoose.isValidObjectId(reminderId)) throw Object.assign(new Error('Not a valid reminder id'), { status: 400 });
   const reminder = await Reminder.findById(reminderId).populate('medicine');
   if (!reminder || !reminder.medicine) throw Object.assign(new Error('Reminder not found'), { status: 404 });
@@ -304,6 +306,44 @@ async function startDoseCall({ reminderId, trigger = 'simulate', channel = 'text
   const caregiver = (await listCaregivers(patient._id)).find((c) => c.role !== 'doctor' && c.name);
   const label = loadPrompt('dose_label', { medicine: '', pillDescribed: '', question: '' });
   const promptVersion = `${FLOW_VERSION}+${label.promptVersion}`;
+  const state = {
+    reminderId: String(reminder._id),
+    attempt: Math.max(1, reminder.attempts || 0),
+    dueTime: spokenTime(reminder.scheduledTime),
+    slots: buildSlots({ med, patient, caregiver, scheduledTime: reminder.scheduledTime }),
+    expected: { medicine: med.name, pill: med.pillDescription || '' },
+    info: { hasLocation: !!med.locationHint, hasPillbox: !!med.pillboxSlot, hasPill: !!med.pillDescription },
+    policy: policy.newState(),
+    promptVersion,
+    transcript: [],
+    lastQuestion: '',
+    llmCalls: 0,
+    usage: { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
+    model: undefined,
+    settled: false,
+    recorded: null,
+    ending: null,
+  };
+  return { reminder, patient, promptVersion, state };
+}
+
+// Mid-call hand-over to the dose flow (plan 6.2: a call-in about a dose that is still due runs the
+// dose flow, so the double-dose check applies). The same call and AgentRun carry on; the dose
+// flow's opening (context, double-dose check, reminder line) is returned as the next actions.
+async function switchToDose(session, reminderId) {
+  const { reminder, state } = await loadDoseState(reminderId);
+  session.state = { ...state, transcript: (session.state && session.state.transcript) || [] };
+  session.flow = 'dose';
+  session.reminderId = reminder._id;
+  if (session.runId) {
+    await AgentRun.updateOne({ _id: session.runId }, { $set: { reminder: reminder._id, flow: 'dose' } }).catch(() => {});
+  }
+  return doseFlow.start(session);
+}
+
+// Starts a dose call for one Reminder. Returns { sessionId, runId, patientId, actions }.
+async function startDoseCall({ reminderId, trigger = 'simulate', channel = 'text', turnBudgetMs }) {
+  const { reminder, patient, promptVersion, state } = await loadDoseState(reminderId);
 
   const runId = await startRun({ trigger, patientId: patient._id, reminderId: reminder._id, flow: 'dose', promptVersion }).catch((err) => {
     console.error('[flow:dose] could not start run:', err.message);
@@ -318,27 +358,10 @@ async function startDoseCall({ reminderId, trigger = 'simulate', channel = 'text
     channel,
     turnBudgetMs,
     init: (session) => {
-      session.state = {
-        reminderId: String(reminder._id),
-        attempt: Math.max(1, reminder.attempts || 0),
-        dueTime: spokenTime(reminder.scheduledTime),
-        slots: buildSlots({ med, patient, caregiver, scheduledTime: reminder.scheduledTime }),
-        expected: { medicine: med.name, pill: med.pillDescription || '' },
-        info: { hasLocation: !!med.locationHint, hasPillbox: !!med.pillboxSlot, hasPill: !!med.pillDescription },
-        policy: policy.newState(),
-        promptVersion,
-        transcript: [],
-        lastQuestion: '',
-        llmCalls: 0,
-        usage: { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
-        model: undefined,
-        settled: false,
-        recorded: null,
-        ending: null,
-      };
+      session.state = state;
     },
   });
   return { sessionId, runId: runId ? String(runId) : null, patientId: String(patient._id), actions };
 }
 
-module.exports = { startDoseCall, doseLineTexts, LABEL_SCHEMA };
+module.exports = { startDoseCall, switchToDose, doseLineTexts, LABEL_SCHEMA };

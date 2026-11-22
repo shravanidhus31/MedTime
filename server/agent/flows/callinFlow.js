@@ -166,8 +166,21 @@ async function handleCallinQuestion(ctx) {
       return medName && lowerQ.includes(medName.split(' ')[0]);
     });
 
+    // "my morning pills" / "evening tablet": the dose in that part of the day (review, 22 Nov:
+    // the time of day in the question was ignored and the first dose found was answered).
+    // If she names a medicine, only that medicine's doses count; then the dose nearest the asked
+    // part of the day (a 9 pm dose is her "evening" one).
+    const CENTRE = { morning: 8, afternoon: 14, evening: 20, night: 22 };
+    const askedBlock = Object.keys(CENTRE).find((b) => lowerQ.includes(b)) || (lowerQ.includes('tonight') ? 'night' : null);
+    const medOf = (r) => String((r.medicine && r.medicine._id) || r.medicine);
+    const named = matchedReminder ? reminders.filter((r) => medOf(r) === medOf(matchedReminder)) : reminders;
+    const istHour = (d) => { const x = new Date(new Date(d).getTime() + 5.5 * 3600000); return x.getUTCHours() + x.getUTCMinutes() / 60; };
+    const blockMatch = askedBlock && named.length
+      ? named.reduce((best, r) => (Math.abs(istHour(r.scheduledTime) - CENTRE[askedBlock]) < Math.abs(istHour(best.scheduledTime) - CENTRE[askedBlock]) ? r : best))
+      : null;
+
     // Use matched reminder or fall back to most recent overdue/pending one
-    const targetReminder = matchedReminder || reminders.find((r) =>
+    const targetReminder = blockMatch || matchedReminder || reminders.find((r) =>
       r.status === 'taken' || r.status === 'missed' || r.status === 'alerted'
     ) || reminders[0];
 
@@ -206,10 +219,19 @@ async function handleCallinQuestion(ctx) {
       };
     }
 
-    // Not recorded + still due (time is in the future or within the last 15 min)
+    // Not recorded + due NOW (within 15 minutes either way). A dose later today is not due: the old
+    // rule ("in the future or within the last 15 min") would have started the dose call hours early
+    // (review, 22 Nov).
     const scheduledTime = new Date(targetReminder.scheduledTime);
     const now = new Date();
-    const stillDue = scheduledTime > new Date(now.getTime() - 15 * 60 * 1000);
+    const stillDue = Math.abs(scheduledTime - now) <= 15 * 60 * 1000;
+    if ((targetReminder.status === 'pending' || targetReminder.status === 'alerted') && scheduledTime > new Date(now.getTime() + 15 * 60 * 1000)) {
+      return {
+        reply: `It isn't time yet. Your ${targetReminder.medicine?.name || 'medicine'} is at ${formatTimeIST(targetReminder.scheduledTime)}.`,
+        done: true,
+        intent: 'doses',
+      };
+    }
 
     if ((targetReminder.status === 'pending' || targetReminder.status === 'alerted') && stillDue) {
       return {
@@ -283,6 +305,7 @@ async function handleCallinQuestion(ctx) {
   return {
     reply: 'I\'m not sure I can answer that right now. I\'ll ask your caregiver to call you back with the answer.',
     done: true,
+    unanswered: true, // nothing in the notes or logs: no invented answer
     action: 'notify_caregiver',
   };
 }

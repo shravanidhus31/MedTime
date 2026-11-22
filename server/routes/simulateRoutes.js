@@ -23,6 +23,7 @@ const Patient = require('../models/Patient');
 const { verifyToken } = require('../middleware/authMiddleware');
 const { canAccess } = require('../agent/access');
 const { startDoseCall, doseLineTexts } = require('../agent/flows/dose');
+const { startCallinCall, callinLineTexts } = require('../agent/flows/callin');
 const { handleTurn, getSession, TurnError, HOLD_TEXT, TURN_LIMIT_TEXT, STAY_TEXT } = require('../agent/orchestrator');
 const { LINES, render } = require('../agent/flows/doseLines');
 const { RESPONSES } = require('../agent/safety');
@@ -85,9 +86,19 @@ router.get('/doses', verifyToken, async (req, res) => {
       const lines = [...new Set([...(await doseLineTexts({ med: full, patient, scheduledTime: dose ? dose.scheduledTime : new Date() })), ...COMMON_LINES()])];
       return { medicineId: String(m._id), name: m.name, dosage: m.dosage, times: m.scheduledTimes, openReminderId: dose ? String(dose._id) : null, lines };
     }));
+    // The call-in's own lines (Feature 7) plus every medicine's dose lines: a call-in can hand over
+    // to any of them, so the page prepares them all before a "patient calls MedTime" call.
+    const { listCaregivers } = require('../services/caregiverLinks');
+    const cg = (await listCaregivers(patient._id)).find((c) => c.role !== 'doctor' && c.name);
+    const firstName = ((patient.user && patient.user.name) || 'there').split(' ')[0];
+    const callinLines = [...new Set([
+      ...callinLineTexts({ name: firstName, caregiver: cg ? cg.name.split(' ')[0] : 'your family' }),
+      ...medicines.flatMap((m) => m.lines),
+    ])].slice(0, 80);
     return res.json({
-      patient: { id: String(patient._id), firstName: ((patient.user && patient.user.name) || '').split(' ')[0], language: patient.language || 'en' },
+      patient: { id: String(patient._id), firstName, language: patient.language || 'en' },
       medicines,
+      callinLines,
     });
   } catch (err) {
     console.error('[simulateRoutes] doses failed:', err.message);
@@ -132,6 +143,33 @@ router.post('/call', verifyToken, async (req, res) => {
   }
 });
 
+// POST /api/v1/simulate/callin { patient?, channel?: 'text' | 'voice' }
+//   The patient calls MedTime (Feature 7). patient: optional for a patient's own login.
+//   → { callId, runId, actions, ended, hints, lines }   then /call/:callId/say (text) or /agent/turn (voice)
+router.post('/callin', verifyToken, async (req, res) => {
+  try {
+    if (req.body && req.body.patient) req.query.patient = String(req.body.patient);
+    const patient = await resolvePatient(req);
+    if (!patient || !(await canAccess(req.user, patient._id, 'primary'))) return res.status(404).json({ message: 'Patient not found.' });
+    const channel = req.body && req.body.channel === 'voice' ? 'voice' : 'text';
+    const call = await startCallinCall({ patientId: patient._id, trigger: 'callin', channel, turnBudgetMs: channel === 'text' ? TEXT_TURN_BUDGET_MS : undefined });
+    const meds = await Medicine.find({ patient: patient._id, isActive: true }).lean();
+    const lines = new Set([...callinLineTexts({ name: call.name, caregiver: call.caregiver }), ...COMMON_LINES()]);
+    if (channel === 'voice') {
+      for (const m of meds) for (const t of await doseLineTexts({ med: m, patient })) lines.add(t);
+    }
+    return res.status(201).json({
+      callId: call.sessionId, runId: call.runId, actions: call.actions, ended: isEnded(call.actions),
+      hints: [...meds.map((m) => m.name), call.name].slice(0, 5), language: patient.language || 'en',
+      lines: channel === 'voice' ? [...lines].slice(0, 80) : undefined,
+    });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ message: err.message });
+    console.error('[simulateRoutes] call-in failed:', err.message);
+    return res.status(500).json({ message: 'Could not start the call-in.' });
+  }
+});
+
 router.post('/call/:callId/say', verifyToken, async (req, res) => {
   const { callId } = req.params;
   const { text, dtmf } = req.body || {};
@@ -146,7 +184,8 @@ router.post('/call/:callId/say', verifyToken, async (req, res) => {
     return res.status(404).json({ message: 'No active simulated call with that id.' });
   }
   try {
-    const result = await handleTurn({ sessionId: callId, flow: 'dose', transcript: text, isFinal: true, dtmf });
+    // No flow name: a call-in can hand over to the dose flow mid-call.
+    const result = await handleTurn({ sessionId: callId, transcript: text, isFinal: true, dtmf });
     return res.json({ callId, runId: session.runId || null, ...result, ended: isEnded(result.actions) });
   } catch (err) {
     if (err instanceof TurnError) return res.status(err.status === 404 ? 409 : err.status).json({ message: err.status === 404 ? 'This call has ended.' : err.message });
