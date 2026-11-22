@@ -18,6 +18,8 @@ const Patient = require('../models/Patient');
 const { verifyToken, requireRole } = require('../middleware/authMiddleware');
 const { requirePatientAccess } = require('../middleware/access');
 const { generateRemindersForMedicine, regenerateFutureReminders } = require('../jobs/reminderTopUpJob');
+const RoutineProfile = require('../models/RoutineProfile');
+const { foodTimingConflicts } = require('../services/scheduleFit');
 
 const router = express.Router();
 
@@ -75,11 +77,13 @@ router.post('/', verifyToken, requireRole(['patient', 'caregiver']), async (req,
 
     // 3. Auto-generate reminders for the next 7 days (B12 #5, #7)
     const { created } = await generateRemindersForMedicine(newMedicine);
+    const routine = await RoutineProfile.findOne({ patient: patient._id }).lean();
 
     res.status(201).json({
       message: 'Medicine added and reminders generated successfully.',
       medicine: newMedicine,
       remindersGenerated: created,
+      warnings: foodTimingConflicts(newMedicine, routine), // food rule vs her meals (B12)
     });
 
   } catch (error) {
@@ -163,10 +167,15 @@ router.put(
       // Regenerate future reminders on edit (#6, B12)
       const regenResult = await regenerateFutureReminders(updatedMed._id);
 
+      // Food rule vs her meals (B12): saved as asked, but the editor is told and offered a time.
+      const routine = await RoutineProfile.findOne({ patient: updatedMed.patient }).lean();
+      const warnings = foodTimingConflicts(updatedMed, routine);
+
       res.status(200).json({
         message: 'Medicine updated and future reminders regenerated.',
         medicine: updatedMed,
         reminders: regenResult,
+        warnings,
       });
     } catch (error) {
       res.status(500).json({ message: 'Server error', error: error.message });

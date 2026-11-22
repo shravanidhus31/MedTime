@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 const multer = require('multer');
 const Tesseract = require('tesseract.js');
@@ -25,6 +26,8 @@ const ProposedChange = require('../models/ProposedChange');
 
 // 5 MB file size limit (B12 requirement)
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const { fitToRoutine } = require('../services/scheduleFit');
+const { canAccess } = require('../middleware/access');
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_FILE_SIZE },
@@ -53,9 +56,15 @@ router.post('/parse', upload.single('prescription'), async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'patientId is required' });
     }
 
+    if (!mongoose.isValidObjectId(patientId)) return res.status(400).json({ status: 'error', message: 'Not a valid patient id' });
     const patient = await Patient.findById(patientId).lean();
     if (!patient) {
       return res.status(404).json({ status: 'error', message: 'Patient not found' });
+    }
+    // Only someone who may approve changes for this patient can start a new schedule (review, 22 Nov:
+    // any logged-in user could create proposals for any patient).
+    if (!(await canAccess(req.user.id, String(patient._id), 'approve'))) {
+      return res.status(403).json({ status: 'error', message: 'Forbidden: insufficient access.' });
     }
 
     // Fetch current active medicines for conflict detection
@@ -138,7 +147,7 @@ router.post('/parse', upload.single('prescription'), async (req, res) => {
         rawExtraction: extraction.medicines,
         ocrTextSample: ocrText.substring(0, 1000),
       },
-      evidence: buildEvidenceSummary(extraction),
+      evidence: buildEvidenceSummary(extraction, fittedMedicines),
       level: proposalLevel,
       status: 'pending',
       createdByRun: agentRun._id,
@@ -161,6 +170,7 @@ router.post('/parse', upload.single('prescription'), async (req, res) => {
       proposalLevel,
       medicines: fittedMedicines,
       conflicts: extraction.medicines.filter((m) => m.isDuplicate || m.isStrengthChange),
+      timingConflicts: fittedMedicines.flatMap((m) => m.timingConflicts || []),
       lowConfidenceLines: extraction.medicines.filter(
         (m) => m.nameConfidence === 'low' || m.frequencyConfidence === 'low'
       ),
@@ -188,10 +198,14 @@ const { generateRemindersForMedicine } = require('../jobs/reminderTopUpJob');
  */
 router.get('/proposals/:patientId', async (req, res) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.patientId)) return res.status(400).json({ status: 'error', message: 'Not a valid patient id' });
+    if (!(await canAccess(req.user.id, req.params.patientId, 'view'))) {
+      return res.status(403).json({ status: 'error', message: 'Forbidden: insufficient access.' });
+    }
     const proposals = await ProposedChange.find({
       patient: req.params.patientId,
       kind: 'new_schedule',
-      status: 'pending',
+      status: { $in: ['pending', 'escalated'] }, // escalated ones wait for the doctor
     }).sort({ createdAt: -1 }).lean();
 
     return res.status(200).json({ status: 'success', proposals });
@@ -206,9 +220,16 @@ router.get('/proposals/:patientId', async (req, res) => {
  */
 async function handleApproveProposal(req, res) {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ status: 'error', message: 'Not a valid proposal id' });
     const proposal = await ProposedChange.findById(req.params.id);
     if (!proposal) return res.status(404).json({ status: 'error', message: 'Proposal not found' });
-    if (proposal.status !== 'pending') {
+    // Level 1: the caregiver (or she herself) approves; Level 2 (lines it couldn't read, duplicates,
+    // strength changes): a doctor approves (plan, approval levels). Before, anyone logged in could.
+    const needed = proposal.level >= 2 || proposal.status === 'escalated' ? 'doctor' : 'approve';
+    if (!(await canAccess(req.user.id, String(proposal.patient), needed))) {
+      return res.status(403).json({ status: 'error', message: needed === 'doctor' ? "This prescription needs a doctor's review before it is added." : 'Forbidden: insufficient access.' });
+    }
+    if (!['pending', 'escalated'].includes(proposal.status)) {
       return res.status(400).json({ status: 'error', message: `Proposal is already ${proposal.status}` });
     }
 
@@ -225,7 +246,7 @@ async function handleApproveProposal(req, res) {
         type: 'tablet',
         frequency: med.frequency || 'once',
         scheduledTimes: med.scheduledTimes || ['08:00'],
-        mealTiming: med.foodRule || med.mealTiming || 'any',
+        mealTiming: ['before', 'after', 'with', 'any'].includes(med.foodRule || med.mealTiming) ? (med.foodRule || med.mealTiming) : 'any',
         notificationType: 'sms',
         startDate: new Date(),
         tabletCount: 30,
@@ -270,8 +291,15 @@ router.post('/approve/:id', handleApproveProposal);
  */
 async function handleEscalateProposal(req, res) {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ status: 'error', message: 'Not a valid proposal id' });
     const proposal = await ProposedChange.findById(req.params.id);
     if (!proposal) return res.status(404).json({ status: 'error', message: 'Proposal not found' });
+    if (!(await canAccess(req.user.id, String(proposal.patient), 'approve'))) {
+      return res.status(403).json({ status: 'error', message: 'Forbidden: insufficient access.' });
+    }
+    if (proposal.status !== 'pending') {
+      return res.status(400).json({ status: 'error', message: `Proposal is already ${proposal.status}` });
+    }
 
     proposal.status = 'escalated';
     proposal.decidedBy = req.user.id;
@@ -293,95 +321,12 @@ router.post('/escalate/:id', handleEscalateProposal);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Fits extracted medicines into the patient's daily routine schedule.
- * Maps food rules (before/after/with breakfast|lunch|dinner) to actual IST times.
- */
-function fitToRoutine(medicines, routine) {
-  const defaults = {
-    wake: '07:00',
-    breakfast: '08:00',
-    lunch: '13:00',
-    dinner: '20:00',
-    bed: '22:00',
-  };
-
-  const schedule = routine?.weekday || defaults;
-
-  return medicines.map((med) => {
-    if (!med.name) return { ...med, scheduledTimes: null, conflict: 'no_name' };
-
-    const times = [];
-    const conflicts = [];
-    const freq = med.frequency;
-
-    // Map frequency + food rule to actual scheduled times
-    if (freq === 'once') {
-      const time = resolveTime(med.foodRule, schedule, 'morning');
-      if (!time.valid) conflicts.push(time.conflict);
-      times.push(time.time);
-    } else if (freq === 'twice') {
-      const morning = resolveTime(med.foodRule, schedule, 'morning');
-      const evening = resolveTime(med.foodRule, schedule, 'evening');
-      if (!morning.valid) conflicts.push(morning.conflict);
-      if (!evening.valid) conflicts.push(evening.conflict);
-      times.push(morning.time, evening.time);
-    } else if (freq === 'thrice') {
-      times.push(
-        resolveTime(med.foodRule, schedule, 'morning').time,
-        resolveTime(med.foodRule, schedule, 'afternoon').time,
-        resolveTime(med.foodRule, schedule, 'evening').time,
-      );
-    } else {
-      // Default: breakfast time
-      times.push(schedule.breakfast || defaults.breakfast);
-    }
-
-    return {
-      ...med,
-      scheduledTimes: times,
-      conflicts: conflicts.length > 0 ? conflicts : null,
-    };
-  });
-}
-
-function resolveTime(foodRule, schedule, period) {
-  const defaults = { morning: '08:00', afternoon: '13:00', evening: '19:00', night: '21:00' };
-
-  if (!foodRule || foodRule === 'any') {
-    return { time: defaults[period] || '08:00', valid: true };
-  }
-
-  if (foodRule === 'before') {
-    if (period === 'morning') return { time: addMinutes(schedule.breakfast || '08:00', -15), valid: true };
-    if (period === 'afternoon') return { time: addMinutes(schedule.lunch || '13:00', -15), valid: true };
-    if (period === 'evening') return { time: addMinutes(schedule.dinner || '20:00', -15), valid: true };
-  }
-  if (foodRule === 'after') {
-    if (period === 'morning') return { time: addMinutes(schedule.breakfast || '08:00', 30), valid: true };
-    if (period === 'afternoon') return { time: addMinutes(schedule.lunch || '13:00', 30), valid: true };
-    if (period === 'evening') return { time: addMinutes(schedule.dinner || '20:00', 30), valid: true };
-  }
-  if (foodRule === 'with') {
-    if (period === 'morning') return { time: schedule.breakfast || '08:00', valid: true };
-    if (period === 'afternoon') return { time: schedule.lunch || '13:00', valid: true };
-    if (period === 'evening') return { time: schedule.dinner || '20:00', valid: true };
-  }
-
-  return { time: defaults[period] || '08:00', valid: true };
-}
-
-function addMinutes(timeStr, minutes) {
-  if (!timeStr || !timeStr.includes(':')) return timeStr;
-  const [h, m] = timeStr.split(':').map(Number);
-  const totalMinutes = h * 60 + m + minutes;
-  const newH = Math.floor(((totalMinutes % (24 * 60)) + 24 * 60) % (24 * 60) / 60);
-  const newM = ((totalMinutes % 60) + 60) % 60;
-  return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
-}
-
-function buildEvidenceSummary(extraction) {
+// The evidence text the caregiver sees on the proposal. Fitting to her routine and the food-rule
+// check live in services/scheduleFit.js.
+function buildEvidenceSummary(extraction, fitted = []) {
   const lines = [`Prescription scan extracted ${extraction.total} medicine(s).`];
+  // Food rule vs her meals (B12): explained, with a suggested time; the caregiver decides.
+  for (const m of fitted) for (const c of m.timingConflicts || []) lines.push(`⚠️ ${c.message}`);
   if (extraction.hasConflicts) {
     const conflicts = extraction.medicines.filter((m) => m.isDuplicate || m.isStrengthChange);
     for (const c of conflicts) {

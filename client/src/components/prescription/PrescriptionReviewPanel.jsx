@@ -7,7 +7,7 @@ import api from '../../utils/api';
  * Shows pending `new_schedule` ProposedChange records from OCR prescription scans.
  * For each proposal:
  *  - Level 1 (clear scan, no conflicts) → one-tap "Approve" by caregiver.
- *  - Level 2 (conflicts / low-confidence) → "Escalate to Doctor" button only.
+ *  - Level 2 (conflicts / low-confidence) or escalated → a doctor approves (the server checks).
  *
  * Rules enforced:
  *  - No Medicine is created until approved here.
@@ -15,8 +15,13 @@ import api from '../../utils/api';
  *  - Conflicts are explained in plain language.
  */
 
-function ConfidenceBadge({ value, confidence }) {
-  if (confidence === null || confidence === undefined) return <span className="text-[#8a7560]">—</span>;
+// The reader gives "high" | "medium" | "low" per field (22 Nov: the panel expected numbers, so
+// every cell showed "—").
+const CONF = { high: 1, medium: 0.6, low: 0 };
+
+function ConfidenceBadge({ value, confidence: c }) {
+  const confidence = typeof c === 'string' ? CONF[c] : c;
+  if (confidence === null || confidence === undefined) return <span className="text-[#2d2418]">{value ?? '—'}</span>;
   if (confidence < 0.5 || value === null || value === undefined) {
     return (
       <span className="bg-[#f7ddd4] text-[#7a2a1a] text-xs px-2 py-0.5 rounded-full font-semibold">
@@ -54,21 +59,44 @@ function ConflictExplainer({ conflicts }) {
   );
 }
 
+// Food rule vs her meals (B12): explained, with a suggested time; the caregiver decides.
+function TimingWarnings({ medicines }) {
+  const warnings = medicines.flatMap((m) => m.timingConflicts || []);
+  if (!warnings.length) return null;
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mt-3">
+      <p className="text-xs font-semibold text-amber-800 mb-2">⏰ Food timing doesn't fit her meals</p>
+      <ul className="space-y-1">
+        {warnings.map((w, i) => <li key={i} className="text-xs text-amber-700">• {w.message}</li>)}
+      </ul>
+      <p className="text-[11px] text-amber-700 mt-2">You can approve as it is and change the time afterwards, or ask the doctor.</p>
+    </div>
+  );
+}
+
 function MedicineRow({ med, idx }) {
-  const conf = med.confidence || {};
+  const conf = med.confidence || {
+    name: med.nameConfidence,
+    dosage: med.strengthConfidence,
+    frequency: med.frequencyConfidence,
+    mealTiming: med.foodRuleConfidence,
+  };
   return (
     <tr className="border-b border-[#fdf8f0] last:border-0">
       <td className="py-3 pr-4 text-sm font-medium text-[#2d2418] align-top">
         {idx + 1}. <ConfidenceBadge value={med.name} confidence={conf.name} />
       </td>
       <td className="py-3 pr-4 text-sm align-top">
-        <ConfidenceBadge value={med.dosage} confidence={conf.dosage} />
+        <ConfidenceBadge value={med.strength || med.dosage} confidence={conf.dosage} />
       </td>
       <td className="py-3 pr-4 text-sm align-top">
         <ConfidenceBadge value={med.frequency} confidence={conf.frequency} />
       </td>
       <td className="py-3 pr-4 text-sm align-top">
-        <ConfidenceBadge value={med.mealTiming} confidence={conf.mealTiming} />
+        <ConfidenceBadge value={med.foodRule || med.mealTiming} confidence={conf.mealTiming} />
+      </td>
+      <td className="py-3 pr-4 text-sm align-top text-[#2d2418]">
+        {(med.scheduledTimes || []).join(', ') || '—'}
       </td>
       <td className="py-3 text-sm align-top">
         {med.pillboxSlot
@@ -84,9 +112,15 @@ function ProposalCard({ proposal, onApprove, onEscalate }) {
   const [escalating, setEscalating] = useState(false);
   const [localMsg, setLocalMsg] = useState(null);
 
-  const isLevel2 = proposal.approvalLevel === 2 || proposal.hasConflicts || proposal.requiresDoctor;
+  // Level 2, or escalated: a doctor approves (the server checks; a caregiver gets a clear refusal).
+  const escalated = proposal.status === 'escalated';
+  const isLevel2 = proposal.level === 2 || proposal.approvalLevel === 2 || escalated;
   const medicines = proposal.payload?.medicines || proposal.medicines || [];
-  const conflicts = proposal.payload?.conflicts || proposal.conflicts || [];
+  const conflicts = medicines
+    .filter((m) => m.isDuplicate || m.isStrengthChange)
+    .map((m) => ({ name: m.name, reason: m.isDuplicate ? 'duplicate' : null, detail: m.conflictNotes || 'Strength change: a doctor should confirm this.' }));
+  const lowConfidenceCount = medicines.reduce((n, m) => n + ['nameConfidence', 'strengthConfidence', 'frequencyConfidence'].filter((k) => m[k] === 'low').length, 0);
+  const rawText = proposal.payload?.ocrTextSample || proposal.payload?.rawText;
 
   const approve = async () => {
     setApproving(true);
@@ -96,7 +130,7 @@ function ProposalCard({ proposal, onApprove, onEscalate }) {
       setLocalMsg({ type: 'success', text: 'Schedule approved and medicines added!' });
       setTimeout(() => onApprove(proposal._id), 1200);
     } catch (err) {
-      setLocalMsg({ type: 'error', text: err?.response?.data?.error || 'Approval failed.' });
+      setLocalMsg({ type: 'error', text: err?.response?.data?.message || err?.response?.data?.error || 'Approval failed.' });
     } finally {
       setApproving(false);
     }
@@ -110,7 +144,7 @@ function ProposalCard({ proposal, onApprove, onEscalate }) {
       setLocalMsg({ type: 'success', text: 'Escalated to doctor for review.' });
       setTimeout(() => onEscalate(proposal._id), 1200);
     } catch (err) {
-      setLocalMsg({ type: 'error', text: err?.response?.data?.error || 'Escalation failed.' });
+      setLocalMsg({ type: 'error', text: err?.response?.data?.message || err?.response?.data?.error || 'Escalation failed.' });
     } finally {
       setEscalating(false);
     }
@@ -127,7 +161,7 @@ function ProposalCard({ proposal, onApprove, onEscalate }) {
             </span>
             {isLevel2 ? (
               <span className="bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded-full font-semibold">
-                Level 2 — Doctor Approval Required
+                {escalated ? 'Escalated — waiting for the doctor' : 'Level 2 — Doctor Approval Required'}
               </span>
             ) : (
               <span className="bg-[#c8d9c4] text-[#2a4a28] text-xs px-2 py-0.5 rounded-full font-semibold">
@@ -155,6 +189,7 @@ function ProposalCard({ proposal, onApprove, onEscalate }) {
                 <th className="pb-2 pr-4 font-medium">Dosage</th>
                 <th className="pb-2 pr-4 font-medium">Frequency</th>
                 <th className="pb-2 pr-4 font-medium">With/Before/After Food</th>
+                <th className="pb-2 pr-4 font-medium">Times</th>
                 <th className="pb-2 font-medium">Pillbox Slot</th>
               </tr>
             </thead>
@@ -169,20 +204,21 @@ function ProposalCard({ proposal, onApprove, onEscalate }) {
 
       {/* Conflict Explainer */}
       <ConflictExplainer conflicts={conflicts} />
+      <TimingWarnings medicines={medicines} />
 
       {/* Low-confidence note */}
-      {proposal.payload?.lowConfidenceCount > 0 && (
+      {lowConfidenceCount > 0 && (
         <p className="text-xs text-[#8a7560] italic">
-          ⚠ {proposal.payload.lowConfidenceCount} field(s) could not be read clearly from the prescription. These are marked as "Couldn't read" above and will not be auto-filled.
+          ⚠ {lowConfidenceCount} field(s) could not be read clearly from the prescription. These are marked as "Couldn't read" above and will not be auto-filled.
         </p>
       )}
 
       {/* Raw text */}
-      {proposal.payload?.rawText && (
+      {rawText && (
         <details className="text-xs text-[#8a7560]">
           <summary className="cursor-pointer hover:text-[#5c4535]">View raw scan text</summary>
           <pre className="mt-2 whitespace-pre-wrap font-mono text-xs bg-[#fdf8f0] p-3 rounded-lg border border-[#e8dcc8] max-h-32 overflow-y-auto">
-            {proposal.payload.rawText}
+            {rawText}
           </pre>
         </details>
       )}
@@ -199,22 +235,20 @@ function ProposalCard({ proposal, onApprove, onEscalate }) {
       )}
 
       <div className="flex gap-3">
-        {!isLevel2 && (
-          <button
-            onClick={approve}
-            disabled={approving}
-            className="flex-1 bg-[#5c4535] text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-[#4a3628] disabled:opacity-50 transition-colors"
-          >
-            {approving ? 'Approving…' : '✓ Approve Schedule'}
-          </button>
-        )}
         <button
+          onClick={approve}
+          disabled={approving}
+          className="flex-1 bg-[#5c4535] text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-[#4a3628] disabled:opacity-50 transition-colors"
+        >
+          {approving ? 'Approving…' : isLevel2 ? '✓ Approve (doctor)' : '✓ Approve Schedule'}
+        </button>
+        {!escalated && <button
           onClick={escalate}
           disabled={escalating}
           className={`flex-1 border-[1.5px] border-amber-400 text-amber-800 bg-amber-50 py-2.5 rounded-xl font-semibold text-sm hover:bg-amber-100 disabled:opacity-50 transition-colors ${isLevel2 ? 'w-full' : ''}`}
         >
           {escalating ? 'Escalating…' : '🏥 Escalate to Doctor'}
-        </button>
+        </button>}
       </div>
     </div>
   );

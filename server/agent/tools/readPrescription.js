@@ -8,7 +8,7 @@
  * Contract C1 compliant.
  */
 
-module.exports = {
+const tool = {
   name: 'read_prescription',
   description: 'Extract structured medicine schedule data from OCR prescription text. Returns each medicine with per-field confidence scores. Low-confidence fields are null, never invented.',
   inputSchema: {
@@ -56,7 +56,8 @@ RULES (must follow strictly):
 3. Low-confidence fields MUST be set to null in the value. Never fill them with assumptions.
 4. Identify if any medicine is a DUPLICATE of the current list (same name, any strength).
 5. Identify STRENGTH CHANGES (same name, different strength than what is currently active).
-6. Output valid JSON only. No commentary.
+6. "times": only clock times written on the prescription (e.g. "8 am and 4 pm" → ["08:00","16:00"]), in 24-hour HH:mm. If no clock time is written, use null. Never derive times from "morning" or "after breakfast".
+7. Output valid JSON only. No commentary.
 
 Current active medicines for conflict detection: ${currentMedNames.length > 0 ? currentMedNames.join(', ') : 'none'}
 
@@ -77,6 +78,7 @@ Output format (JSON array):
     "durationConfidence": "high | medium | low",
     "foodRule": "before | after | with | any | null",
     "foodRuleConfidence": "high | medium | low",
+    "times": ["HH:mm"] | null,
     "isDuplicate": boolean,
     "isStrengthChange": boolean,
     "conflictNotes": "string | null"
@@ -145,6 +147,7 @@ Output format (JSON array):
         frequency: med.frequencyConfidence === 'low' ? null : med.frequency,
         duration: med.durationConfidence === 'low' ? null : med.duration,
         foodRule: med.foodRuleConfidence === 'low' ? null : med.foodRule,
+        times: cleanTimes(med.times),
       }));
 
       return {
@@ -165,6 +168,39 @@ Output format (JSON array):
     }
   },
 };
+module.exports = tool;
+module.exports._test = { fallbackRegexParse, cleanTimes, timesInLine };
+
+// Only well-formed HH:mm times survive (22 Nov review: a written time beats our default).
+function cleanTimes(times) {
+  if (!Array.isArray(times)) return null;
+  const ok = times
+    .map((t) => String(t || '').trim())
+    .filter((t) => /^([01]?\d|2[0-3]):[0-5]\d$/.test(t))
+    .map((t) => t.padStart(5, '0'));
+  return ok.length ? [...new Set(ok)] : null;
+}
+
+// Clock times written in a line: "8 am", "8:30 pm", "20:00".
+function timesInLine(line) {
+  const out = [];
+  const re = /\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)(?=\W|$)|\b([01]?\d|2[0-3]):([0-5]\d)\b/gi;
+  let m;
+  while ((m = re.exec(line))) {
+    if (m[3]) {
+      let h = Number(m[1]);
+      const min = Number(m[2] || 0);
+      if (h < 1 || h > 12 || min > 59) continue;
+      const pm = /^p/i.test(m[3]);
+      if (pm && h !== 12) h += 12;
+      if (!pm && h === 12) h = 0;
+      out.push(`${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`);
+    } else {
+      out.push(`${m[4].padStart(2, '0')}:${m[5]}`);
+    }
+  }
+  return cleanTimes(out);
+}
 
 /**
  * Basic regex fallback when no LLM key is available.
@@ -191,11 +227,12 @@ function fallbackRegexParse(ocrText, currentMedicines) {
     // Frequency detection
     let frequency = null;
     let frequencyConfidence = 'low';
-    if (/\b(od|once|1-0-0|1-0-1|1-1-1|once daily)\b/i.test(lower)) {
+    // 1-0-1 is twice a day and 1-1-1 three times (they used to be caught here as "once")
+    if (/\b(od|once|1-0-0|0-0-1|once daily)\b/i.test(lower)) {
       frequency = 'once'; frequencyConfidence = 'high';
     } else if (/\b(bd|twice|bid|2x|1-0-1|twice daily|two times)\b/i.test(lower)) {
       frequency = 'twice'; frequencyConfidence = 'high';
-    } else if (/\b(tds|thrice|tid|3x|three times)\b/i.test(lower)) {
+    } else if (/\b(tds|thrice|tid|3x|1-1-1|three times)\b/i.test(lower)) {
       frequency = 'thrice'; frequencyConfidence = 'high';
     } else if (/\b(alternate|eod|every other day)\b/i.test(lower)) {
       frequency = 'alternate_days'; frequencyConfidence = 'medium';
@@ -235,6 +272,7 @@ function fallbackRegexParse(ocrText, currentMedicines) {
       durationConfidence: duration ? 'medium' : 'low',
       foodRule,
       foodRuleConfidence,
+      times: timesInLine(line),
       isDuplicate,
       isStrengthChange: false,
       conflictNotes: isDuplicate ? `${name} may already be in the active medicine list` : null,

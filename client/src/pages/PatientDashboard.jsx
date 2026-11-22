@@ -170,14 +170,17 @@ export default function PatientDashboard() {
         }
       });
 
-      const { proposalId, proposalLevel, medicines: extractedMeds, message } = response.data;
+      const { proposalId, proposalLevel, medicines: extractedMeds, message, timingConflicts = [] } = response.data;
+      // Food rule vs her meals (B12): shown before approving, with the suggested time
+      const timingNote = timingConflicts.length ? `\n\nPlease check:\n${timingConflicts.map(c => `⏰ ${c.message}`).join('\n')}` : '';
 
       if (proposalId && extractedMeds && extractedMeds.length > 0) {
         // If Level 1 (clear lines, no conflicts), patient/caregiver can approve immediately
         if (proposalLevel === 1) {
           const autoApprove = window.confirm(
             `Prescription parsed ${extractedMeds.length} medicine(s) successfully:\n` +
-            extractedMeds.map(m => `• ${m.name} (${m.strength || ''}) - ${m.frequency || 'once'}`).join('\n') +
+            extractedMeds.map(m => `• ${m.name} (${m.strength || ''}) - ${m.frequency || 'once'} at ${(m.scheduledTimes || []).join(', ')}`).join('\n') +
+            timingNote +
             `\n\nWould you like to approve and add these to your schedule now?`
           );
 
