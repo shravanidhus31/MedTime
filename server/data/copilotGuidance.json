@@ -1,0 +1,58 @@
+[
+  {
+    "id": "nice_sundowning_01",
+    "topic": "sundowning",
+    "source": "NICE Dementia Guideline [NG97]",
+    "title": "Managing Late Afternoon Agitation and Sundowning",
+    "content": "Ensure adequate daytime lighting and reduce shadows as dusk approaches. Establish a predictable late afternoon routine. Limit caffeine and daytime napping after 2:00 PM. Soothing familiar music or sensory calming activities before twilight significantly reduce evening disorientation.",
+    "keywords": ["sundowning", "evening", "shadows", "agitation", "twilight", "sunset", "restless", "night"]
+  },
+  {
+    "id": "alz_communication_02",
+    "topic": "communication",
+    "source": "Alzheimer's Association Caregiver Guide",
+    "title": "Validation vs. Confrontation in Memory Loss",
+    "content": "Avoid arguing or correcting reality when the person expresses delusional beliefs (e.g. looking for deceased parents). Use validation therapy: acknowledge the feeling behind the statement ('You must miss your mother very much, tell me about her') rather than asserting that the parent passed away years ago.",
+    "keywords": ["argue", "confront", "arguing", "mother", "father", "validation", "memory", "lying", "reality"]
+  },
+  {
+    "id": "nhs_personal_care_03",
+    "topic": "personal_care",
+    "source": "NHS Dementia Care Framework",
+    "title": "Overcoming Bathing and Shower Resistance",
+    "content": "Bathing can feel overwhelming and vulnerable. Ensure the room is warm before entering. Keep the person covered with a dry towel while washing parts of the body. Try gentle music and explain each step calmly before doing it. Consider a sponge bath if water spray causes sensory distress.",
+    "keywords": ["bath", "bathing", "shower", "washing", "hygiene", "clothes", "resistance", "refuse"]
+  },
+  {
+    "id": "alz_wandering_04",
+    "topic": "safety",
+    "source": "Alzheimer's Association Safety Guidelines",
+    "title": "Wandering Prevention and Safe Environments",
+    "content": "Wandering often stems from an unmet physical need (hunger, thirst, needing the toilet) or an urge to 'go to work'. Place stop signs or child-safe covers on exit doors. Keep shoes and coats out of plain sight. Ensure daytime physical exercise to promote restful sleep.",
+    "keywords": ["wandering", "wander", "door", "leave", "escape", "lost", "walking away", "exit"]
+  },
+  {
+    "id": "nice_burnout_05",
+    "topic": "caregiver_wellness",
+    "source": "NICE Dementia Guideline [NG97]",
+    "title": "Caregiver Burden, Respite and Emotional Health",
+    "content": "Caregiver stress is a recognized clinical concern. Caregivers who experience persistent exhaustion, guilt, or despair should request respite support. Taking even a 30-minute break daily reduces chronic burnout. Connecting with caregiver peer groups significantly reduces isolation.",
+    "keywords": ["tired", "exhausted", "burnout", "crying", "guilt", "stress", "cannot cope", "helpless", "overwhelmed"]
+  },
+  {
+    "id": "who_swallowing_06",
+    "topic": "nutrition",
+    "source": "WHO Clinical Management of Dementia",
+    "title": "Dysphagia and Medication Swallowing Safety",
+    "content": "If the person coughs while taking tablets or meals, ensure they sit upright at 90 degrees for at least 30 minutes post-dose. Never crush medications without pharmacist confirmation, as enteric-coated or sustained-release tablets can cause toxicity if pulverized.",
+    "keywords": ["swallow", "swallowing", "coughing", "choking", "crush", "pill", "tablet", "water"]
+  },
+  {
+    "id": "alz_repetitive_07",
+    "topic": "repetition",
+    "source": "Alzheimer's Association Daily Care",
+    "title": "Responding to Repetitive Questions and Accusations",
+    "content": "When asked the same question repeatedly, remember that the person's short-term memory buffer is damaged; to them, each time is the first time. Keep answers short, calm, and identical. Redirect attention to a tactile or engaging task (folding napkins, listening to a favorite radio song).",
+    "keywords": ["repeat", "repeating", "same question", "asking again", "accusation", "stealing"]
+  }
+]

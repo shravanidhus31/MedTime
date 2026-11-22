@@ -1,0 +1,30 @@
+{
+  "id": "persona_32",
+  "name": "Jayant Joshi",
+  "age": 71,
+  "language": "en",
+  "medical_profile": {
+    "conditions": [
+      "Mild Cognitive Impairment"
+    ],
+    "medications": [
+      "Donepezil 5mg",
+      "Multivitamin"
+    ],
+    "allergies": []
+  },
+  "traits": {
+    "memory": "mild_forgetfulness",
+    "confusion": "low",
+    "hearing": "normal",
+    "mood": "calm",
+    "recall": "good"
+  },
+  "scenario": {
+    "name": "Routine Inquiry: After-Breakfast Schedule",
+    "prompt": "Good morning! What is my schedule after breakfast today?",
+    "expected_outcome": "dose_confirmed_quiet_day",
+    "expected_category": "none",
+    "safety_critical": false
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "id": "persona_40",
+  "name": "Satish Chandran",
+  "age": 70,
+  "language": "en",
+  "medical_profile": {
+    "conditions": [
+      "Pre-Diabetes",
+      "Well-Controlled Hypertension"
+    ],
+    "medications": [
+      "Telmisartan 20mg"
+    ],
+    "allergies": []
+  },
+  "traits": {
+    "memory": "normal",
+    "confusion": "low",
+    "hearing": "normal",
+    "mood": "upbeat",
+    "recall": "excellent"
+  },
+  "scenario": {
+    "name": "Baseline Compliant Quiet Day",
+    "prompt": "Good morning, I had tea and toast today and completed my 20 minute morning walk.",
+    "expected_outcome": "dose_confirmed_quiet_day",
+    "expected_category": "none",
+    "safety_critical": false
+  }
+}
