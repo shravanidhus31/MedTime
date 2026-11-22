@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
+import { HelpCircle } from 'lucide-react';
 
 export default function QuestionsPanel({ patientId, onUpdate }) {
   const [questions, setQuestions] = useState([]);
@@ -38,15 +39,15 @@ export default function QuestionsPanel({ patientId, onUpdate }) {
   if (questions.length === 0) return null;
 
   return (
-    <div className="bg-white rounded-[20px] p-6 border-[1.5px] border-[#e8dcc8] shadow-[0_2px_16px_rgba(90,60,30,0.08)] mb-8">
+    <div className="bg-white rounded-[20px] p-6 border-[1.5px] border-[#e2e9e5] shadow-[0_2px_16px_rgba(20,45,38,0.08)] mb-8">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2.5">
-          <span className="text-2xl">💬</span>
+          <span className="w-10 h-10 rounded-full bg-[#e3f2ea] text-[#2f6f5e] flex items-center justify-center shrink-0"><HelpCircle size={18} /></span>
           <div>
-            <h2 className="text-xl font-bold text-[#5c4535]" style={{ fontFamily: "'Lora', serif" }}>
+            <h2 className="text-xl font-bold text-[#2f6f5e]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
               Questions from the AI Care Agent
             </h2>
-            <p className="text-xs text-[#8a7560]">
+            <p className="text-xs text-[#66756f]">
               The agent needs clarification before continuing its workflow (CHI 2025).
             </p>
           </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
+import { NotebookPen } from 'lucide-react';
 
 /**
  * LifeNotesEditor — Feature 7 (B9: Memory Graph)
@@ -95,12 +96,12 @@ export default function LifeNotesEditor({ patientId }) {
   };
 
   const kinds = [
-    { id: 'all', label: 'All Notes', icon: '🧠' },
-    { id: 'topic_answer', label: 'Sensitive Topics ("How to answer")', icon: '💬' },
-    { id: 'person', label: 'People & Family', icon: '👤' },
-    { id: 'place', label: 'Places & Home', icon: '🏡' },
-    { id: 'routine', label: 'Daily Routines', icon: '⏰' },
-    { id: 'event', label: 'Life Events', icon: '📅' },
+    { id: 'all', label: 'All Notes', icon: '' },
+    { id: 'topic_answer', label: 'Sensitive Topics ("How to answer")', icon: '' },
+    { id: 'person', label: 'People & Family', icon: '' },
+    { id: 'place', label: 'Places & Home', icon: '' },
+    { id: 'routine', label: 'Daily Routines', icon: '' },
+    { id: 'event', label: 'Life Events', icon: '' },
   ];
 
   const filteredNotes = notes.filter((n) => {
@@ -110,16 +111,14 @@ export default function LifeNotesEditor({ patientId }) {
   });
 
   return (
-    <div className="bg-white rounded-[24px] p-6 border-[1.5px] border-[#e8dcc8] shadow-[0_2px_16px_rgba(90,60,30,0.08)] mb-8">
+    <div className="bg-white rounded-[24px] p-6 border-[1.5px] border-[#e2e9e5] shadow-[0_2px_16px_rgba(20,45,38,0.08)] mb-8">
       {/* Top Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#f0e6d6]">
+      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#e6eee9]">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#f5ede0] text-[#5c4535] flex items-center justify-center font-bold text-xl border border-[#e8dcc8]">
-            🌿
-          </div>
+          <div className="w-10 h-10 rounded-xl bg-[#eaf3ee] text-[#2f6f5e] flex items-center justify-center font-bold text-xl border border-[#e2e9e5]"><NotebookPen size={18} /></div>
           <div>
-            <h3 className="text-xl font-bold text-[#2d2418]">Patient Memory Graph & Life Notes</h3>
-            <p className="text-xs text-[#8a7560]">
+            <h3 className="text-xl font-bold text-[#1c2b26]">Patient Memory Graph & Life Notes</h3>
+            <p className="text-xs text-[#66756f]">
               Personal context and comforting phrasing used by the AI voice agent during check-ins and call-ins.
             </p>
           </div>
@@ -127,7 +126,7 @@ export default function LifeNotesEditor({ patientId }) {
 
         <button
           onClick={() => setShowModal(true)}
-          className="px-4 py-2 text-xs font-bold rounded-xl bg-[#5c4535] text-white hover:bg-[#483629] transition-colors shadow-sm flex items-center gap-2"
+          className="px-4 py-2 text-xs font-bold rounded-xl bg-[#2f6f5e] text-white hover:bg-[#255a4c] transition-colors shadow-sm flex items-center gap-2"
         >
           <span>＋</span> Add Memory Note
         </button>
@@ -142,8 +141,8 @@ export default function LifeNotesEditor({ patientId }) {
               onClick={() => setSelectedKind(k.id)}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${
                 selectedKind === k.id
-                  ? 'bg-[#5c4535] text-white border-[#5c4535]'
-                  : 'bg-white text-[#8a7560] border-[#e8dcc8] hover:bg-[#fdfaf5]'
+                  ? 'bg-[#2f6f5e] text-white border-[#2f6f5e]'
+                  : 'bg-white text-[#66756f] border-[#e2e9e5] hover:bg-[#f8faf9]'
               }`}
             >
               <span className="mr-1">{k.icon}</span> {k.label}
@@ -157,7 +156,7 @@ export default function LifeNotesEditor({ patientId }) {
             placeholder="Search memories..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full px-3 py-1.5 text-xs rounded-xl border border-[#e8dcc8] bg-[#fdfaf5] focus:outline-none focus:border-[#5c4535]"
+            className="w-full px-3 py-1.5 text-xs rounded-xl border border-[#e2e9e5] bg-[#f8faf9] focus:outline-none focus:border-[#2f6f5e]"
           />
         </div>
       </div>
@@ -171,11 +170,11 @@ export default function LifeNotesEditor({ patientId }) {
       {/* Notes Grid */}
       <div className="mt-6">
         {loading ? (
-          <div className="py-8 text-center text-xs text-[#8a7560]">Loading memory notes...</div>
+          <div className="py-8 text-center text-xs text-[#66756f]">Loading memory notes...</div>
         ) : filteredNotes.length === 0 ? (
-          <div className="py-10 text-center bg-[#fdfaf5] rounded-xl border border-dashed border-[#e8dcc8]">
-            <p className="text-sm font-semibold text-[#8a7560]">No notes found in this category</p>
-            <p className="text-xs text-[#b09e8c] mt-1">
+          <div className="py-10 text-center bg-[#f8faf9] rounded-xl border border-dashed border-[#e2e9e5]">
+            <p className="text-sm font-semibold text-[#66756f]">No notes found in this category</p>
+            <p className="text-xs text-[#93a59e] mt-1">
               Add family stories, routines, or answering guidelines to help the agent communicate smoothly.
             </p>
           </div>
@@ -188,14 +187,14 @@ export default function LifeNotesEditor({ patientId }) {
                   key={note._id}
                   className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
                     note.approved
-                      ? 'bg-white border-[#e8dcc8] hover:shadow-sm'
+                      ? 'bg-white border-[#e2e9e5] hover:shadow-sm'
                       : 'bg-amber-50/70 border-amber-300 shadow-sm'
                   }`}
                 >
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-2">
-                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#fdf5eb] text-[#8a5d3b] border border-[#e8dcc8] flex items-center gap-1">
-                        <span>{kindObj?.icon || '📝'}</span> {kindObj?.label || note.kind}
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#f6f9f7] text-[#2f6f5e] border border-[#e2e9e5] flex items-center gap-1">
+                        <span>{kindObj?.icon || ''}</span> {kindObj?.label || note.kind}
                       </span>
                       {note.approved ? (
                         <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
@@ -208,11 +207,11 @@ export default function LifeNotesEditor({ patientId }) {
                       )}
                     </div>
 
-                    <h4 className="font-bold text-sm text-[#2d2418] mb-1.5">{note.title}</h4>
-                    <p className="text-xs text-[#5c4535] leading-relaxed whitespace-pre-wrap">{note.text}</p>
+                    <h4 className="font-bold text-sm text-[#1c2b26] mb-1.5">{note.title}</h4>
+                    <p className="text-xs text-[#2f6f5e] leading-relaxed whitespace-pre-wrap">{note.text}</p>
                   </div>
 
-                  <div className="flex items-center justify-between pt-3 mt-3 border-t border-[#f0e6d6] text-[11px] text-[#8a7560]">
+                  <div className="flex items-center justify-between pt-3 mt-3 border-t border-[#e6eee9] text-[11px] text-[#66756f]">
                     <span>By: {note.writtenBy?.name || 'Caregiver'}</span>
                     <div className="flex items-center gap-2">
                       {!note.approved && (
@@ -241,9 +240,9 @@ export default function LifeNotesEditor({ patientId }) {
       {/* Add Note Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-[#e8dcc8] max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-[#f0e6d6]">
-              <h3 className="text-lg font-bold text-[#2d2418]">Add Memory Note</h3>
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-[#e2e9e5] max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-[#e6eee9]">
+              <h3 className="text-lg font-bold text-[#1c2b26]">Add Memory Note</h3>
               <button
                 onClick={() => setShowModal(false)}
                 className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-500"
@@ -254,39 +253,39 @@ export default function LifeNotesEditor({ patientId }) {
 
             <form onSubmit={handleCreateNote} className="space-y-4 mt-4">
               <div>
-                <label className="block text-xs font-bold text-[#5c4535] mb-1">Category</label>
+                <label className="block text-xs font-bold text-[#2f6f5e] mb-1">Category</label>
                 <select
                   value={formData.kind}
                   onChange={(e) => setFormData({ ...formData, kind: e.target.value })}
-                  className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-[#e8dcc8] bg-white focus:outline-none focus:border-[#5c4535]"
+                  className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-[#e2e9e5] bg-white focus:outline-none focus:border-[#2f6f5e]"
                 >
-                  <option value="topic_answer">💬 Sensitive Topic (&quot;How should we answer questions about...&quot;)</option>
-                  <option value="person">👤 Person / Family Member</option>
-                  <option value="place">🏡 Place / Familiar Surroundings</option>
-                  <option value="routine">⏰ Daily Habit or Routine</option>
-                  <option value="event">📅 Memorable Life Event</option>
+                  <option value="topic_answer">Sensitive Topic (&quot;How should we answer questions about...&quot;)</option>
+                  <option value="person">Person / Family Member</option>
+                  <option value="place">Place / Familiar Surroundings</option>
+                  <option value="routine">Daily Habit or Routine</option>
+                  <option value="event">Memorable Life Event</option>
                 </select>
                 {formData.kind === 'topic_answer' && (
-                  <p className="text-[11px] text-[#8a7560] mt-1 italic">
+                  <p className="text-[11px] text-[#66756f] mt-1 italic">
                     Example: When Grandma repeatedly asks about her late husband, instruct the agent how to answer kindly without causing distress.
                   </p>
                 )}
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#5c4535] mb-1">Title / Topic Name</label>
+                <label className="block text-xs font-bold text-[#2f6f5e] mb-1">Title / Topic Name</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Questions about Grandpa, Morning Walk Routine, etc."
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-[#e8dcc8] bg-white focus:outline-none focus:border-[#5c4535]"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-[#e2e9e5] bg-white focus:outline-none focus:border-[#2f6f5e]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#5c4535] mb-1">
+                <label className="block text-xs font-bold text-[#2f6f5e] mb-1">
                   {formData.kind === 'topic_answer' ? 'Approved Answer Wording' : 'Context / Instructions'}
                 </label>
                 <textarea
@@ -299,12 +298,12 @@ export default function LifeNotesEditor({ patientId }) {
                   }
                   value={formData.text}
                   onChange={(e) => setFormData({ ...formData, text: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-[#e8dcc8] bg-white focus:outline-none focus:border-[#5c4535]"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-[#e2e9e5] bg-white focus:outline-none focus:border-[#2f6f5e]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#5c4535] mb-1">
+                <label className="block text-xs font-bold text-[#2f6f5e] mb-1">
                   Optional Linked Voice Clip ID
                 </label>
                 <input
@@ -312,22 +311,22 @@ export default function LifeNotesEditor({ patientId }) {
                   placeholder="e.g. clip_daughter_morning_greeting"
                   value={formData.linkedRecordingId}
                   onChange={(e) => setFormData({ ...formData, linkedRecordingId: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-[#e8dcc8] bg-white focus:outline-none focus:border-[#5c4535]"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-[#e2e9e5] bg-white focus:outline-none focus:border-[#2f6f5e]"
                 />
               </div>
 
-              <div className="flex justify-end gap-3 pt-3 border-t border-[#f0e6d6]">
+              <div className="flex justify-end gap-3 pt-3 border-t border-[#e6eee9]">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-xs font-bold rounded-xl border border-[#e8dcc8] text-[#8a7560] hover:bg-gray-50"
+                  className="px-4 py-2 text-xs font-bold rounded-xl border border-[#e2e9e5] text-[#66756f] hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-5 py-2 text-xs font-bold rounded-xl bg-[#5c4535] text-white hover:bg-[#483629] transition-colors disabled:opacity-50"
+                  className="px-5 py-2 text-xs font-bold rounded-xl bg-[#2f6f5e] text-white hover:bg-[#255a4c] transition-colors disabled:opacity-50"
                 >
                   {submitting ? 'Saving...' : 'Save Note'}
                 </button>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import api from '../../utils/api';
+import { PhoneIncoming } from 'lucide-react';
 
 /**
  * CallinSimulator — B11 (Feature 7: "Did I take my pills?" Call-In Agent)
@@ -85,16 +86,14 @@ export default function CallinSimulator({ patientId }) {
   };
 
   return (
-    <div className="bg-white rounded-[24px] p-6 border-[1.5px] border-[#e8dcc8] shadow-[0_2px_16px_rgba(90,60,30,0.08)] mb-8">
+    <div className="bg-white rounded-[24px] p-6 border-[1.5px] border-[#e2e9e5] shadow-[0_2px_16px_rgba(20,45,38,0.08)] mb-8">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#f0e6d6]">
+      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#e6eee9]">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#eef7f2] text-[#2e7d32] flex items-center justify-center font-bold text-xl border border-[#c8e6c9]">
-            📞
-          </div>
+          <div className="w-10 h-10 rounded-xl bg-[#eef7f2] text-[#2e7d32] flex items-center justify-center font-bold text-xl border border-[#c8e6c9]"><PhoneIncoming size={18} /></div>
           <div>
-            <h3 className="text-xl font-bold text-[#2d2418]">Call-In Agent Simulator (Feature 7)</h3>
-            <p className="text-xs text-[#8a7560]">
+            <h3 className="text-xl font-bold text-[#1c2b26]">Call-In Agent Simulator (Feature 7)</h3>
+            <p className="text-xs text-[#66756f]">
               Test patient inquiries (&quot;Did I take my pills?&quot;, family queries, safety checks) in text mode.
             </p>
           </div>
@@ -102,7 +101,7 @@ export default function CallinSimulator({ patientId }) {
 
         <button
           onClick={handleReset}
-          className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#e8dcc8] text-[#8a7560] hover:bg-gray-50"
+          className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#e2e9e5] text-[#66756f] hover:bg-gray-50"
         >
           ↺ Reset Call
         </button>
@@ -110,13 +109,13 @@ export default function CallinSimulator({ patientId }) {
 
       {/* Quick Prompts */}
       <div className="flex flex-wrap items-center gap-2 mt-4">
-        <span className="text-[11px] font-bold text-[#8a7560]">Sample Questions:</span>
+        <span className="text-[11px] font-bold text-[#66756f]">Sample Questions:</span>
         {quickPrompts.map((p, idx) => (
           <button
             key={idx}
             disabled={loading}
             onClick={() => handleSend(p)}
-            className="px-2.5 py-1 text-xs rounded-full bg-[#fdfaf5] border border-[#e8dcc8] text-[#5c4535] hover:bg-[#f5ede0] transition-colors disabled:opacity-50"
+            className="px-2.5 py-1 text-xs rounded-full bg-[#f8faf9] border border-[#e2e9e5] text-[#2f6f5e] hover:bg-[#eaf3ee] transition-colors disabled:opacity-50"
           >
             {p}
           </button>
@@ -130,20 +129,20 @@ export default function CallinSimulator({ patientId }) {
       )}
 
       {/* Transcript Log */}
-      <div className="mt-4 space-y-3 max-h-72 overflow-y-auto p-4 bg-[#fdfaf5] rounded-2xl border border-[#f0e6d6]">
+      <div className="mt-4 space-y-3 max-h-72 overflow-y-auto p-4 bg-[#f8faf9] rounded-2xl border border-[#e6eee9]">
         {messages.map((m, idx) => (
           <div
             key={idx}
             className={`flex flex-col ${m.role === 'patient' ? 'items-end' : 'items-start'}`}
           >
-            <div className="text-[10px] text-[#8a7560] px-1 mb-0.5">
+            <div className="text-[10px] text-[#66756f] px-1 mb-0.5">
               {m.role === 'patient' ? 'Patient' : 'MedTime Agent'} • {m.time}
             </div>
             <div
               className={`max-w-[85%] p-3.5 rounded-2xl text-xs leading-relaxed ${
                 m.role === 'patient'
-                  ? 'bg-[#5c4535] text-white rounded-br-none'
-                  : 'bg-white text-[#2d2418] border border-[#e8dcc8] shadow-sm rounded-bl-none'
+                  ? 'bg-[#2f6f5e] text-white rounded-br-none'
+                  : 'bg-white text-[#1c2b26] border border-[#e2e9e5] shadow-sm rounded-bl-none'
               }`}
             >
               <p>{m.text}</p>
@@ -153,7 +152,7 @@ export default function CallinSimulator({ patientId }) {
                     Action: {m.action.replace(/_/g, ' ')}
                   </span>
                   {m.source && (
-                    <span className="text-[10px] text-[#8a7560]">Source: {m.source}</span>
+                    <span className="text-[10px] text-[#66756f]">Source: {m.source}</span>
                   )}
                 </div>
               )}
@@ -161,7 +160,7 @@ export default function CallinSimulator({ patientId }) {
           </div>
         ))}
         {loading && (
-          <div className="text-xs text-[#8a7560] italic flex items-center gap-2">
+          <div className="text-xs text-[#66756f] italic flex items-center gap-2">
             <span>Agent is looking up records...</span>
           </div>
         )}
@@ -181,12 +180,12 @@ export default function CallinSimulator({ patientId }) {
           value={inputQuery}
           onChange={(e) => setInputQuery(e.target.value)}
           disabled={loading}
-          className="flex-1 px-4 py-2.5 text-xs rounded-xl border border-[#e8dcc8] bg-white focus:outline-none focus:border-[#5c4535]"
+          className="flex-1 px-4 py-2.5 text-xs rounded-xl border border-[#e2e9e5] bg-white focus:outline-none focus:border-[#2f6f5e]"
         />
         <button
           type="submit"
           disabled={loading || !inputQuery.trim()}
-          className="px-5 py-2.5 text-xs font-bold rounded-xl bg-[#5c4535] text-white hover:bg-[#483629] transition-colors disabled:opacity-50"
+          className="px-5 py-2.5 text-xs font-bold rounded-xl bg-[#2f6f5e] text-white hover:bg-[#255a4c] transition-colors disabled:opacity-50"
         >
           {loading ? 'Thinking...' : 'Speak ↵'}
         </button>

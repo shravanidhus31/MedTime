@@ -91,21 +91,21 @@ export default function CaregiverAccessPage() {
   const backLink = user?.role === 'patient' ? '/patient' : '/caregiver';
 
   return (
-    <div className="min-h-screen bg-[#fdf8f0] text-[#2d2418] pb-12 font-sans" style={{ fontFamily: "'Nunito', sans-serif" }}>
+    <div className="min-h-screen bg-[#f4f7f5] text-[#1c2b26] pb-12 font-sans" style={{ fontFamily: "'Inter', sans-serif" }}>
       {/* Top Nav */}
-      <nav className="bg-white border-b-[1.5px] border-[#e8dcc8] px-8 h-[68px] flex items-center justify-between shadow-[0_2px_12px_rgba(90,60,30,0.06)]">
+      <nav className="bg-white border-b-[1.5px] border-[#e2e9e5] px-8 h-[68px] flex items-center justify-between shadow-[0_2px_12px_rgba(20,45,38,0.06)]">
         <div className="flex items-center gap-3">
-          <Link to={backLink} className="w-10 h-10 bg-gradient-to-br from-[#f2c4b5] to-[#dbd3ef] rounded-[10px] flex items-center justify-center text-xl">
-            💊
+          <Link to={backLink} className="w-10 h-10 bg-gradient-to-br from-[#f5c6c0] to-[#dfe9f5] rounded-[10px] flex items-center justify-center text-xl">
+            
           </Link>
-          <span className="text-xl text-[#5c4535] font-medium" style={{ fontFamily: "'Lora', serif" }}>
+          <span className="text-xl text-[#2f6f5e] font-medium" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
             MedTime Care
           </span>
         </div>
         <div className="flex items-center gap-4">
           <Link
             to={backLink}
-            className="text-sm font-bold text-[#5c4535] px-4 py-2 rounded-xl border border-[#e8dcc8] hover:bg-[#f5ede0] transition-colors"
+            className="text-sm font-bold text-[#2f6f5e] px-4 py-2 rounded-xl border border-[#e2e9e5] hover:bg-[#eaf3ee] transition-colors"
           >
             ← Back to Dashboard
           </Link>
@@ -114,10 +114,10 @@ export default function CaregiverAccessPage() {
 
       <div className="max-w-[960px] mx-auto px-6 mt-10">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-[#5c4535] mb-2" style={{ fontFamily: "'Lora', serif" }}>
+          <h1 className="text-3xl font-bold text-[#2f6f5e] mb-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
             Caregiver Access Management
           </h1>
-          <p className="text-[#8a7560]">
+          <p className="text-[#66756f]">
             Review, approve, or revoke caregiver access permissions. Revocations take effect immediately.
           </p>
         </div>
@@ -131,8 +131,8 @@ export default function CaregiverAccessPage() {
                 onClick={() => setSelectedPatientId(p.patientId)}
                 className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all border-[1.5px] whitespace-nowrap ${
                   selectedPatientId === p.patientId
-                    ? 'bg-[#5c4535] text-white border-[#5c4535]'
-                    : 'bg-white text-[#8a7560] border-[#e8dcc8] hover:bg-[#f5ede0]'
+                    ? 'bg-[#2f6f5e] text-white border-[#2f6f5e]'
+                    : 'bg-white text-[#66756f] border-[#e2e9e5] hover:bg-[#eaf3ee]'
                 }`}
               >
                 {p.name}
@@ -154,9 +154,9 @@ export default function CaregiverAccessPage() {
         )}
 
         {/* ─── SECTION 1: Pending Access Requests ─── */}
-        <div className="bg-white rounded-[20px] p-6 border-[1.5px] border-[#e8dcc8] shadow-[0_2px_16px_rgba(90,60,30,0.08)] mb-8">
+        <div className="bg-white rounded-[20px] p-6 border-[1.5px] border-[#e2e9e5] shadow-[0_2px_16px_rgba(20,45,38,0.08)] mb-8">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-[#5c4535]" style={{ fontFamily: "'Lora', serif" }}>
+            <h2 className="text-xl font-bold text-[#2f6f5e]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
               Pending Requests
             </h2>
             <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
@@ -165,9 +165,9 @@ export default function CaregiverAccessPage() {
           </div>
 
           {isLoading ? (
-            <p className="text-sm text-[#8a7560]">Loading requests...</p>
+            <p className="text-sm text-[#66756f]">Loading requests...</p>
           ) : pendingLinks.length === 0 ? (
-            <div className="py-6 text-center text-sm text-[#8a7560]">
+            <div className="py-6 text-center text-sm text-[#66756f]">
               No pending caregiver link requests at this time.
             </div>
           ) : (
@@ -181,7 +181,7 @@ export default function CaregiverAccessPage() {
                     <div className="font-bold text-gray-900 text-base">{item.user?.name || 'Caregiver'}</div>
                     <div className="text-sm text-gray-600 mt-1">
                       Phone: <span className="font-medium">{item.user?.phone || '—'}</span> · Requested Role:{' '}
-                      <span className="font-bold capitalize text-[#5c4535]">{item.role}</span>
+                      <span className="font-bold capitalize text-[#2f6f5e]">{item.role}</span>
                     </div>
                     <div className="text-xs text-gray-400 mt-1">
                       Requested on {new Date(item.createdAt).toLocaleDateString()}
@@ -209,9 +209,9 @@ export default function CaregiverAccessPage() {
         </div>
 
         {/* ─── SECTION 2: Active Caregivers ─── */}
-        <div className="bg-white rounded-[20px] p-6 border-[1.5px] border-[#e8dcc8] shadow-[0_2px_16px_rgba(90,60,30,0.08)] mb-8">
+        <div className="bg-white rounded-[20px] p-6 border-[1.5px] border-[#e2e9e5] shadow-[0_2px_16px_rgba(20,45,38,0.08)] mb-8">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-[#5c4535]" style={{ fontFamily: "'Lora', serif" }}>
+            <h2 className="text-xl font-bold text-[#2f6f5e]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
               Active Caregivers & Permissions
             </h2>
             <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800 border border-green-200">
@@ -220,19 +220,19 @@ export default function CaregiverAccessPage() {
           </div>
 
           {isLoading ? (
-            <p className="text-sm text-[#8a7560]">Loading caregivers...</p>
+            <p className="text-sm text-[#66756f]">Loading caregivers...</p>
           ) : activeLinks.length === 0 ? (
-            <div className="py-6 text-center text-sm text-[#8a7560]">
+            <div className="py-6 text-center text-sm text-[#66756f]">
               No active caregivers linked yet.
             </div>
           ) : (
-            <div className="divide-y divide-[#f5ede0]">
+            <div className="divide-y divide-[#eaf3ee]">
               {activeLinks.map((item) => (
                 <div key={item._id} className="py-4 flex items-center justify-between flex-wrap gap-4">
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-gray-900 text-base">{item.user?.name || 'Caregiver'}</span>
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#f5ede0] text-[#5c4535] border border-[#e8dcc8] capitalize">
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#eaf3ee] text-[#2f6f5e] border border-[#e2e9e5] capitalize">
                         {item.role}
                       </span>
                     </div>
@@ -261,11 +261,11 @@ export default function CaregiverAccessPage() {
 
         {/* ─── SECTION 3: Revoked Access History ─── */}
         {revokedLinks.length > 0 && (
-          <div className="bg-white rounded-[20px] p-6 border-[1.5px] border-[#e8dcc8] shadow-[0_2px_16px_rgba(90,60,30,0.08)]">
-            <h2 className="text-lg font-bold text-[#8a7560] mb-3" style={{ fontFamily: "'Lora', serif" }}>
+          <div className="bg-white rounded-[20px] p-6 border-[1.5px] border-[#e2e9e5] shadow-[0_2px_16px_rgba(20,45,38,0.08)]">
+            <h2 className="text-lg font-bold text-[#66756f] mb-3" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
               Revoked Caregivers (Audit History)
             </h2>
-            <div className="divide-y divide-[#f5ede0]">
+            <div className="divide-y divide-[#eaf3ee]">
               {revokedLinks.map((item) => (
                 <div key={item._id} className="py-3 flex items-center justify-between text-xs text-gray-500">
                   <div>

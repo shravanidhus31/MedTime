@@ -100,39 +100,39 @@ export default function RoutineProfileEditor({ patientId }) {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-2xl border border-[#e8dcc8] p-6">
-        <p className="text-sm text-[#8a7560] animate-pulse">Loading routine profile…</p>
+      <div className="bg-white rounded-2xl border border-[#e2e9e5] p-6">
+        <p className="text-sm text-[#66756f] animate-pulse">Loading routine profile…</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-[#e8dcc8] p-6 space-y-6">
+    <div className="bg-white rounded-2xl border border-[#e2e9e5] p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-[#2d2418]">📅 Daily Routine Profile</h2>
-        <span className="text-xs text-[#8a7560] bg-[#fdf8f0] px-3 py-1 rounded-full">
+        <h2 className="text-lg font-bold text-[#1c2b26]">Daily Routine Profile</h2>
+        <span className="text-xs text-[#66756f] bg-[#f4f7f5] px-3 py-1 rounded-full">
           Used by Prescription Agent to fit new medicines into the schedule
         </span>
       </div>
 
       {/* Meal & Sleep Times */}
       <div>
-        <h3 className="text-sm font-semibold text-[#5c4535] mb-3">Weekday Times (IST)</h3>
+        <h3 className="text-sm font-semibold text-[#2f6f5e] mb-3">Weekday Times (IST)</h3>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
           {[
-            { label: '☀️ Wake Up', field: 'wakeUpTime' },
-            { label: '🍳 Breakfast', field: 'breakfastTime' },
-            { label: '🍛 Lunch', field: 'lunchTime' },
-            { label: '🌙 Dinner', field: 'dinnerTime' },
-            { label: '🛏 Bedtime', field: 'bedTime' },
+            { label: 'Wake Up', field: 'wakeUpTime' },
+            { label: 'Breakfast', field: 'breakfastTime' },
+            { label: 'Lunch', field: 'lunchTime' },
+            { label: 'Dinner', field: 'dinnerTime' },
+            { label: 'Bedtime', field: 'bedTime' },
           ].map(({ label, field }) => (
             <div key={field}>
-              <label className="block text-xs text-[#8a7560] mb-1">{label}</label>
+              <label className="block text-xs text-[#66756f] mb-1">{label}</label>
               <input
                 type="time"
                 value={profile[field]}
                 onChange={e => handleChange(field, e.target.value)}
-                className="w-full border border-[#e8dcc8] rounded-lg px-3 py-2 text-sm text-[#2d2418] focus:outline-none focus:ring-2 focus:ring-[#c5a87a]"
+                className="w-full border border-[#e2e9e5] rounded-lg px-3 py-2 text-sm text-[#1c2b26] focus:outline-none focus:ring-2 focus:ring-[#9fb5ad]"
               />
             </div>
           ))}
@@ -141,21 +141,21 @@ export default function RoutineProfileEditor({ patientId }) {
 
       {/* Weekend Overrides */}
       <div>
-        <h3 className="text-sm font-semibold text-[#5c4535] mb-1">Weekend Overrides (optional)</h3>
-        <p className="text-xs text-[#8a7560] mb-3">Leave blank to use the same weekday times on weekends.</p>
+        <h3 className="text-sm font-semibold text-[#2f6f5e] mb-1">Weekend Overrides (optional)</h3>
+        <p className="text-xs text-[#66756f] mb-3">Leave blank to use the same weekday times on weekends.</p>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
           {[
-            { label: '☀️ Weekend Wake Up', field: 'weekendWakeUpTime' },
-            { label: '🍳 Weekend Breakfast', field: 'weekendBreakfastTime' },
-            { label: '🛏 Weekend Bedtime', field: 'weekendBedTime' },
+            { label: 'Weekend Wake Up', field: 'weekendWakeUpTime' },
+            { label: 'Weekend Breakfast', field: 'weekendBreakfastTime' },
+            { label: 'Weekend Bedtime', field: 'weekendBedTime' },
           ].map(({ label, field }) => (
             <div key={field}>
-              <label className="block text-xs text-[#8a7560] mb-1">{label}</label>
+              <label className="block text-xs text-[#66756f] mb-1">{label}</label>
               <input
                 type="time"
                 value={profile[field]}
                 onChange={e => handleChange(field, e.target.value)}
-                className="w-full border border-[#e8dcc8] rounded-lg px-3 py-2 text-sm text-[#2d2418] focus:outline-none focus:ring-2 focus:ring-[#c5a87a]"
+                className="w-full border border-[#e2e9e5] rounded-lg px-3 py-2 text-sm text-[#1c2b26] focus:outline-none focus:ring-2 focus:ring-[#9fb5ad]"
               />
             </div>
           ))}
@@ -164,7 +164,7 @@ export default function RoutineProfileEditor({ patientId }) {
 
       {/* Pillbox Layout */}
       <div>
-        <h3 className="text-sm font-semibold text-[#5c4535] mb-3">Pillbox Layout</h3>
+        <h3 className="text-sm font-semibold text-[#2f6f5e] mb-3">Pillbox Layout</h3>
         <div className="flex flex-wrap gap-2 mb-3">
           {Object.keys(PILLBOX_PRESETS).map(preset => (
             <button
@@ -172,8 +172,8 @@ export default function RoutineProfileEditor({ patientId }) {
               onClick={() => handlePillboxPreset(preset)}
               className={`text-xs px-3 py-1.5 rounded-full font-medium border transition-colors ${
                 pillboxPreset === preset
-                  ? 'bg-[#5c4535] text-white border-[#5c4535]'
-                  : 'bg-white text-[#5c4535] border-[#c8b89a] hover:bg-[#fdf8f0]'
+                  ? 'bg-[#2f6f5e] text-white border-[#2f6f5e]'
+                  : 'bg-white text-[#2f6f5e] border-[#c8b89a] hover:bg-[#f4f7f5]'
               }`}
             >
               {preset}
@@ -183,13 +183,13 @@ export default function RoutineProfileEditor({ patientId }) {
 
         {pillboxPreset === 'Custom' && (
           <div>
-            <label className="block text-xs text-[#8a7560] mb-1">Custom Slot Labels (comma-separated)</label>
+            <label className="block text-xs text-[#66756f] mb-1">Custom Slot Labels (comma-separated)</label>
             <input
               type="text"
               placeholder="e.g. Morning, Noon, Night"
               value={customSlots}
               onChange={e => handleCustomSlots(e.target.value)}
-              className="w-full border border-[#e8dcc8] rounded-lg px-3 py-2 text-sm text-[#2d2418] focus:outline-none focus:ring-2 focus:ring-[#c5a87a]"
+              className="w-full border border-[#e2e9e5] rounded-lg px-3 py-2 text-sm text-[#1c2b26] focus:outline-none focus:ring-2 focus:ring-[#9fb5ad]"
             />
           </div>
         )}
@@ -197,7 +197,7 @@ export default function RoutineProfileEditor({ patientId }) {
         {profile.pillboxSlots.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-3">
             {profile.pillboxSlots.map(slot => (
-              <span key={slot} className="bg-[#fdf8f0] border border-[#e8dcc8] text-[#5c4535] text-xs px-3 py-1 rounded-full font-semibold">
+              <span key={slot} className="bg-[#f4f7f5] border border-[#e2e9e5] text-[#2f6f5e] text-xs px-3 py-1 rounded-full font-semibold">
                 {slot}
               </span>
             ))}
@@ -207,13 +207,13 @@ export default function RoutineProfileEditor({ patientId }) {
 
       {/* Notes */}
       <div>
-        <label className="block text-xs text-[#8a7560] mb-1">Notes for Agent</label>
+        <label className="block text-xs text-[#66756f] mb-1">Notes for Agent</label>
         <textarea
           rows={2}
           placeholder="e.g. Patient skips lunch on Tuesdays. Blood pressure medicine must always be morning."
           value={profile.notes}
           onChange={e => handleChange('notes', e.target.value)}
-          className="w-full border border-[#e8dcc8] rounded-lg px-3 py-2 text-sm text-[#2d2418] focus:outline-none focus:ring-2 focus:ring-[#c5a87a] resize-none"
+          className="w-full border border-[#e2e9e5] rounded-lg px-3 py-2 text-sm text-[#1c2b26] focus:outline-none focus:ring-2 focus:ring-[#9fb5ad] resize-none"
         />
       </div>
 
@@ -221,8 +221,8 @@ export default function RoutineProfileEditor({ patientId }) {
       {message && (
         <div className={`text-sm px-4 py-2 rounded-lg ${
           message.type === 'success'
-            ? 'bg-[#c8d9c4] text-[#2a4a28]'
-            : 'bg-[#f7ddd4] text-[#7a2a1a]'
+            ? 'bg-[#d6ebe0] text-[#1e5a45]'
+            : 'bg-[#fdecea] text-[#a23b32]'
         }`}>
           {message.text}
         </div>
@@ -231,7 +231,7 @@ export default function RoutineProfileEditor({ patientId }) {
       <button
         onClick={handleSave}
         disabled={saving || !patientId}
-        className="w-full bg-[#5c4535] text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-[#4a3628] disabled:opacity-50 transition-colors"
+        className="w-full bg-[#2f6f5e] text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-[#255a4c] disabled:opacity-50 transition-colors"
       >
         {saving ? 'Saving…' : 'Save Routine Profile'}
       </button>

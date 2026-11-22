@@ -16,7 +16,18 @@ import CaregiverCopilotPanel from '../components/agent/CaregiverCopilotPanel';
 import FollowUpsPanel from '../components/agent/FollowUpsPanel';
 import AttentionStrip from '../components/agent/AttentionStrip';
 import CareSettings from '../components/CareSettings';
-import { Tabs, Card, SectionTitle } from '../components/ui';
+import { Card, SectionTitle } from '../components/ui';
+import { HeartPulse, LayoutDashboard, CheckSquare, Activity, LineChart, MessageCircle, Settings, Users, LogOut, UserPlus } from 'lucide-react';
+
+// Sections, as tabs in the nav bar. 'today' is the Overview (the id is kept so a remembered tab still works).
+const NAV = [
+  { id: 'today', label: 'Overview', icon: LayoutDashboard },
+  { id: 'approvals', label: 'Approvals', icon: CheckSquare },
+  { id: 'activity', label: 'Agent decisions', icon: Activity },
+  { id: 'insights', label: 'Insights', icon: LineChart },
+  { id: 'copilot', label: 'Copilot', icon: MessageCircle },
+  { id: 'setup', label: 'Setup', icon: Settings },
+];
 
 // UI pass (22 Nov): the dashboard is tabs under a "Needs attention" strip, instead of ten panels in
 // one long page. The tab is remembered on this device.
@@ -125,6 +136,7 @@ export default function CaregiverDashboard() {
   });
 
   const selectedPatient = patients.find(p => p.patientId === selectedPatientId);
+  const approvalsCount = attention ? attention.pendingApprovals + attention.pendingQuestions : 0;
 
   const linkForm = (
     <>
@@ -134,10 +146,10 @@ export default function CaregiverDashboard() {
               placeholder="Enter patient's registered phone number (e.g. 9876543210)"
               value={linkPhone}
               onChange={(e) => setLinkPhone(e.target.value)}
-              className="flex-1 px-4 py-[13px] bg-white border-[1.5px] border-[#e8dcc8] rounded-xl outline-none focus:border-[#5c4535] font-sans transition-colors w-full"
+              className="flex-1 px-4 py-[13px] bg-white border-[1.5px] border-[#e2e9e5] rounded-xl outline-none focus:border-[#2f6f5e] font-sans transition-colors w-full"
               required
             />
-            <button type="submit" className="bg-[#5c4535] text-white px-6 py-[13px] rounded-xl font-bold hover:bg-[#4a3628] transition-colors border-[1.5px] border-[#5c4535] w-full md:w-auto whitespace-nowrap">
+            <button type="submit" className="bg-[#2f6f5e] text-white px-6 py-[13px] rounded-xl font-bold hover:bg-[#255a4c] transition-colors border-[1.5px] border-[#2f6f5e] w-full md:w-auto whitespace-nowrap">
               Link Patient
             </button>
           </form>
@@ -150,54 +162,66 @@ export default function CaregiverDashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-[#fdf8f0] text-[#2d2418] font-sans pb-12" style={{ fontFamily: "'Nunito', sans-serif" }}>
+    <div className="min-h-screen bg-[#f4f7f5] text-[#1c2b26] font-sans pb-12" >
 
-      {/* ─── TOP NAV ─── */}
-      <nav className="sticky top-0 z-40 bg-white border-b-[1.5px] border-[#e8dcc8] px-8 h-[68px] flex items-center shadow-[0_2px_12px_rgba(90,60,30,0.06)] justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-[#f2c4b5] to-[#dbd3ef] rounded-[10px] flex items-center justify-center text-xl">
-            💊
+      {/* ─── TOP NAV: every section is a tab here (UI pass, 22 Nov) ─── */}
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-[#e2e9e5]">
+        <div className="max-w-[1240px] mx-auto px-4 md:px-7 h-[64px] flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5 shrink-0">
+            <div className="w-9 h-9 rounded-full bg-[#e3f2ea] text-[#2f6f5e] flex items-center justify-center">
+              <HeartPulse size={18} strokeWidth={2.2} />
+            </div>
+            <div className="leading-tight">
+              <div className="text-[17px] font-bold text-[#1c2b26]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>MedTime</div>
+              <div className="text-[11px] text-[#66756f]">Care team</div>
+            </div>
           </div>
-          <span className="text-xl text-[#5c4535] font-medium" style={{ fontFamily: "'Lora', serif" }}>
-            MedTime Care
-          </span>
+          {selectedPatientId && (
+            <nav className="hidden lg:flex items-center gap-1" aria-label="Sections">
+              {NAV.map((n) => (
+                <button key={n.id} onClick={() => setTab(n.id)} aria-current={tab === n.id ? 'page' : undefined}
+                  className={`flex items-center gap-2 whitespace-nowrap px-3.5 py-2 rounded-full text-sm font-semibold transition-colors ${tab === n.id ? 'bg-[#e3f2ea] text-[#2f6f5e]' : 'text-[#66756f] hover:text-[#1c2b26] hover:bg-[#f4f7f5]'}`}>
+                  <n.icon size={16} />
+                  {n.label}
+                  {n.id === 'approvals' && approvalsCount > 0 && <span className="text-[10px] font-bold bg-[#a23b32] text-white rounded-full px-1.5 py-0.5">{approvalsCount}</span>}
+                </button>
+              ))}
+            </nav>
+          )}
+          <div className="flex items-center gap-2 shrink-0">
+            <Link to="/caregiver/access" className="hidden md:inline-flex items-center gap-1.5 text-sm font-semibold text-[#2f6f5e] px-3 py-2 rounded-full hover:bg-[#f4f7f5]">
+              <Users size={16} /> Access
+            </Link>
+            <span className="hidden md:inline text-sm font-semibold text-[#1c2b26] px-2">{user?.name || 'Caregiver'}</span>
+            <button
+              onClick={() => { dispatch(logoutUser()); navigate('/'); }}
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#66756f] hover:text-[#a23b32] px-3 py-2 rounded-full hover:bg-[#fdecea] transition-colors"
+            >
+              <LogOut size={16} /> <span className="hidden sm:inline">Sign out</span>
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Link
-            to="/caregiver/link"
-            className="text-xs md:text-sm font-bold text-[#5c4535] bg-[#f5ede0] hover:bg-[#e8dcc8] px-3.5 py-2 rounded-xl transition-colors border border-[#e8dcc8]"
-          >
-            + Request Link
-          </Link>
-          <Link
-            to="/caregiver/access"
-            className="text-xs md:text-sm font-bold text-[#5c4535] bg-[#f5ede0] hover:bg-[#e8dcc8] px-3.5 py-2 rounded-xl transition-colors border border-[#e8dcc8]"
-          >
-            Manage Access
-          </Link>
-          <span className="hidden md:inline text-[14px] font-bold text-[#8a7560] px-2">
-            {user?.name || 'Caregiver'}
-          </span>
-          <button
-            onClick={() => {
-              dispatch(logoutUser());
-              navigate('/');
-            }}
-            className="text-xs md:text-sm font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-xl border border-red-200 transition-colors"
-          >
-            Sign Out
-          </button>
-        </div>
-      </nav>
+        {selectedPatientId && (
+          <nav className="lg:hidden flex gap-1 overflow-x-auto px-4 pb-2 [scrollbar-width:none]" aria-label="Sections">
+            {NAV.map((n) => (
+              <button key={n.id} onClick={() => setTab(n.id)}
+                className={`flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-full text-[13px] font-semibold ${tab === n.id ? 'bg-[#e3f2ea] text-[#2f6f5e]' : 'text-[#66756f]'}`}>
+                <n.icon size={14} />{n.label}
+                {n.id === 'approvals' && approvalsCount > 0 && <span className="text-[10px] font-bold bg-[#a23b32] text-white rounded-full px-1.5">{approvalsCount}</span>}
+              </button>
+            ))}
+          </nav>
+        )}
+      </header>
 
       <div className="max-w-[1180px] mx-auto px-4 md:px-7 mt-6 md:mt-10">
 
         {patients.length === 0 ? (
           /* ─── EMPTY STATE IF NO PATIENTS ARE LINKED ─── */
-          <div className="text-center py-16 bg-white rounded-[24px] border-2 border-dashed border-[#e8dcc8]">
-            <div className="text-4xl mb-4">🩺</div>
-            <h3 className="text-xl font-bold text-[#5c4535] mb-2" style={{ fontFamily: "'Lora', serif" }}>No Patients Found</h3>
-            <p className="text-[#8a7560] font-medium mb-6">Enter your family member's registered phone number to send a link request.</p>
+          <div className="text-center py-16 bg-white rounded-[24px] border-2 border-dashed border-[#e2e9e5]">
+            <div className="mx-auto mb-4 w-14 h-14 rounded-full bg-[#e3f2ea] text-[#2f6f5e] flex items-center justify-center"><UserPlus size={26} /></div>
+            <h3 className="text-xl font-bold text-[#2f6f5e] mb-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>No Patients Found</h3>
+            <p className="text-[#66756f] font-medium mb-6">Enter your family member's registered phone number to send a link request.</p>
             <div className="max-w-xl mx-auto text-left">{linkForm}</div>
           </div>
         ) : (
@@ -211,8 +235,8 @@ export default function CaregiverDashboard() {
                     onClick={() => setSelectedPatientId(p.patientId)}
                     className={`px-6 py-3 rounded-xl font-bold transition-all border-[1.5px] whitespace-nowrap
                       ${selectedPatientId === p.patientId
-                        ? 'bg-[#5c4535] text-white border-[#5c4535]'
-                        : 'bg-white text-[#8a7560] border-[#e8dcc8] hover:bg-[#f5ede0]'
+                        ? 'bg-[#2f6f5e] text-white border-[#2f6f5e]'
+                        : 'bg-white text-[#66756f] border-[#e2e9e5] hover:bg-[#eaf3ee]'
                       }
                     `}
                   >
@@ -224,19 +248,10 @@ export default function CaregiverDashboard() {
 
             {selectedPatientId && (
               <>
-                <AttentionStrip patientId={selectedPatientId} onOpen={setTab} onCounts={setAttention} />
-                <Tabs
-                  active={tab}
-                  onChange={setTab}
-                  tabs={[
-                    { id: 'today', label: 'Today' },
-                    { id: 'approvals', label: 'Approvals', count: attention ? attention.pendingApprovals + attention.pendingQuestions : 0 },
-                    { id: 'activity', label: 'Agent activity' },
-                    { id: 'insights', label: 'Insights' },
-                    { id: 'copilot', label: 'Copilot' },
-                    { id: 'setup', label: 'Setup' },
-                  ]}
-                />
+                {/* the strip stays loaded on every tab (it feeds the Approvals badge); shown on Overview */}
+                <div className={tab === 'today' ? '' : 'hidden'}>
+                  <AttentionStrip patientId={selectedPatientId} onOpen={setTab} onCounts={setAttention} />
+                </div>
                 {tab === 'approvals' && (
                   <div className="space-y-6">
                     <ApprovalsPanel patientId={selectedPatientId} onUpdate={setPendingApprovalsCount} />
@@ -274,19 +289,19 @@ export default function CaregiverDashboard() {
             {/* ─── MAIN CALENDAR DASHBOARD ─── */}
             {selectedPatient && tab === 'today' && (
               <div className="space-y-6">
-              <div className="bg-white rounded-[24px] p-5 md:p-8 border-[1.5px] border-[#e8dcc8] shadow-[0_2px_16px_rgba(90,60,30,0.08)]">
+              <div className="bg-white rounded-[24px] p-5 md:p-8 border-[1.5px] border-[#e2e9e5] shadow-[0_2px_16px_rgba(20,45,38,0.08)]">
 
                 <div className="flex justify-between items-start mb-6">
                   <div>
-                    <h2 className="text-[28px] text-[#2d2418] font-bold leading-none" style={{ fontFamily: "'Lora', serif" }}>
+                    <h2 className="text-[28px] text-[#1c2b26] font-bold leading-none" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                       Doses this week
                     </h2>
-                    <p className="text-[13px] text-[#8a7560] mt-2 font-bold tracking-wider uppercase">
-                      Patient: <span className="text-[#5c4535]">{selectedPatient.name}</span> • 📞 {selectedPatient.phone}
+                    <p className="text-[13px] text-[#66756f] mt-2 font-bold tracking-wider uppercase">
+                      Patient: <span className="text-[#2f6f5e]">{selectedPatient.name}</span> • {selectedPatient.phone}
                     </p>
                   </div>
-                  <a href={`tel:${selectedPatient.phone}`} className="bg-white border-[1.5px] border-[#e8dcc8] text-[#2d2418] px-5 py-2.5 rounded-xl font-bold hover:bg-[#fdf8f0] transition-colors">
-                    📞 Call
+                  <a href={`tel:${selectedPatient.phone}`} className="bg-white border-[1.5px] border-[#e2e9e5] text-[#1c2b26] px-5 py-2.5 rounded-xl font-bold hover:bg-[#f4f7f5] transition-colors">
+                    Call
                   </a>
                 </div>
 
@@ -300,8 +315,8 @@ export default function CaregiverDashboard() {
                         onClick={() => setSelectedDateStr(d.fullDateStr)}
                         className={`flex-1 min-w-[80px] py-4 rounded-xl text-center cursor-pointer transition-all border-[1.5px]
                           ${isSelected
-                            ? 'bg-[#f5ede0] border-[#5c4535] text-[#5c4535]'
-                            : 'bg-[#fdf8f0] border-transparent text-[#2d2418] hover:border-[#e8dcc8]'
+                            ? 'bg-[#eaf3ee] border-[#2f6f5e] text-[#2f6f5e]'
+                            : 'bg-[#f4f7f5] border-transparent text-[#1c2b26] hover:border-[#e2e9e5]'
                           }
                         `}
                       >
@@ -317,23 +332,23 @@ export default function CaregiverDashboard() {
                   <table className="w-full text-left border-collapse min-w-[700px]">
                     <thead>
                       <tr>
-                        <th className="pb-4 text-[11px] font-bold text-[#8a7560] uppercase border-b-[1.5px] border-[#f5ede0] w-[15%]">Time</th>
-                        <th className="pb-4 text-[11px] font-bold text-[#8a7560] uppercase border-b-[1.5px] border-[#f5ede0] w-[35%]">Medicine</th>
-                        <th className="pb-4 text-[11px] font-bold text-[#8a7560] uppercase border-b-[1.5px] border-[#f5ede0] w-[20%]">Meal Timing</th>
-                        <th className="pb-4 text-[11px] font-bold text-[#8a7560] uppercase border-b-[1.5px] border-[#f5ede0] w-[15%]">Status</th>
-                        <th className="pb-4 text-[11px] font-bold text-[#8a7560] uppercase border-b-[1.5px] border-[#f5ede0] w-[15%]">Action</th>
+                        <th className="pb-4 text-[11px] font-bold text-[#66756f] uppercase border-b-[1.5px] border-[#eaf3ee] w-[15%]">Time</th>
+                        <th className="pb-4 text-[11px] font-bold text-[#66756f] uppercase border-b-[1.5px] border-[#eaf3ee] w-[35%]">Medicine</th>
+                        <th className="pb-4 text-[11px] font-bold text-[#66756f] uppercase border-b-[1.5px] border-[#eaf3ee] w-[20%]">Meal Timing</th>
+                        <th className="pb-4 text-[11px] font-bold text-[#66756f] uppercase border-b-[1.5px] border-[#eaf3ee] w-[15%]">Status</th>
+                        <th className="pb-4 text-[11px] font-bold text-[#66756f] uppercase border-b-[1.5px] border-[#eaf3ee] w-[15%]">Action</th>
                       </tr>
                     </thead>
                     <tbody>
                       {isLoading ? (
                         <tr>
-                          <td colSpan="5" className="py-12 text-center text-[#8a7560] font-bold">
+                          <td colSpan="5" className="py-12 text-center text-[#66756f] font-bold">
                             Loading clinical records...
                           </td>
                         </tr>
                       ) : displayedHistory.length === 0 ? (
                         <tr>
-                          <td colSpan="5" className="py-12 text-center text-[#8a7560] font-bold">
+                          <td colSpan="5" className="py-12 text-center text-[#66756f] font-bold">
                             No medications scheduled for this day.
                           </td>
                         </tr>
@@ -345,31 +360,31 @@ export default function CaregiverDashboard() {
 
                           return (
                             <tr key={reminder._id}>
-                              <td className="py-5 border-b border-[#fdf8f0] text-[14px] text-[#2d2418] font-medium">
+                              <td className="py-5 border-b border-[#f4f7f5] text-[14px] text-[#1c2b26] font-medium">
                                 {new Date(reminder.scheduledTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </td>
-                              <td className="py-5 border-b border-[#fdf8f0] text-[14px] text-[#2d2418]">
+                              <td className="py-5 border-b border-[#f4f7f5] text-[14px] text-[#1c2b26]">
                                 {reminder.medicine?.name || 'Unknown'}
                                 <span className="bg-[#c5dff0] text-[#1a3e5a] px-2.5 py-1 rounded-full text-[11px] font-bold ml-2">
                                   {reminder.medicine?.dosage}
                                 </span>
                               </td>
-                              <td className="py-5 border-b border-[#fdf8f0] text-[14px] text-[#2d2418] capitalize">
+                              <td className="py-5 border-b border-[#f4f7f5] text-[14px] text-[#1c2b26] capitalize">
                                 {reminder.medicine?.mealTiming || 'Anytime'} Food
                               </td>
-                              <td className="py-5 border-b border-[#fdf8f0]">
-                                {isTaken && <span className="bg-[#c8d9c4] text-[#2a4a28] px-3 py-1.5 rounded-full text-[11px] font-bold">✓ Taken</span>}
-                                {isSkipped && <span className="bg-[#f5ede0] text-[#7a2a1a] px-3 py-1.5 rounded-full text-[11px] font-bold">🚫 Skipped</span>}
-                                {isMissed && <span className="bg-[#f7ddd4] text-[#7a2a1a] px-3 py-1.5 rounded-full text-[11px] font-bold">⚠️ Missed</span>}
-                                {reminder.status === 'pending' && <span className="bg-gray-100 text-gray-500 px-3 py-1.5 rounded-full text-[11px] font-bold">⏳ Pending</span>}
+                              <td className="py-5 border-b border-[#f4f7f5]">
+                                {isTaken && <span className="bg-[#d6ebe0] text-[#1e5a45] px-3 py-1.5 rounded-full text-[11px] font-bold">✓ Taken</span>}
+                                {isSkipped && <span className="bg-[#eaf3ee] text-[#a23b32] px-3 py-1.5 rounded-full text-[11px] font-bold">Skipped</span>}
+                                {isMissed && <span className="bg-[#fdecea] text-[#a23b32] px-3 py-1.5 rounded-full text-[11px] font-bold">Missed</span>}
+                                {reminder.status === 'pending' && <span className="bg-gray-100 text-gray-500 px-3 py-1.5 rounded-full text-[11px] font-bold">Pending</span>}
                               </td>
-                              <td className="py-5 border-b border-[#fdf8f0]">
+                              <td className="py-5 border-b border-[#f4f7f5]">
                                 {(isSkipped || isMissed) ? (
-                                  <a href={`tel:${selectedPatient?.phone}`} className="bg-[#5c4535] border-[1.5px] border-[#5c4535] text-white px-4 py-2 rounded-lg font-bold hover:bg-[#4a3628] text-[13px] transition-colors inline-block text-center">
+                                  <a href={`tel:${selectedPatient?.phone}`} className="bg-[#2f6f5e] border-[1.5px] border-[#2f6f5e] text-white px-4 py-2 rounded-lg font-bold hover:bg-[#255a4c] text-[13px] transition-colors inline-block text-center">
                                     Call Patient
                                   </a>
                                 ) : (
-                                  <button className="bg-white border-[1.5px] border-[#e8dcc8] text-[#2d2418] px-4 py-2 rounded-lg font-bold hover:bg-[#fdf8f0] text-[13px] transition-colors">
+                                  <button className="bg-white border-[1.5px] border-[#e2e9e5] text-[#1c2b26] px-4 py-2 rounded-lg font-bold hover:bg-[#f4f7f5] text-[13px] transition-colors">
                                     Details
                                   </button>
                                 )}

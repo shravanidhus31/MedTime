@@ -56,7 +56,7 @@ const handleSubmit = async (e) => {
         
         <div className="flex justify-between items-center mb-8">
           <h2 className="font-serif text-3xl text-brown2">Health Metrics Log</h2>
-          <button onClick={() => setIsModalOpen(true)} className="bg-brown2 text-white px-6 py-3 rounded-xl font-bold hover:bg-[#4a3628] transition-colors">
+          <button onClick={() => setIsModalOpen(true)} className="bg-brown2 text-white px-6 py-3 rounded-xl font-bold hover:bg-[#255a4c] transition-colors">
             + Log Vitals
           </button>
         </div>
@@ -74,7 +74,7 @@ const handleSubmit = async (e) => {
                 ${latest.status === 'Normal' ? 'bg-[#c8e6c9] text-[#2e7d32]' : 
                   latest.status === 'Elevated' ? 'bg-[#ffebee] text-[#c62828]' : 
                   'bg-[#ffcdd2] text-[#c62828] animate-pulse'}`}>
-                {latest.status === 'Normal' ? '✓ Normal Range' : `⚠ ${latest.status}`}
+                {latest.status === 'Normal' ? '✓ Normal Range' : `${latest.status}`}
               </div>
             </div>
 
@@ -136,7 +136,7 @@ const handleSubmit = async (e) => {
 
       {/* ADD VITALS MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-[#2d2418]/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-[#1c2b26]/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-[24px] p-8 w-full max-w-lg shadow-2xl">
             <h2 className="font-serif text-2xl text-brown2 mb-6">Log Health Vitals</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -159,7 +159,7 @@ const handleSubmit = async (e) => {
                 </div>
               </div>
               <div className="flex gap-3 pt-6">
-                <button type="submit" className="flex-[2] bg-brown2 text-white py-3 rounded-xl font-bold hover:bg-[#4a3628]">Save Vitals</button>
+                <button type="submit" className="flex-[2] bg-brown2 text-white py-3 rounded-xl font-bold hover:bg-[#255a4c]">Save Vitals</button>
                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 bg-white border-2 border-sand text-textDark py-3 rounded-xl font-bold hover:bg-cream">Cancel</button>
               </div>
             </form>

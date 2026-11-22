@@ -161,23 +161,23 @@ export default function CallSimulator() {
     <div className="min-h-screen bg-[#faf6ef] p-6">
       <div className="max-w-7xl mx-auto flex flex-col xl:flex-row gap-6 items-start">
       <div className="w-full max-w-3xl">
-        <h1 className="text-2xl font-bold text-[#5c4535]" style={{ fontFamily: "'Lora', serif" }}>Voice call</h1>
-        <p className="text-sm text-[#8a7560] mt-1">
+        <h1 className="text-2xl font-bold text-[#2f6f5e]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Voice call</h1>
+        <p className="text-sm text-[#66756f] mt-1">
           A spoken call with the agent: MedTime calling about a dose, or the patient calling in with a question. Speak normally; you can interrupt it. This records real doses for the patient.
         </p>
 
-        <div className="mt-5 inline-flex rounded-xl border-[1.5px] border-[#e8dcc8] bg-white p-1 text-sm font-bold">
-          {[['dose', '📞 MedTime calls the patient'], ['callin', '☎️ Patient calls MedTime'], ['chat', '💬 Weekly chat']].map(([m, label]) => (
+        <div className="mt-5 inline-flex rounded-xl border-[1.5px] border-[#e2e9e5] bg-white p-1 text-sm font-bold">
+          {[['dose', 'MedTime calls the patient'], ['callin', 'Patient calls MedTime'], ['chat', 'Weekly chat']].map(([m, label]) => (
             <button key={m} disabled={busy} onClick={() => setMode(m)}
-              className={`px-4 py-2 rounded-lg ${mode === m ? 'bg-[#f5ede0] text-[#5c4535]' : 'text-[#8a7560]'} disabled:opacity-60`}>
+              className={`px-4 py-2 rounded-lg ${mode === m ? 'bg-[#eaf3ee] text-[#2f6f5e]' : 'text-[#66756f]'} disabled:opacity-60`}>
               {label}
             </button>
           ))}
         </div>
 
-        <div className="mt-3 bg-white rounded-[18px] border-[1.5px] border-[#e8dcc8] p-5 flex flex-wrap gap-3 items-end">
+        <div className="mt-3 bg-white rounded-[18px] border-[1.5px] border-[#e2e9e5] p-5 flex flex-wrap gap-3 items-end">
           {isCaregiver && (
-            <label className="flex flex-col text-xs font-bold text-[#5c4535]">
+            <label className="flex flex-col text-xs font-bold text-[#2f6f5e]">
               Patient
               <select className="mt-1 border rounded-lg px-3 py-2 text-sm font-normal" value={patientId} disabled={busy}
                 onChange={(e) => setPatientId(e.target.value)}>
@@ -186,7 +186,7 @@ export default function CallSimulator() {
               </select>
             </label>
           )}
-          {mode === 'dose' && <label className="flex flex-col text-xs font-bold text-[#5c4535]">
+          {mode === 'dose' && <label className="flex flex-col text-xs font-bold text-[#2f6f5e]">
             Medicine
             <select className="mt-1 border rounded-lg px-3 py-2 text-sm font-normal min-w-[220px]" value={medicineId} disabled={busy || !meds.length}
               onChange={(e) => setMedicineId(e.target.value)}>
@@ -199,32 +199,32 @@ export default function CallSimulator() {
             </select>
           </label>}
           {mode === 'chat' && (
-            <p className="text-xs text-[#8a7560] max-w-[300px]">
+            <p className="text-xs text-[#66756f] max-w-[300px]">
               The weekly chat call: MedTime asks how {doses?.patient?.firstName || 'she'} makes her morning tea and listens. With 50+ words it
               measures vocabulary, repetitions and word-finding (the speech-screening research), plus speech rate and time before answering
               on this browser call. {doses?.weeklyChat ? 'The Sunday call is on.' : 'The Sunday call is off (Settings).'}
             </p>
           )}
           {mode === 'callin' && (
-            <p className="text-xs text-[#8a7560] max-w-[260px]">
+            <p className="text-xs text-[#66756f] max-w-[260px]">
               {doses?.patient?.firstName || 'The patient'} calls and asks, for example, "Did I take my morning pills?"
             </p>
           )}
           {!busy ? (
             <button onClick={startCall} disabled={(mode === 'dose' && !medicineId) || !doses || !prep || prep.error || prep.preparing}
               className="bg-sage2 text-[#1e3a1d] px-5 py-2 rounded-lg font-bold text-sm border-2 border-sage2 disabled:opacity-50">
-              📞 Start call
+              Start call
             </button>
           ) : (
-            <button onClick={hangUp} className="bg-blush2 text-[#7a2a1a] px-5 py-2 rounded-lg font-bold text-sm border-2 border-blush2">
-              ⏹ Hang up
+            <button onClick={hangUp} className="bg-blush2 text-[#a23b32] px-5 py-2 rounded-lg font-bold text-sm border-2 border-blush2">
+              Hang up
             </button>
           )}
-          <span className="text-xs text-[#8a7560] ml-auto">
+          <span className="text-xs text-[#66756f] ml-auto">
             {!busy && prep?.preparing && `Preparing the voice… ${prep.cached}/${prep.total} lines`}
             {!busy && prep && !prep.preparing && !prep.error && status === 'idle' && 'Voice ready'}
             {status === 'starting' && 'Connecting…'}
-            {status === 'live' && (userSpeaking ? '🎙️ Listening to you…' : '🔊 Call in progress')}
+            {status === 'live' && (userSpeaking ? 'Listening to you…' : 'Call in progress')}
             {status === 'ended' && 'Call ended'}
           </span>
         </div>
@@ -233,15 +233,15 @@ export default function CallSimulator() {
         {error && <div className="mt-3 p-3 rounded-xl bg-[#ffebee] text-[#b71c1c] text-sm">{error}</div>}
         {prep?.error && <div className="mt-3 p-3 rounded-xl bg-[#fff8e1] text-[#7a5a10] text-sm">{prep.error}</div>}
 
-        <div className="mt-5 bg-white rounded-[18px] border-[1.5px] border-[#e8dcc8] p-5 min-h-[260px] space-y-3">
-          {lines.length === 0 && <p className="text-sm text-[#8a7560]">The conversation appears here.</p>}
+        <div className="mt-5 bg-white rounded-[18px] border-[1.5px] border-[#e2e9e5] p-5 min-h-[260px] space-y-3">
+          {lines.length === 0 && <p className="text-sm text-[#66756f]">The conversation appears here.</p>}
           {lines.map((l, i) => (
             <div key={i} className={`flex ${l.who === 'patient' ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${
                 l.who === 'patient' ? 'bg-[#e3f2fd] text-[#0d3c61]'
-                  : l.who === 'agent' ? 'bg-[#f5ede0] text-[#5c4535]'
+                  : l.who === 'agent' ? 'bg-[#eaf3ee] text-[#2f6f5e]'
                   : l.emergency ? 'bg-[#ffcdd2] text-[#b71c1c] font-bold' : 'bg-gray-50 text-gray-500 text-xs'}`}>
-                {l.who === 'agent' && <div className="text-[10px] uppercase tracking-wider text-[#8a7560]">Agent · neutral voice{l.lineId ? ` · ${l.lineId}` : ''}</div>}
+                {l.who === 'agent' && <div className="text-[10px] uppercase tracking-wider text-[#66756f]">Agent · neutral voice{l.lineId ? ` · ${l.lineId}` : ''}</div>}
                 {l.who === 'patient' && <div className="text-[10px] uppercase tracking-wider text-[#5a7fa0]">Patient</div>}
                 {l.text}
               </div>

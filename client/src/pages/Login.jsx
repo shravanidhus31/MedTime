@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { setCredentials } from '../redux/authSlice';
 import api from '../utils/api';
+import AuthLayout from '../components/ui/AuthLayout';
 
 export default function Login() {
   const [phone, setPhone] = useState('');
@@ -44,21 +45,15 @@ export default function Login() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-[#f8fafc]">
-      <div className="w-full max-w-md p-8 bg-white border border-gray-100 rounded-xl shadow-sm">
-        
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">MedTime</h1>
-          <p className="mt-2 text-sm text-gray-500">Sign in to manage your schedule</p>
-        </div>
+    <AuthLayout title="Welcome back" subtitle="Sign in with your phone number.">
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Phone Number</label>
+            <label className="block text-sm font-medium text-[#1c2b26]">Phone Number</label>
             <input
               type="tel"
               required
-              className="w-full px-4 py-3 mt-1 text-gray-900 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors"
+              className="w-full px-4 py-3 mt-1 text-[#1c2b26] bg-[#f7faf8] border border-[#e2e9e5] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2f6f5e]/30 focus:bg-white transition-colors"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="e.g. 9876543210"
@@ -66,11 +61,11 @@ export default function Login() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Password</label>
+            <label className="block text-sm font-medium text-[#1c2b26]">Password</label>
             <input
               type="password"
               required
-              className="w-full px-4 py-3 mt-1 text-gray-900 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors"
+              className="w-full px-4 py-3 mt-1 text-[#1c2b26] bg-[#f7faf8] border border-[#e2e9e5] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2f6f5e]/30 focus:bg-white transition-colors"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -86,20 +81,18 @@ export default function Login() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full px-4 py-3 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors disabled:opacity-50"
+            className="w-full px-4 py-3 text-sm font-semibold text-white bg-[#2f6f5e] rounded-full hover:bg-[#255a4c] focus:outline-none focus:ring-2 focus:ring-[#2f6f5e]/30 focus:ring-offset-1 transition-colors disabled:opacity-50"
           >
             {isLoading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
 
-        <div className="mt-6 text-center text-sm text-gray-500">
+        <div className="mt-6 text-center text-sm text-[#66756f]">
           Don't have an account?{' '}
-          <Link to="/register" className="font-semibold text-blue-600 hover:text-blue-700">
+          <Link to="/register" className="font-semibold text-[#2f6f5e] hover:text-[#255a4c]">
             Sign up
           </Link>
         </div>
-
-      </div>
-    </div>
+    </AuthLayout>
   );
 }

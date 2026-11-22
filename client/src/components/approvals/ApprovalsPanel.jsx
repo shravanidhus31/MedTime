@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
+import { CheckSquare } from 'lucide-react';
 
 export default function ApprovalsPanel({ patientId, onUpdate }) {
   const [proposals, setProposals] = useState([]);
@@ -49,7 +50,7 @@ export default function ApprovalsPanel({ patientId, onUpdate }) {
   };
 
   if (isLoading && proposals.length === 0) {
-    return <div className="text-sm text-[#8a7560] py-4">Checking for pending proposals...</div>;
+    return <div className="text-sm text-[#66756f] py-4">Checking for pending proposals...</div>;
   }
 
   if (proposals.length === 0) {
@@ -57,15 +58,15 @@ export default function ApprovalsPanel({ patientId, onUpdate }) {
   }
 
   return (
-    <div className="bg-white rounded-[20px] p-6 border-[1.5px] border-[#e8dcc8] shadow-[0_2px_16px_rgba(90,60,30,0.08)] mb-8">
+    <div className="bg-white rounded-[20px] p-6 border-[1.5px] border-[#e2e9e5] shadow-[0_2px_16px_rgba(20,45,38,0.08)] mb-8">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2.5">
-          <span className="text-2xl">⚖️</span>
+          <span className="w-10 h-10 rounded-full bg-[#e3f2ea] text-[#2f6f5e] flex items-center justify-center shrink-0"><CheckSquare size={18} /></span>
           <div>
-            <h2 className="text-xl font-bold text-[#5c4535]" style={{ fontFamily: "'Lora', serif" }}>
+            <h2 className="text-xl font-bold text-[#2f6f5e]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
               Pending Proposals Waiting for Approval
             </h2>
-            <p className="text-xs text-[#8a7560]">
+            <p className="text-xs text-[#66756f]">
               The AI agent planned these changes. Review the evidence and approve or reject.
             </p>
           </div>
@@ -85,7 +86,7 @@ export default function ApprovalsPanel({ patientId, onUpdate }) {
         {proposals.map((item) => (
           <div
             key={item._id}
-            className="p-5 rounded-xl border border-[#e8dcc8] bg-[#fdfcf9] flex flex-col gap-3"
+            className="p-5 rounded-xl border border-[#e2e9e5] bg-[#fafcfb] flex flex-col gap-3"
           >
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2">
@@ -108,8 +109,8 @@ export default function ApprovalsPanel({ patientId, onUpdate }) {
             </div>
 
             {/* Evidence quote */}
-            <div className="text-sm bg-[#f5ede0]/60 p-3 rounded-lg border border-[#e8dcc8] text-[#5c4535]">
-              <span className="font-bold text-xs uppercase tracking-wider text-[#8a7560] block mb-1">
+            <div className="text-sm bg-[#eaf3ee]/60 p-3 rounded-lg border border-[#e2e9e5] text-[#2f6f5e]">
+              <span className="font-bold text-xs uppercase tracking-wider text-[#66756f] block mb-1">
                 Reason / Evidence:
               </span>
               "{item.evidence}"

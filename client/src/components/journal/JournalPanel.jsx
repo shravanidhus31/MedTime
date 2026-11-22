@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
+import { BookOpen } from 'lucide-react';
 
 /**
  * JournalPanel — Feature 6 (B8)
@@ -79,16 +80,14 @@ export default function JournalPanel({ patientId }) {
   };
 
   return (
-    <div className="bg-white rounded-[24px] p-6 border-[1.5px] border-[#e8dcc8] shadow-[0_2px_16px_rgba(90,60,30,0.08)] mb-8">
+    <div className="bg-white rounded-[24px] p-6 border-[1.5px] border-[#e2e9e5] shadow-[0_2px_16px_rgba(20,45,38,0.08)] mb-8">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#f0e6d6]">
+      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#e6eee9]">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#fdf5eb] text-[#8a5d3b] flex items-center justify-center font-bold text-xl border border-[#e8dcc8]">
-            📖
-          </div>
+          <div className="w-10 h-10 rounded-xl bg-[#f6f9f7] text-[#2f6f5e] flex items-center justify-center font-bold text-xl border border-[#e2e9e5]"><BookOpen size={18} /></div>
           <div>
-            <h3 className="text-xl font-bold text-[#2d2418]">Daily Care Journal</h3>
-            <p className="text-xs text-[#8a7560]">
+            <h3 className="text-xl font-bold text-[#1c2b26]">Daily Care Journal</h3>
+            <p className="text-xs text-[#66756f]">
               Nightly summary (9:00 PM IST) for clinical and family review. Attention items appear first.
             </p>
           </div>
@@ -99,14 +98,14 @@ export default function JournalPanel({ patientId }) {
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            className="px-3 py-1.5 text-xs font-bold rounded-lg border border-[#e8dcc8] text-[#5c4535] bg-[#fdfaf5] focus:outline-none"
+            className="px-3 py-1.5 text-xs font-bold rounded-lg border border-[#e2e9e5] text-[#2f6f5e] bg-[#f8faf9] focus:outline-none"
           />
           <button
             onClick={handleGenerateToday}
             disabled={generating}
-            className="px-4 py-1.5 text-xs font-bold rounded-lg bg-[#5c4535] text-white hover:bg-[#483629] transition-colors disabled:opacity-50"
+            className="px-4 py-1.5 text-xs font-bold rounded-lg bg-[#2f6f5e] text-white hover:bg-[#255a4c] transition-colors disabled:opacity-50"
           >
-            {generating ? 'Compiling...' : '⚡ Compile Journal'}
+            {generating ? 'Compiling...' : 'Compile Journal'}
           </button>
         </div>
       </div>
@@ -120,17 +119,17 @@ export default function JournalPanel({ patientId }) {
       {/* Content */}
       <div className="mt-5">
         {loading ? (
-          <div className="py-8 text-center text-xs text-[#8a7560]">Loading care journal...</div>
+          <div className="py-8 text-center text-xs text-[#66756f]">Loading care journal...</div>
         ) : !currentEntry || !currentEntry.lines || currentEntry.lines.length === 0 ? (
-          <div className="py-8 text-center bg-[#fdfaf5] rounded-xl border border-dashed border-[#e8dcc8]">
-            <p className="text-sm font-semibold text-[#8a7560]">No care journal recorded for {selectedDate}</p>
-            <p className="text-xs text-[#b09e8c] mt-1">
+          <div className="py-8 text-center bg-[#f8faf9] rounded-xl border border-dashed border-[#e2e9e5]">
+            <p className="text-sm font-semibold text-[#66756f]">No care journal recorded for {selectedDate}</p>
+            <p className="text-xs text-[#93a59e] mt-1">
               Click &quot;Compile Journal&quot; to synthesize today&apos;s interactions and adherence into care notes.
             </p>
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="flex items-center justify-between text-xs text-[#8a7560] px-1">
+            <div className="flex items-center justify-between text-xs text-[#66756f] px-1">
               <span>{currentEntry.lines.length} care observations recorded</span>
               <span>Updated: {new Date(currentEntry.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
             </div>
@@ -146,7 +145,7 @@ export default function JournalPanel({ patientId }) {
                         ? 'bg-gray-50 border-gray-200 opacity-60'
                         : attention
                         ? 'bg-amber-50/60 border-amber-200 shadow-sm'
-                        : 'bg-white border-[#f0e6d6] hover:border-[#e8dcc8]'
+                        : 'bg-white border-[#e6eee9] hover:border-[#e2e9e5]'
                     }`}
                   >
                     <div className="flex-1 space-y-1.5">
@@ -165,7 +164,7 @@ export default function JournalPanel({ patientId }) {
                       </div>
                       <p
                         className={`text-sm leading-relaxed ${
-                          line.markedWrong ? 'line-through text-gray-400' : 'text-[#2d2418]'
+                          line.markedWrong ? 'line-through text-gray-400' : 'text-[#1c2b26]'
                         } ${line.source === 'patient_said' ? 'italic font-serif' : ''}`}
                       >
                         {line.text}

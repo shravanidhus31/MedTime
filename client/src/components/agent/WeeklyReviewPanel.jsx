@@ -60,37 +60,37 @@ export default function WeeklyReviewPanel({ patientId }) {
   if (!patientId) return null;
 
   return (
-    <div className="bg-white rounded-2xl border border-[#e8dcc8] p-6 space-y-6">
+    <div className="bg-white rounded-2xl border border-[#e2e9e5] p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="text-lg font-bold text-[#2d2418]">📊 Weekly review</h2>
-          <p className="text-xs text-[#8a7560] mt-0.5">
+          <h2 className="text-lg font-bold text-[#1c2b26]">Weekly review</h2>
+          <p className="text-xs text-[#66756f] mt-0.5">
             Changes in how her calls go, compared with her own first 4 weeks; harder evenings (sundowning)
           </p>
         </div>
         <button
           onClick={handleGenerate}
           disabled={generating}
-          className="bg-[#5c4535] text-white px-4 py-2 rounded-xl text-xs font-semibold hover:bg-[#4a3628] disabled:opacity-50 transition-colors"
+          className="bg-[#2f6f5e] text-white px-4 py-2 rounded-xl text-xs font-semibold hover:bg-[#255a4c] disabled:opacity-50 transition-colors"
         >
-          {generating ? 'Analyzing…' : '⚡ Run Weekly Analysis'}
+          {generating ? 'Analyzing…' : 'Run Weekly Analysis'}
         </button>
       </div>
 
       {msg && (
         <div className={`text-xs px-3 py-2 rounded-lg ${
-          msg.type === 'success' ? 'bg-[#c8d9c4] text-[#2a4a28]' : 'bg-[#f7ddd4] text-[#7a2a1a]'
+          msg.type === 'success' ? 'bg-[#d6ebe0] text-[#1e5a45]' : 'bg-[#fdecea] text-[#a23b32]'
         }`}>
           {msg.text}
         </div>
       )}
 
       {loading ? (
-        <p className="text-xs text-[#8a7560] animate-pulse">Loading weekly trend data…</p>
+        <p className="text-xs text-[#66756f] animate-pulse">Loading weekly trend data…</p>
       ) : reviews.length === 0 ? (
-        <div className="text-center py-8 bg-[#fdf8f0] rounded-xl border border-[#e8dcc8]">
-          <p className="text-sm font-semibold text-[#2d2418]">No weekly reviews yet</p>
-          <p className="text-xs text-[#8a7560] mt-1 max-w-sm mx-auto">
+        <div className="text-center py-8 bg-[#f4f7f5] rounded-xl border border-[#e2e9e5]">
+          <p className="text-sm font-semibold text-[#1c2b26]">No weekly reviews yet</p>
+          <p className="text-xs text-[#66756f] mt-1 max-w-sm mx-auto">
             Click "Run Weekly Analysis", or wait for the automatic review on Sunday evening.
           </p>
         </div>
@@ -103,18 +103,18 @@ export default function WeeklyReviewPanel({ patientId }) {
             checking: 'bg-sky-50 border-sky-200 text-sky-900',
             explained: 'bg-blue-50 border-blue-200 text-blue-900',
             sundowning: 'bg-orange-50 border-orange-300 text-orange-900',
-            watch: 'bg-white border-[#e8dcc8] text-[#5c4535]',
+            watch: 'bg-white border-[#e2e9e5] text-[#2f6f5e]',
             ok: 'bg-emerald-50 border-emerald-200 text-emerald-900',
-            info: 'bg-white border-[#e8dcc8] text-[#8a7560]',
+            info: 'bg-white border-[#e2e9e5] text-[#66756f]',
           };
-          const ICON = { flag: '⚠️', checking: '❓', explained: 'ℹ️', sundowning: '🌅', watch: '👀', ok: '✓', info: '·' };
+          const ICON = { flag: '', checking: '', explained: '', sundowning: '', watch: '', ok: '✓', info: '·' };
           return (
-            <div key={review._id} className="border border-[#e8dcc8] rounded-xl p-5 space-y-4 bg-[#faf6f0]">
+            <div key={review._id} className="border border-[#e2e9e5] rounded-xl p-5 space-y-4 bg-[#f7faf8]">
               <div className="flex items-center justify-between flex-wrap gap-2">
-                <span className="text-xs font-bold text-[#5c4535] bg-[#f5ede0] px-3 py-1 rounded-full">
+                <span className="text-xs font-bold text-[#2f6f5e] bg-[#eaf3ee] px-3 py-1 rounded-full">
                   Week of {new Date(review.weekStartDate).toLocaleDateString('en-IN')} – {new Date(review.weekEndDate).toLocaleDateString('en-IN')}
                 </span>
-                <span className="text-[11px] text-[#8a7560]">Compared with her own first 4 weeks · margin {review.marginPercent || 25}%</span>
+                <span className="text-[11px] text-[#66756f]">Compared with her own first 4 weeks · margin {review.marginPercent || 25}%</span>
               </div>
 
               <div className="space-y-2">
@@ -127,18 +127,18 @@ export default function WeeklyReviewPanel({ patientId }) {
 
               {/* Her own words from those calls (never invented) */}
               {findings.some((f) => f.quotes && f.quotes.length) && (
-                <div className="text-xs text-[#5c4535]">
+                <div className="text-xs text-[#2f6f5e]">
                   <div className="font-semibold mb-1">Her words on those calls</div>
                   {findings.flatMap((f) => f.quotes || []).slice(0, 4).map((q, i) => (
-                    <div key={i} className="italic text-[#8a7560]">“{q}”</div>
+                    <div key={i} className="italic text-[#66756f]">“{q}”</div>
                   ))}
                 </div>
               )}
               {review.languageNotes && review.languageNotes.length > 0 && (
-                <div className="text-xs text-[#5c4535]">
+                <div className="text-xs text-[#2f6f5e]">
                   <div className="font-semibold mb-1">Noticed in how she spoke</div>
                   {review.languageNotes.map((n, i) => (
-                    <div key={i}>• {n.difference} <span className="italic text-[#8a7560]">“{n.quote}”</span></div>
+                    <div key={i}>• {n.difference} <span className="italic text-[#66756f]">“{n.quote}”</span></div>
                   ))}
                 </div>
               )}
@@ -148,26 +148,26 @@ export default function WeeklyReviewPanel({ patientId }) {
 
               {/* Doctor Report Summary */}
               {review.doctorReportSummary && (
-                <details className="text-xs text-[#8a7560]">
-                  <summary className="cursor-pointer hover:text-[#5c4535] font-semibold">
+                <details className="text-xs text-[#66756f]">
+                  <summary className="cursor-pointer hover:text-[#2f6f5e] font-semibold">
                     View Doctor Summary Text
                   </summary>
-                  <pre className="mt-2 whitespace-pre-wrap font-mono text-[11px] bg-white p-3 rounded-lg border border-[#e8dcc8]">
+                  <pre className="mt-2 whitespace-pre-wrap font-mono text-[11px] bg-white p-3 rounded-lg border border-[#e2e9e5]">
                     {review.doctorReportSummary}
                   </pre>
                 </details>
               )}
 
               {/* Caregiver Feedback */}
-              <div className="flex items-center justify-between text-xs pt-2 border-t border-[#e8dcc8]">
-                <span className="text-[#8a7560]">Was this review accurate?</span>
+              <div className="flex items-center justify-between text-xs pt-2 border-t border-[#e2e9e5]">
+                <span className="text-[#66756f]">Was this review accurate?</span>
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleFeedback(review._id, true)}
                     className={`px-3 py-1 rounded-lg border transition-colors ${
                       review.caregiverFeedback?.markedAccurate === true
-                        ? 'bg-[#c8d9c4] text-[#2a4a28] border-green-300 font-bold'
-                        : 'bg-white text-[#2d2418] border-[#e8dcc8] hover:bg-[#fdf8f0]'
+                        ? 'bg-[#d6ebe0] text-[#1e5a45] border-green-300 font-bold'
+                        : 'bg-white text-[#1c2b26] border-[#e2e9e5] hover:bg-[#f4f7f5]'
                     }`}
                   >
                     ✓ Accurate
@@ -176,8 +176,8 @@ export default function WeeklyReviewPanel({ patientId }) {
                     onClick={() => handleFeedback(review._id, false)}
                     className={`px-3 py-1 rounded-lg border transition-colors ${
                       review.caregiverFeedback?.markedAccurate === false
-                        ? 'bg-[#f7ddd4] text-[#7a2a1a] border-red-300 font-bold'
-                        : 'bg-white text-[#2d2418] border-[#e8dcc8] hover:bg-[#fdf8f0]'
+                        ? 'bg-[#fdecea] text-[#a23b32] border-red-300 font-bold'
+                        : 'bg-white text-[#1c2b26] border-[#e2e9e5] hover:bg-[#f4f7f5]'
                     }`}
                   >
                     ✗ Inaccurate

@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { logoutUser } from '../redux/authSlice';
 import DoctorSettings from '../components/DoctorSettings';
 import CareSettings from '../components/CareSettings';
+import { Settings, Users, HeartPulse, LogOut, Pill, Plus, Activity, Clock, CheckCircle2, AlertCircle, Phone, MessageSquare, Pencil, X, Check, MapPin, Package } from 'lucide-react';
 
 
 export default function PatientDashboard() {
@@ -192,7 +193,7 @@ export default function PatientDashboard() {
 
       const { proposalId, proposalLevel, medicines: extractedMeds, message, timingConflicts = [] } = response.data;
       // Food rule vs her meals (B12): shown before approving, with the suggested time
-      const timingNote = timingConflicts.length ? `\n\nPlease check:\n${timingConflicts.map(c => `⏰ ${c.message}`).join('\n')}` : '';
+      const timingNote = timingConflicts.length ? `\n\nPlease check:\n${timingConflicts.map(c => `${c.message}`).join('\n')}` : '';
 
       if (proposalId && extractedMeds && extractedMeds.length > 0) {
         // If Level 1 (clear lines, no conflicts), patient/caregiver can approve immediately
@@ -232,215 +233,209 @@ export default function PatientDashboard() {
   };
 
   // --- 3. UI RENDERING ---
+  // Overview numbers (UI pass): today's progress, the next dose, what's coming up
+  const firstName = (user?.name || '').split(' ')[0] || 'there';
+  const hourIST = new Date(Date.now() + 5.5 * 3600000).getUTCHours();
+  const greeting = hourIST < 12 ? 'Good morning' : hourIST < 17 ? 'Good afternoon' : 'Good evening';
+  const timeOf = (d) => (d ? new Date(d).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' }) : '');
+  const takenCount = medicines.filter((m) => m.status === 'taken').length;
+  const progressPct = medicines.length ? Math.round((takenCount / medicines.length) * 100) : 0;
+  const dueNow = medicines.filter((m) => m.status === 'due' || m.status === 'overdue');
+  const upcoming = medicines.filter((m) => m.status === 'upcoming' && m.doseTime).sort((a, b) => new Date(a.doseTime) - new Date(b.doseTime));
+  const nextDose = dueNow[0] || upcoming[0] || null;
+
   return (
     <div className="min-h-screen bg-cream text-textDark font-sans pb-12">
 
-      {/* Top Navigation */}
-      <nav className="sticky top-0 z-40 bg-white border-b border-sand px-8 h-[68px] flex items-center shadow-sm">
-        <div className="flex items-center gap-3 mr-10">
-          <div className="w-10 h-10 bg-gradient-to-br from-blush2 to-sky rounded-xl flex items-center justify-center">
-            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-          </div>
-          <span className="font-serif text-xl text-brown2 font-medium">MedTime</span>
-        </div>
-        <div className="flex gap-2 flex-1 overflow-x-auto">
-          <button className="px-4 py-2 rounded-lg text-sm font-semibold bg-parchment text-brown2">Home</button>
-          <button className="px-4 py-2 rounded-lg text-sm font-semibold text-textLight hover:bg-cream hover:text-textDark transition-colors">Schedule</button>
-          <button onClick={() => navigate('/vitals')} className="px-4 py-2 rounded-lg text-sm font-semibold text-textLight hover:bg-cream hover:text-textDark transition-colors">Vitals</button>
-          <button
-            onClick={() => setIsDoctorPanelOpen(true)}
-            className="px-4 py-2 rounded-lg text-sm font-semibold text-textLight hover:bg-cream hover:text-textDark transition-colors flex items-center gap-1.5"
-          >
-            <span className="text-base">⚙️</span> Settings
-          </button>
-          <button
-            onClick={() => navigate('/caregiver/access')}
-            className="px-4 py-2 rounded-lg text-sm font-semibold text-textLight hover:bg-cream hover:text-textDark transition-colors flex items-center gap-1.5"
-          >
-            <span className="text-base">🤝</span> Caregivers
-          </button>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => {
-              dispatch(logoutUser());
-              navigate('/');
-            }}
-            className="text-xs font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-lg border border-red-200 transition-colors"
-          >
-            Sign Out
-          </button>
-          <button className="flex items-center gap-2 bg-[#fff0ef] border-[1.5px] border-rose text-[#c0392b] rounded-lg px-4 py-2 font-bold transition-transform hover:scale-105">
-            <span className="w-2 h-2 rounded-full bg-rose animate-pulse"></span> SOS
-          </button>
-        </div>
-      </nav>
-
-      {/* Hero Banner */}
-      <div className="h-[180px] relative overflow-hidden mb-8 bg-gradient-to-r from-[#fae8d8] via-[#f0dded] to-[#dde8f5]">
-        <div className="absolute inset-0 flex items-center px-10 max-w-6xl mx-auto w-full">
-          <div>
-            <h1 className="font-serif text-3xl text-brown2 leading-tight">Good morning, {user?.name || 'Ramesh'}</h1>
-            <p className="text-textLight text-[15px] mt-1">You have <strong className="text-textDark">{medicines.length} medicines</strong> active.</p>
-            <div className="mt-5 flex gap-3">
-              <button onClick={() => setIsModalOpen(true)} className="bg-brown2 text-white px-5 py-2.5 rounded-lg font-bold text-sm hover:bg-[#4a3628] transition-colors flex items-center gap-2">
-                + Add Medicine
-              </button>
+      {/* Top navigation */}
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-[#e2e9e5]">
+        <div className="max-w-6xl mx-auto px-4 md:px-8 h-[64px] flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5 shrink-0">
+            <div className="w-9 h-9 rounded-full bg-[#e3f2ea] text-[#2f6f5e] flex items-center justify-center"><HeartPulse size={18} strokeWidth={2.2} /></div>
+            <div className="leading-tight">
+              <div className="text-[17px] font-bold text-[#1c2b26]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>MedTime</div>
+              <div className="text-[11px] text-[#66756f]">Better habits, calmer days</div>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Main Content Area */}
-      <div className="max-w-6xl mx-auto px-8">
-        <h2 className="font-serif text-2xl text-brown2 mb-4">Your Active Prescriptions</h2>
-
-        {medicines.length === 0 ? (
-          <div className="p-8 text-center bg-white rounded-xl border border-dashed border-sand">
-            <p className="text-textLight">No medicines added yet. Click "Add Medicine" to get started.</p>
+          <nav className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none]" aria-label="Sections">
+            <button className="flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2 rounded-full text-sm font-semibold bg-[#e3f2ea] text-[#2f6f5e]"><HeartPulse size={15} /> Home</button>
+            <button onClick={() => navigate('/vitals')} className="flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2 rounded-full text-sm font-semibold text-[#66756f] hover:bg-[#f4f7f5] hover:text-[#1c2b26]"><Activity size={15} /> Vitals</button>
+            <button onClick={() => setIsDoctorPanelOpen(true)} className="flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2 rounded-full text-sm font-semibold text-[#66756f] hover:bg-[#f4f7f5] hover:text-[#1c2b26]"><Settings size={15} /> Settings</button>
+            <button onClick={() => navigate('/caregiver/access')} className="flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2 rounded-full text-sm font-semibold text-[#66756f] hover:bg-[#f4f7f5] hover:text-[#1c2b26]"><Users size={15} /> Caregivers</button>
+          </nav>
+          <div className="flex items-center gap-2 shrink-0">
+            <button className="hidden sm:flex items-center gap-2 bg-[#fdf0ee] border border-[#f5d3ce] text-[#a23b32] rounded-full px-4 py-2 text-sm font-bold">
+              <span className="w-2 h-2 rounded-full bg-[#c0574d] animate-pulse" /> SOS
+            </button>
+            <button onClick={() => { dispatch(logoutUser()); navigate('/'); }} className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#66756f] hover:text-[#a23b32] px-3 py-2 rounded-full hover:bg-[#fdecea]">
+              <LogOut size={16} /> <span className="hidden md:inline">Sign out</span>
+            </button>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        </div>
+      </header>
 
-            {/* EXACTLY ONE CLEAN MAP LOOP HERE */}
+      <main className="max-w-6xl mx-auto px-4 md:px-8 pt-8">
+        {/* Greeting */}
+        <div className="mb-6">
+          <p className="text-[#66756f] text-sm">{greeting},</p>
+          <h1 className="text-3xl md:text-4xl font-bold text-[#1c2b26]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{firstName}</h1>
+          <p className="text-[#66756f] text-sm mt-1">{medicines.length ? `${takenCount} of ${medicines.length} medicines taken today.` : 'Add your first medicine to get started.'}</p>
+        </div>
+
+        <div className="grid lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            {/* Next dose */}
+            <section className="relative overflow-hidden rounded-3xl p-6 md:p-8 text-white bg-gradient-to-br from-[#2f6f5e] via-[#3c7f6c] to-[#6fa596] min-h-[190px]">
+              <div className="absolute -right-10 -top-10 w-56 h-56 rounded-full bg-white/10" />
+              <div className="absolute right-16 -bottom-16 w-44 h-44 rounded-full bg-white/5" />
+              <div className="relative">
+                <div className="text-[11px] font-semibold tracking-[0.18em] uppercase text-white/80">
+                  {nextDose ? `Next dose · ${dueNow.includes(nextDose) ? 'now' : timeOf(nextDose.doseTime)}` : 'All set'}
+                </div>
+                <h2 className="mt-2 text-3xl md:text-4xl uppercase leading-none" style={{ fontFamily: "'Anton', 'Plus Jakarta Sans', sans-serif", letterSpacing: '0.01em' }}>
+                  {nextDose ? `${nextDose.name} ${nextDose.dosage || ''}` : 'Nothing due right now'}
+                </h2>
+                <p className="mt-2 text-white/85 text-sm max-w-md">Small, steady habits make calmer days. MedTime will call you when it's time.</p>
+                {nextDose && dueNow.includes(nextDose) && (
+                  <button onClick={() => handleStatusUpdate(nextDose, 'taken')} className="mt-5 inline-flex items-center gap-2 bg-white text-[#1c2b26] px-5 py-2.5 rounded-full text-sm font-semibold hover:bg-[#f4f7f5]">
+                    <CheckCircle2 size={16} className="text-[#2f6f5e]" /> Mark {nextDose.name} as taken
+                  </button>
+                )}
+              </div>
+            </section>
+
+            {/* Today's medicines */}
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-bold text-[#1c2b26]">Your medicines</h2>
+                <button onClick={() => setIsModalOpen(true)} className="text-sm font-semibold text-[#2f6f5e] hover:underline">Add medicine</button>
+              </div>
+              {medicines.length === 0 ? (
+                <div className="p-10 text-center bg-white rounded-3xl border border-dashed border-[#e2e9e5]">
+                  <div className="mx-auto mb-3 w-12 h-12 rounded-full bg-[#e3f2ea] text-[#2f6f5e] flex items-center justify-center"><Pill size={22} /></div>
+                  <p className="text-[#66756f] text-sm">No medicines yet. Add one, or scan a prescription.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {medicines.map((med) => {
-              // ── Escalation Engine Visual State (priority order) ─────────────
-              // Per dose (A1.4): these come from the current dose, not the medicine.
-              // 1. caregiverAlerted → solid red (missed, caregiver was notified)
-              // 2. snoozeUntil set → amber (patient snoozed, awaiting re-call)
-              // 3. Reminder-based status fallback (taken / skipped / due / upcoming)
               const isMissed = !!med.caregiverAlerted || med.status === 'missed';
               const isSnoozed = !isMissed && !!med.snoozeUntil;
-
-              const cardClass = isMissed
-                ? 'bg-[#ffebee] border-[#e57373]'          // solid red — missed
-                : isSnoozed
-                  ? 'bg-[#fff8e1] border-[#ffca28]'          // amber — snoozed
-                  : med.status === 'taken'
-                    ? 'bg-[#e8f5e9] border-[#a5d6a7]'         // green — taken
-                    : med.status === 'skipped'
-                      ? 'bg-[#ffebee] border-[#ef9a9a]'          // light red — skipped
-                      : med.status === 'due' || med.status === 'overdue'
-                        ? 'bg-[#fffef5] border-amber2'             // warm yellow — due / not confirmed
-                        : 'bg-white border-sand';                  // default — upcoming
+              const tone = isMissed || med.status === 'skipped' ? 'rose' : isSnoozed || med.status === 'due' || med.status === 'overdue' ? 'amber' : med.status === 'taken' ? 'mint' : 'lavender';
+              const TONE = {
+                mint: { card: 'bg-[#eef7f2] border-[#d6ebe0]', icon: 'bg-white text-[#2f6f5e]', bar: 'bg-[#2f6f5e]', pct: 'w-full' },
+                amber: { card: 'bg-[#fdf6e7] border-[#f3e1b5]', icon: 'bg-white text-[#b7791f]', bar: 'bg-[#d69e2e]', pct: 'w-1/2' },
+                rose: { card: 'bg-[#fdf0ee] border-[#f5d3ce]', icon: 'bg-white text-[#a23b32]', bar: 'bg-[#c0574d]', pct: 'w-1/4' },
+                lavender: { card: 'bg-[#f3f2fb] border-[#e2e0f4]', icon: 'bg-white text-[#5b57a6]', bar: 'bg-[#8b87c9]', pct: 'w-0' },
+              }[tone];
+              const statusText = isMissed ? (med.caregiverAlerted ? 'Missed · family told' : 'Missed') : isSnoozed ? 'Snoozed' : med.status === 'taken' ? 'Taken' : med.status === 'skipped' ? 'Skipped' : med.status === 'due' ? 'Due now' : med.status === 'overdue' ? 'Not confirmed yet' : `Later${med.doseTime ? ` · ${timeOf(med.doseTime)}` : ''}`;
 
               return (
-                <div
-                  key={med._id}
-                  className={`rounded-[18px] p-5 border-2 shadow-sm flex flex-col gap-3 transition-colors duration-300 ${cardClass}`}
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="text-[18px] font-bold text-textDark">{med.name} {med.dosage}</div>
-                      <div className="text-xs text-textLight mt-0.5 capitalize">
-                        {med.mealTiming} Food • Scheduled: {med.scheduledTimes?.join(', ')} • {med.notificationType === 'call' ? '📞 Call' : '💬 SMS'}
-                      </div>
-                      {/* C10 Step-by-Step Guidance Badges */}
-                      {(med.pillDescription || med.locationHint || med.pillboxSlot) && (
-                        <div className="text-[11px] text-[#5c4535] mt-2 flex flex-wrap gap-1.5 items-center">
-                          {med.pillDescription && (
-                            <span className="bg-white/80 border border-sand px-2 py-0.5 rounded-md font-medium" title="Pill Appearance">
-                              💊 {med.pillDescription}
-                            </span>
-                          )}
-                          {med.pillboxSlot && (
-                            <span className="bg-white/80 border border-sand px-2 py-0.5 rounded-md font-medium" title="Pillbox Compartment">
-                              📦 {med.pillboxSlot}
-                            </span>
-                          )}
-                          {med.locationHint && (
-                            <span className="bg-white/80 border border-sand px-2 py-0.5 rounded-md font-medium" title="Storage Location">
-                              📍 {med.locationHint}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Dynamic Badges — escalation states take priority */}
-                    {isMissed && (
-                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#ffcdd2] text-[#b71c1c] animate-pulse">
-                        {med.caregiverAlerted ? '🚨 Missed – Caregiver Alerted' : '🚨 Missed'}
-                      </span>
-                    )}
-                    {isSnoozed && (
-                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#fff9c4] text-[#7a5a10]">
-                        ⏰ Snoozed
-                      </span>
-                    )}
-                    {!isMissed && !isSnoozed && med.status === 'taken' && (
-                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#c8e6c9] text-[#2e7d32]">✓ Taken</span>
-                    )}
-                    {!isMissed && !isSnoozed && med.status === 'skipped' && (
-                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#ffcdd2] text-[#c62828]">✗ Skipped</span>
-                    )}
-                    {!isMissed && !isSnoozed && med.status === 'due' && (
-                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amberSoft text-[#7a5a10] animate-pulse">● Due Now</span>
-                    )}
-                    {!isMissed && !isSnoozed && med.status === 'overdue' && (
-                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amberSoft text-[#7a5a10]">⏰ Not confirmed yet</span>
-                    )}
-                    {!isMissed && !isSnoozed && med.status === 'upcoming' && (
-                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-500">
-                        ⏳ Upcoming{med.doseTime ? ` · ${new Date(med.doseTime).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' })}` : ''}
-                      </span>
-                    )}
+                <div key={med._id} className={`rounded-3xl p-5 border flex flex-col gap-3 transition-colors ${TONE.card}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className={`w-11 h-11 rounded-full flex items-center justify-center shadow-sm ${TONE.icon}`}><Pill size={20} /></div>
+                    <span className="text-[11px] font-semibold text-[#66756f] inline-flex items-center gap-1">
+                      {med.notificationType === 'call' ? <Phone size={12} /> : <MessageSquare size={12} />}{med.notificationType === 'call' ? 'Call' : 'SMS'}
+                    </span>
                   </div>
-
-                  <div className="flex gap-2 mt-2">
-                    {/* Take / Skip Buttons (Only show if due!) */}
+                  <div>
+                    <div className="text-lg font-bold text-[#1c2b26] leading-tight" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{med.name}</div>
+                    <div className="text-[13px] text-[#66756f] mt-0.5">{med.dosage} · {med.scheduledTimes?.join(', ')} · <span className="capitalize">{med.mealTiming === 'any' ? 'any time' : `${med.mealTiming} food`}</span></div>
+                  </div>
+                  {(med.pillDescription || med.locationHint || med.pillboxSlot) && (
+                    <div className="flex flex-wrap gap-1.5 text-[11px] text-[#46564f]">
+                      {med.pillDescription && <span className="inline-flex items-center gap-1 bg-white/80 rounded-full px-2 py-0.5"><Pill size={11} />{med.pillDescription}</span>}
+                      {med.pillboxSlot && <span className="inline-flex items-center gap-1 bg-white/80 rounded-full px-2 py-0.5"><Package size={11} />{med.pillboxSlot}</span>}
+                      {med.locationHint && <span className="inline-flex items-center gap-1 bg-white/80 rounded-full px-2 py-0.5"><MapPin size={11} />{med.locationHint}</span>}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 h-1.5 rounded-full bg-white overflow-hidden"><div className={`h-full rounded-full ${TONE.bar} ${TONE.pct}`} /></div>
+                    <span className="text-xs font-semibold text-[#1c2b26] whitespace-nowrap">{statusText}</span>
+                  </div>
+                  <div className="flex gap-2 pt-1">
                     {(med.status === 'due' || med.status === 'overdue') && (
                       <>
-                        <button
-                          onClick={() => handleStatusUpdate(med, 'taken')}
-                          className="flex-1 bg-sage2 text-[#1e3a1d] py-2 rounded-lg font-bold text-sm border-2 border-sage2 hover:bg-sage transition-colors shadow-sm"
-                        >
-                          ✓ Take
+                        <button onClick={() => handleStatusUpdate(med, 'taken')} className="flex-1 inline-flex items-center justify-center gap-1.5 bg-[#2f6f5e] text-white py-2 rounded-full font-semibold text-sm hover:bg-[#255a4c] transition-colors">
+                          <Check size={15} /> Take
                         </button>
-                        <button
-                          onClick={() => handleStatusUpdate(med, 'skipped')}
-                          className="flex-1 bg-blush2 text-[#7a2a1a] py-2 rounded-lg font-bold text-sm border-2 border-blush2 hover:bg-blush transition-colors shadow-sm"
-                        >
-                          ✗ Skip
+                        <button onClick={() => handleStatusUpdate(med, 'skipped')} className="flex-1 inline-flex items-center justify-center gap-1.5 bg-white text-[#a23b32] py-2 rounded-full font-semibold text-sm border border-[#f5d3ce] hover:bg-[#fdf0ee] transition-colors">
+                          <X size={15} /> Skip
                         </button>
                       </>
                     )}
-
-                    {/* Edit Button */}
-                    <button
-                      onClick={() => openEditModal(med)}
-                      className="flex-[0.5] bg-white border-2 border-sky2 text-[#2c658a] py-2 rounded-lg font-bold text-sm hover:bg-[#f0f7fc] transition-colors shadow-sm"
-                      title="Edit Medication"
-                    >
-                      ✏️ Edit
+                    <button onClick={() => openEditModal(med)} title="Edit medication" className="inline-flex items-center justify-center gap-1 bg-white text-[#2f6f5e] px-3.5 py-2 rounded-full font-semibold text-sm border border-[#e2e9e5] hover:bg-[#f4f7f5] transition-colors">
+                      <Pencil size={14} /> Edit
                     </button>
-
-                    {/* Cancel Button */}
-                    <button
-                      onClick={() => handleDelete(med._id)}
-                      className="flex-[0.5] bg-white border-2 border-gray-200 text-gray-500 py-2 rounded-lg font-bold text-sm hover:bg-gray-50 transition-colors shadow-sm"
-                      title="Cancel Medication"
-                    >
-                      🗑️ Cancel
+                    <button onClick={() => handleDelete(med._id)} title="Cancel medication" className="inline-flex items-center justify-center bg-white text-[#66756f] px-3.5 py-2 rounded-full font-semibold text-sm border border-[#e2e9e5] hover:bg-[#f4f7f5] transition-colors">
+                      Cancel
                     </button>
                   </div>
                 </div>
               );
             })}
-            {/* END OF MAP LOOP */}
 
+                </div>
+              )}
+            </section>
           </div>
-        )}
 
-      </div>
+          {/* Right column */}
+          <aside className="space-y-6">
+            <section className="rounded-3xl p-6 bg-[#eef7f2] border border-[#d6ebe0]">
+              <h2 className="text-base font-bold text-[#1c2b26] mb-4">Today's progress</h2>
+              <div className="flex items-center gap-5">
+                <div className="relative w-28 h-28 shrink-0">
+                  <svg viewBox="0 0 36 36" className="w-28 h-28 -rotate-90">
+                    <circle cx="18" cy="18" r="15.5" fill="none" stroke="#d6ebe0" strokeWidth="3.2" />
+                    <circle cx="18" cy="18" r="15.5" fill="none" stroke="#2f6f5e" strokeWidth="3.2" strokeLinecap="round" strokeDasharray={`${(progressPct / 100) * 97.4} 97.4`} />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center text-xl font-bold text-[#1c2b26]">{progressPct}%</div>
+                </div>
+                <div>
+                  <div className="font-semibold text-[#1c2b26]">{progressPct >= 100 ? 'All done today' : takenCount ? "You're on track" : 'Not started yet'}</div>
+                  <div className="text-sm text-[#66756f] mt-1">{takenCount} of {medicines.length} taken.{dueNow.length ? ` ${dueNow.length} due now.` : ''}</div>
+                </div>
+              </div>
+            </section>
+
+            <section>
+              <h2 className="text-base font-bold text-[#1c2b26] mb-3">Quick actions</h2>
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2.5 p-3.5 rounded-2xl bg-[#eef7f2] text-left text-sm font-semibold text-[#1c2b26] hover:brightness-95"><span className="w-8 h-8 rounded-full bg-white text-[#2f6f5e] flex items-center justify-center"><Plus size={16} /></span>Add medicine</button>
+                <button onClick={() => navigate('/vitals')} className="flex items-center gap-2.5 p-3.5 rounded-2xl bg-[#eaf2fb] text-left text-sm font-semibold text-[#1c2b26] hover:brightness-95"><span className="w-8 h-8 rounded-full bg-white text-[#3a6fa0] flex items-center justify-center"><Activity size={16} /></span>Vitals</button>
+                <button onClick={() => setIsDoctorPanelOpen(true)} className="flex items-center gap-2.5 p-3.5 rounded-2xl bg-[#fdf6e7] text-left text-sm font-semibold text-[#1c2b26] hover:brightness-95"><span className="w-8 h-8 rounded-full bg-white text-[#b7791f] flex items-center justify-center"><Settings size={16} /></span>Settings</button>
+                <button onClick={() => navigate('/caregiver/access')} className="flex items-center gap-2.5 p-3.5 rounded-2xl bg-[#f3f2fb] text-left text-sm font-semibold text-[#1c2b26] hover:brightness-95"><span className="w-8 h-8 rounded-full bg-white text-[#5b57a6] flex items-center justify-center"><Users size={16} /></span>Caregivers</button>
+              </div>
+            </section>
+
+            <section className="rounded-3xl p-6 bg-white border border-[#e2e9e5]">
+              <h2 className="text-base font-bold text-[#1c2b26] mb-3">Coming up</h2>
+              {upcoming.length === 0 ? (
+                <p className="text-sm text-[#66756f]">No more doses today.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {upcoming.slice(0, 5).map((m) => (
+                    <li key={m._id} className="flex items-center gap-3 text-sm">
+                      <Clock size={15} className="text-[#8b87c9] shrink-0" />
+                      <span className="w-20 text-[#66756f] shrink-0">{timeOf(m.doseTime)}</span>
+                      <span className="font-semibold text-[#1c2b26] truncate">{m.name}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {medicines.some((m) => m.caregiverAlerted || m.status === 'missed') && (
+                <div className="mt-4 flex items-start gap-2 text-xs text-[#a23b32] bg-[#fdf0ee] rounded-xl p-3"><AlertCircle size={14} className="shrink-0 mt-0.5" /> A dose was missed today; your family has been told.</div>
+              )}
+            </section>
+          </aside>
+        </div>
+      </main>
 
       {/* ── My Doctor Slide-In Panel ─────────────────────────────────────────── */}
       {/* Backdrop */}
       {isDoctorPanelOpen && (
         <div
-          className="fixed inset-0 bg-[#2d2418]/40 backdrop-blur-sm z-40"
+          className="fixed inset-0 bg-[#1c2b26]/40 backdrop-blur-sm z-40"
           onClick={() => setIsDoctorPanelOpen(false)}
         />
       )}
@@ -451,10 +446,10 @@ export default function PatientDashboard() {
           }`}
       >
         {/* Panel Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-sand bg-gradient-to-r from-[#fae8d8] to-[#f0dded]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-sand bg-gradient-to-r from-[#e3f2ea] to-[#e8f0fb]">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-white/70 flex items-center justify-center shadow-sm">
-              <span className="text-xl">🩺</span>
+              <Settings size={18} className="text-[#2f6f5e]" />
             </div>
             <div>
               <h2 className="font-serif text-lg text-brown2 font-semibold leading-tight">Settings</h2>
@@ -479,13 +474,13 @@ export default function PatientDashboard() {
 
       {/* --- ADD MEDICINE MODAL --- */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-[#2d2418]/60 backdrop-blur-sm z-50 overflow-y-auto p-4" style={{ overflowY: 'auto' }}>
+        <div className="fixed inset-0 bg-[#1c2b26]/60 backdrop-blur-sm z-50 overflow-y-auto p-4" style={{ overflowY: 'auto' }}>
           <div className="bg-white rounded-[24px] p-6 sm:p-8 w-full max-w-lg shadow-2xl mx-auto my-4" style={{ maxHeight: 'calc(100vh - 2rem)', overflowY: 'auto' }}>
             <h2 className="font-serif text-2xl text-brown2 mb-6">Add New Medication</h2>
             {/* Change accept="image/*,application/pdf" to strictly images */}
             <input type="file" accept="image/png, image/jpeg" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
             <button type="button" onClick={() => fileInputRef.current.click()} disabled={isScanning} className="w-full mb-6 py-4 rounded-xl border-2 border-dashed border-sky3 bg-[#f0f7fc] text-sky3 font-bold flex items-center justify-center gap-2 hover:bg-[#e0f0fa] transition-colors disabled:opacity-70">
-              {isScanning ? 'Analyzing Prescription...' : '📷 Scan Prescription (Auto-Fill)'}
+              {isScanning ? 'Analyzing Prescription...' : 'Scan Prescription (Auto-Fill)'}
             </button>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -569,7 +564,7 @@ export default function PatientDashboard() {
                 </div>
               </div>
               <div className="flex gap-3 pt-4">
-                <button type="submit" disabled={saving} className="flex-[2] bg-brown2 text-white py-3 rounded-lg font-bold hover:bg-[#4a3628] disabled:opacity-60 disabled:cursor-wait">{saving ? 'Saving…' : 'Schedule & Save'}</button>
+                <button type="submit" disabled={saving} className="flex-[2] bg-brown2 text-white py-3 rounded-lg font-bold hover:bg-[#255a4c] disabled:opacity-60 disabled:cursor-wait">{saving ? 'Saving…' : 'Schedule & Save'}</button>
                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 bg-white border-2 border-sand text-textDark py-3 rounded-lg font-bold hover:bg-cream">Cancel</button>
               </div>
             </form>
@@ -579,7 +574,7 @@ export default function PatientDashboard() {
 
       {/* --- EDIT MEDICINE MODAL --- */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 bg-[#2d2418]/60 backdrop-blur-sm z-50 overflow-y-auto p-4" style={{ overflowY: 'auto' }}>
+        <div className="fixed inset-0 bg-[#1c2b26]/60 backdrop-blur-sm z-50 overflow-y-auto p-4" style={{ overflowY: 'auto' }}>
           <div className="bg-white rounded-[24px] p-6 sm:p-8 w-full max-w-lg shadow-2xl mx-auto my-4" style={{ maxHeight: 'calc(100vh - 2rem)', overflowY: 'auto' }}>
             <h2 className="font-serif text-2xl text-brown2 mb-6">Edit Medication</h2>
             <form onSubmit={handleEditSubmit} className="space-y-4">

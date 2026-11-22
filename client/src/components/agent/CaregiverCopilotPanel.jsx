@@ -21,11 +21,11 @@ const QUICK_PROMPTS = [
 ];
 
 const MODES = [
-  { id: '', label: '✨ Auto-Detect' },
-  { id: 'inform', label: '📖 Inform' },
-  { id: 'coach', label: '🎯 Coach' },
-  { id: 'relate', label: '🤝 Relate' },
-  { id: 'listen', label: '👂 Listen' },
+  { id: '', label: 'Auto-Detect' },
+  { id: 'inform', label: 'Inform' },
+  { id: 'coach', label: 'Coach' },
+  { id: 'relate', label: 'Relate' },
+  { id: 'listen', label: 'Listen' },
 ];
 
 export default function CaregiverCopilotPanel({ patientId }) {
@@ -89,27 +89,27 @@ export default function CaregiverCopilotPanel({ patientId }) {
   const getModeBadge = (mode) => {
     switch (mode) {
       case 'listen':
-        return <span className="bg-purple-100 text-purple-800 text-[11px] font-bold px-2.5 py-0.5 rounded-full">👂 Listen (Emotional Support)</span>;
+        return <span className="bg-purple-100 text-purple-800 text-[11px] font-bold px-2.5 py-0.5 rounded-full">Listen (Emotional Support)</span>;
       case 'coach':
-        return <span className="bg-blue-100 text-blue-800 text-[11px] font-bold px-2.5 py-0.5 rounded-full">🎯 Coach (Step-by-Step)</span>;
+        return <span className="bg-blue-100 text-blue-800 text-[11px] font-bold px-2.5 py-0.5 rounded-full">Coach (Step-by-Step)</span>;
       case 'relate':
-        return <span className="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2.5 py-0.5 rounded-full">🤝 Relate (Shared Experience)</span>;
+        return <span className="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2.5 py-0.5 rounded-full">Relate (Shared Experience)</span>;
       default:
-        return <span className="bg-[#f5ede0] text-[#5c4535] text-[11px] font-bold px-2.5 py-0.5 rounded-full">📖 Inform (Clinical Guidance)</span>;
+        return <span className="bg-[#eaf3ee] text-[#2f6f5e] text-[11px] font-bold px-2.5 py-0.5 rounded-full">Inform (Clinical Guidance)</span>;
     }
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-[#e8dcc8] p-6 space-y-5">
+    <div className="bg-white rounded-2xl border border-[#e2e9e5] p-6 space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="text-lg font-bold text-[#2d2418]">🤖 Caregiver Copilot</h2>
-          <p className="text-xs text-[#8a7560] mt-0.5">
+          <h2 className="text-lg font-bold text-[#1c2b26]">Caregiver Copilot</h2>
+          <p className="text-xs text-[#66756f] mt-0.5">
             Dementia care guidance, behavioral coaching, and compassionate caregiver support
           </p>
         </div>
         <span className="text-[11px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1 rounded-full font-semibold">
-          🛡️ CareGuardAI: Safe (No Dosing Advice)
+          CareGuardAI: Safe (No Dosing Advice)
         </span>
       </div>
 
@@ -121,8 +121,8 @@ export default function CaregiverCopilotPanel({ patientId }) {
             onClick={() => setSelectedMode(m.id)}
             className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors ${
               selectedMode === m.id
-                ? 'bg-[#5c4535] text-white shadow-sm'
-                : 'bg-[#faf6f0] text-[#8a7560] hover:bg-[#f5ede0]'
+                ? 'bg-[#2f6f5e] text-white shadow-sm'
+                : 'bg-[#f7faf8] text-[#66756f] hover:bg-[#eaf3ee]'
             }`}
           >
             {m.label}
@@ -136,9 +136,9 @@ export default function CaregiverCopilotPanel({ patientId }) {
           <button
             key={i}
             onClick={() => sendMessage(prompt)}
-            className="text-[11px] bg-[#fdf8f0] border border-[#e8dcc8] text-[#5c4535] px-3 py-1.5 rounded-full hover:bg-[#f5ede0] whitespace-nowrap transition-colors flex-shrink-0"
+            className="text-[11px] bg-[#f4f7f5] border border-[#e2e9e5] text-[#2f6f5e] px-3 py-1.5 rounded-full hover:bg-[#eaf3ee] whitespace-nowrap transition-colors flex-shrink-0"
           >
-            💬 {prompt}
+            {prompt}
           </button>
         ))}
       </div>
@@ -153,8 +153,8 @@ export default function CaregiverCopilotPanel({ patientId }) {
             <div
               className={`max-w-[85%] rounded-2xl p-4 text-xs leading-relaxed ${
                 m.sender === 'user'
-                  ? 'bg-[#5c4535] text-white'
-                  : 'bg-[#faf6f0] border border-[#e8dcc8] text-[#2d2418]'
+                  ? 'bg-[#2f6f5e] text-white'
+                  : 'bg-[#f7faf8] border border-[#e2e9e5] text-[#1c2b26]'
               }`}
             >
               {m.sender === 'copilot' && (
@@ -162,11 +162,11 @@ export default function CaregiverCopilotPanel({ patientId }) {
                   {getModeBadge(m.mode)}
                 </div>
               )}
-              <div className={`whitespace-pre-line ${m.urgent ? 'font-semibold text-[#7a2a1a]' : ''}`}>{m.text}</div>
+              <div className={`whitespace-pre-line ${m.urgent ? 'font-semibold text-[#a23b32]' : ''}`}>{m.text}</div>
 
               {/* fix 9: how the answer was checked before it was shown */}
               {m.sender === 'copilot' && m.reviews && (
-                <div className="mt-2 text-[10px] text-[#8a7560]">
+                <div className="mt-2 text-[10px] text-[#66756f]">
                   {m.reviews.safety && m.reviews.grounding
                     ? `${m.released ? '✓ Checked before showing' : '✗ Not shown: failed the checks'} · safety risk ${m.reviews.safety.score}/5 · made-up facts risk ${m.reviews.grounding.score}/5`
                     : m.reviews.note === 'basic answer (model unavailable)'
@@ -177,10 +177,10 @@ export default function CaregiverCopilotPanel({ patientId }) {
 
               {/* Citations */}
               {m.citations && m.citations.length > 0 && (
-                <div className="mt-3 pt-2 border-t border-[#e8dcc8] text-[10px] text-[#8a7560] flex flex-wrap gap-1.5 items-center">
+                <div className="mt-3 pt-2 border-t border-[#e2e9e5] text-[10px] text-[#66756f] flex flex-wrap gap-1.5 items-center">
                   <span className="font-bold">Sources:</span>
                   {m.citations.map((c, ci) => (
-                    <span key={ci} className="bg-white border border-[#e8dcc8] px-2 py-0.5 rounded font-mono">
+                    <span key={ci} className="bg-white border border-[#e2e9e5] px-2 py-0.5 rounded font-mono">
                       {c.source || c.title}
                     </span>
                   ))}
@@ -191,7 +191,7 @@ export default function CaregiverCopilotPanel({ patientId }) {
               {m.proposedAction && (
                 <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-[11px]">
                   <strong>For the doctor:</strong> {m.proposedAction.question || m.proposedAction.description}
-                  <div className="mt-1 text-[#5c4535]">Write this down to ask at her next visit.</div>
+                  <div className="mt-1 text-[#2f6f5e]">Write this down to ask at her next visit.</div>
                 </div>
               )}
             </div>
@@ -199,8 +199,8 @@ export default function CaregiverCopilotPanel({ patientId }) {
         ))}
 
         {loading && (
-          <div className="flex items-center gap-2 text-xs text-[#8a7560] bg-[#faf6f0] p-3 rounded-xl border border-[#e8dcc8] w-fit">
-            <span className="animate-spin">⏳</span> Consulting dementia care guidance…
+          <div className="flex items-center gap-2 text-xs text-[#66756f] bg-[#f7faf8] p-3 rounded-xl border border-[#e2e9e5] w-fit">
+            <span className="animate-spin"></span> Consulting dementia care guidance…
           </div>
         )}
       </div>
@@ -218,12 +218,12 @@ export default function CaregiverCopilotPanel({ patientId }) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask about behavioral challenges, evening sundowning, caregiver burnout..."
-          className="flex-1 border border-[#e8dcc8] rounded-xl px-4 py-2.5 text-xs text-[#2d2418] focus:outline-none focus:ring-2 focus:ring-[#c5a87a]"
+          className="flex-1 border border-[#e2e9e5] rounded-xl px-4 py-2.5 text-xs text-[#1c2b26] focus:outline-none focus:ring-2 focus:ring-[#9fb5ad]"
         />
         <button
           type="submit"
           disabled={!input.trim() || loading}
-          className="bg-[#5c4535] text-white px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-[#4a3628] disabled:opacity-50 transition-colors"
+          className="bg-[#2f6f5e] text-white px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-[#255a4c] disabled:opacity-50 transition-colors"
         >
           Send
         </button>

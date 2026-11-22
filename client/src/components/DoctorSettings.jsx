@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../utils/api';
+import { Stethoscope } from 'lucide-react';
 
 /**
  * DoctorSettings — Elderly-friendly form to link a physician and toggle
@@ -121,7 +122,7 @@ export default function DoctorSettings() {
           color:  status.type === 'success' ? '#2e7d32' : '#c62828'
         }}>
           <span style={{ fontSize: 18, marginRight: 10 }}>
-            {status.type === 'success' ? '✅' : '⚠️'}
+            {status.type === 'success' ? '' : ''}
           </span>
           {status.message}
         </div>
@@ -196,7 +197,7 @@ export default function DoctorSettings() {
         {/* Automation status pill */}
         {autoSendMonthly && (
           <div style={styles.automationPill}>
-            <span style={{ marginRight: 6 }}>📅</span>
+            
             Automation is <strong>ON</strong> — next report sends on the 1st of next month.
           </div>
         )}
@@ -233,7 +234,7 @@ export default function DoctorSettings() {
       {/* Download Report Tester */}
       <div style={styles.downloadSection}>
         <div style={styles.downloadInfo}>
-          <span style={{ fontSize: 20 }}>📄</span>
+          <Stethoscope size={20} />
           <div>
             <p style={styles.downloadTitle}>Preview Your Report</p>
             <p style={styles.downloadDesc}>Download a copy of the 30-day clinical PDF that gets sent to your doctor.</p>
@@ -249,7 +250,7 @@ export default function DoctorSettings() {
             cursor: downloading ? 'not-allowed' : 'pointer'
           }}
         >
-          {downloading ? 'Generating…' : '⬇ Download Report'}
+          {downloading ? 'Generating…' : 'Download Report'}
         </button>
       </div>
     </div>

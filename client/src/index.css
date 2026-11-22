@@ -1,40 +1,53 @@
 @import "tailwindcss";
 
 @theme {
-  /* MedTime Custom Color Palette */
-  --color-cream: #fdf8f0;
-  --color-parchment: #f5ede0;
-  
-  --color-blush: #f7ddd4;
-  --color-blush2: #f2c4b5;
-  --color-rose: #e8a090;
-  
-  --color-sage: #c8d9c4;
-  --color-sage2: #a8c4a2;
-  --color-sage3: #7da876;
-  
-  --color-sky: #c5dff0;
-  --color-sky2: #a4c8e5;
-  --color-sky3: #6babd4;
-  
-  --color-lavender: #dbd3ef;
-  
-  --color-amber-soft: #f7e4b0;
-  --color-amber2: #f2cc72;
-  --color-amber3: #d4a030;
-  
-  --color-sand: #e8dcc8;
-  --color-brown2: #5c4535;
-  
-  --color-text-dark: #2d2418;
-  --color-text-light: #8a7560;
+  /* MedTime palette (UI pass, 22 Nov): calm sage and teal on soft neutrals */
+  --color-cream: #f4f7f5;
+  --color-parchment: #eaf3ee;
 
-  /* Custom Fonts */
-  --font-sans: 'Nunito', sans-serif;
-  --font-serif: 'Lora', serif;
+  --color-blush: #fdecea;
+  --color-blush2: #f5c6c0;
+  --color-rose: #e08a80;
+
+  --color-sage: #d6ebe0;
+  --color-sage2: #a9d6c1;
+  --color-sage3: #3f8f74;
+
+  --color-sky: #dbeaf7;
+  --color-sky2: #b9d6ef;
+  --color-sky3: #4a90c2;
+
+  --color-lavender: #e6e4f5;
+
+  --color-amber-soft: #fbefd2;
+  --color-amber2: #e9c46a;
+  --color-amber3: #c99a2e;
+
+  --color-sand: #e2e9e5;
+  --color-brown2: #2f6f5e;
+
+  --color-text-dark: #1c2b26;
+  --color-text-light: #66756f;
+
+  /* the camelCase names the components use (text-textDark, bg-amberSoft) */
+  --color-textDark: #1c2b26;
+  --color-textLight: #66756f;
+  --color-amberSoft: #fbefd2;
+
+  /* Fonts */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-serif: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  --font-display: 'Anton', 'Plus Jakarta Sans', sans-serif;
 }
 
 body {
   background-color: var(--color-cream);
   color: var(--color-text-dark);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-serif);
+  letter-spacing: -0.01em;
 }
