@@ -27,6 +27,7 @@ Priority: **High** = security or data-correctness problem, **Medium** = function
 - `/webhooks/sms` and `/webhooks/voice` don't validate `X-Twilio-Signature`, so anyone can POST to them and mark doses taken, skipped or snoozed.
 - `/webhooks/sms` also reads `req.body.Body.trim()` with no guard, and dereferences `patient._id` when the user has no `Patient` profile.
 - **Fix:** use `twilio.webhook()` or `validateRequest`, and add null checks.
+- **Status:** ✅ fixed in A1.1 (`server/middleware/twilioSignature.js`, branch `feat/a-phase0-fixes`).
 
 ## Medium
 
@@ -57,6 +58,7 @@ Priority: **High** = security or data-correctness problem, **Medium** = function
 - **Where:** [server/utils/twilioClient.js:14](server/utils/twilioClient.js#L14)
 - If `NGROK_URL` is not set on Render, voice-call webhooks point at a dead tunnel. Patients' button presses are lost and the caregiver gets a false "missed" alert.
 - **Fix:** use a `PUBLIC_BASE_URL` variable and fail loudly at startup if it is missing.
+- **Status:** ✅ fixed in A1.2 (branch `feat/a-phase0-fixes`). `NGROK_URL` is no longer read.
 
 ### 11. Access token is never refreshed, and is lost on reload
 - **Where:** [client/src/utils/api.js](client/src/utils/api.js), [client/src/redux/authSlice.js](client/src/redux/authSlice.js)
@@ -99,7 +101,7 @@ Priority: **High** = security or data-correctness problem, **Medium** = function
 
 ### 19. Duplicate and dead code
 - `DELETE /medicines/:id` is defined twice in [medicineRoutes.js](server/routes/medicineRoutes.js).
-- `makeCall` in [twilioClient.js](server/utils/twilioClient.js) is a legacy helper that nothing uses.
+- `makeCall` in [twilioClient.js](server/utils/twilioClient.js) is a legacy helper that nothing uses. ✅ Deleted in A1.2.
 - Stray `// 3. Parse...` comment repeated three times in [ocrRoutes.js](server/routes/ocrRoutes.js).
 - Diagnostic `console.log`s in [reportRoutes.js](server/routes/reportRoutes.js) that say "remove after confirming".
 - Unused dependency `socket.io-client` in [client/package.json](client/package.json).
@@ -107,7 +109,7 @@ Priority: **High** = security or data-correctness problem, **Medium** = function
 
 ### 20. Repository housekeeping
 - [README.md](README.md) is empty. There is no setup guide or list of required environment variables.
-- Required variables, found by reading the code: `MONGO_URI`, `JWT_SECRET`, `ENCRYPTION_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`, `NGROK_URL`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS`, `EMAIL_FROM_NAME`, `VITE_API_URL`.
+- Required variables, found by reading the code: `MONGO_URI`, `JWT_SECRET`, `ENCRYPTION_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`, `PUBLIC_BASE_URL` (was `NGROK_URL` before A1.2), `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS`, `EMAIL_FROM_NAME`, `VITE_API_URL`.
 - `server/eng.traineddata` (a binary Tesseract model) is committed to git.
 - `dns.setServers(["1.1.1.1", "8.8.8.8"])` in [server/index.js](server/index.js) is a global workaround for DNS resolution and should be documented or removed.
 - The reminder job polls the database every 10 seconds and every medicine card polls every 5 seconds, which is heavy for a free-tier deployment.

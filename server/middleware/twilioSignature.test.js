@@ -10,7 +10,7 @@ const twilio = require('twilio');
 const TOKEN = 'test-auth-token';
 const BASE = 'https://medtime.example.test';
 const saved = {};
-const ENV = ['TWILIO_AUTH_TOKEN', 'PUBLIC_BASE_URL', 'NGROK_URL', 'NODE_ENV'];
+const ENV = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_ENABLED', 'PUBLIC_BASE_URL', 'NODE_ENV', 'RENDER'];
 
 let server, local;
 test.before(() => {
@@ -29,9 +29,11 @@ test.after(() => {
   }
 });
 test.beforeEach(() => {
+  process.env.TWILIO_ACCOUNT_SID = 'AC' + '0'.repeat(32);
   process.env.TWILIO_AUTH_TOKEN = TOKEN;
   process.env.PUBLIC_BASE_URL = BASE;
-  delete process.env.NGROK_URL;
+  delete process.env.TWILIO_ENABLED;
+  delete process.env.RENDER;
   process.env.NODE_ENV = 'test';
 });
 
@@ -88,5 +90,12 @@ test('simulation mode: no auth token skips the check locally, but rejects in pro
   delete process.env.TWILIO_AUTH_TOKEN;
   assert.equal((await post('/api/v1/webhooks/voice', { Digits: '1' })).status, 200);
   process.env.NODE_ENV = 'production';
+  assert.equal((await post('/api/v1/webhooks/voice', { Digits: '1' })).status, 403);
+});
+
+test('TWILIO_ENABLED=false skips the check locally even with credentials, and rejects on Render', async () => {
+  process.env.TWILIO_ENABLED = 'false';
+  assert.equal((await post('/api/v1/webhooks/voice', { Digits: '1' })).status, 200);
+  process.env.RENDER = 'true'; // Render sets this on every service
   assert.equal((await post('/api/v1/webhooks/voice', { Digits: '1' })).status, 403);
 });

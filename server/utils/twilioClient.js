@@ -1,26 +1,44 @@
 require('dotenv').config();
 const twilio = require('twilio');
+const { publicBaseUrl } = require('./publicUrl');
+const { twilioEnabled, twilioSwitchedOff } = require('./runtime');
 
-// ── Twilio client (graceful no-op in dev if credentials are missing) ──────────
-let client;
-if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
-  client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-} else {
-  console.warn('⚠️  [Twilio] No credentials found — running in simulation mode.');
+// ── Twilio client ─────────────────────────────────────────────────────────────
+// Off (simulation mode) when TWILIO_ENABLED=false or credentials are missing:
+// calls and SMS are only logged (A1.2). Checked on every send, so tests can
+// switch it.
+let cachedClient = null;
+const getClient = () => {
+  if (!twilioEnabled()) return null;
+  if (!cachedClient) cachedClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+  return cachedClient;
+};
+
+if (twilioSwitchedOff()) {
+  console.warn('⚠️  [Twilio] TWILIO_ENABLED=false: running in simulation mode (calls and SMS are only logged).');
+} else if (!twilioEnabled()) {
+  console.warn('⚠️  [Twilio] No credentials found: running in simulation mode (calls and SMS are only logged).');
 }
 
-// ── Base ngrok URL for webhook callbacks ─────────────────────────────────────
-// Keep this in sync with your active ngrok tunnel.
-// A1.1: the same base the webhook signature check uses (utils/publicUrl.js), so
-// the URL Twilio calls and the URL we verify against always match. The old
-// hard-coded tunnel is only a last resort until A1.2 removes it.
-const NGROK_URL = require('./publicUrl').publicBaseUrl() || 'https://cardiac-gallstone-quartet.ngrok-free.dev';
+// ── Callback URLs ─────────────────────────────────────────────────────────────
+// Every URL Twilio calls back on is PUBLIC_BASE_URL + path (A1.2). There is no
+// fallback: in production the server won't start without it (index.js), and
+// here a missing value is a clear error instead of a dead tunnel.
+const callbackUrl = (path) => {
+  const base = publicBaseUrl();
+  if (!base) throw new Error(`PUBLIC_BASE_URL is not set, so Twilio can't reach ${path}`);
+  return base + path;
+};
+
+const withCountryCode = (phone) => (String(phone).startsWith('+') ? String(phone) : `+91${phone}`);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// sendSMS — sends an SMS to the patient (e.g. for initial dose reminders)
+// sendSMS — sends an SMS to the patient (e.g. for initial dose reminders).
+// Throws on failure, so the caller can count retries.
 // ─────────────────────────────────────────────────────────────────────────────
 const sendSMS = async (to, message) => {
-  const formattedTo = to.startsWith('+') ? to : `+91${to}`;
+  const formattedTo = withCountryCode(to);
+  const client = getClient();
 
   if (!client) {
     console.log(`[SIMULATION] SMS → ${formattedTo}: "${message}"`);
@@ -42,10 +60,13 @@ const sendSMS = async (to, message) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// sendCaregiverSMS — sends an escalation/alert SMS to the caregiver
+// sendCaregiverSMS — sends an escalation/alert SMS to the caregiver.
+// Never throws (used by the vitals alert). Missed-dose alerts are phone calls
+// on the trial (A1.3, services/caregiverAlerts.js).
 // ─────────────────────────────────────────────────────────────────────────────
 const sendCaregiverSMS = async (toPhone, messageBody) => {
-  const formattedPhone = toPhone.startsWith('+') ? toPhone : `+91${toPhone}`;
+  const formattedPhone = withCountryCode(toPhone);
+  const client = getClient();
 
   if (!client) {
     console.log(`[SIMULATION] Caregiver SMS → ${formattedPhone}: "${messageBody}"`);
@@ -62,7 +83,7 @@ const sendCaregiverSMS = async (toPhone, messageBody) => {
     return response.sid;
   } catch (error) {
     console.error(`❌ Caregiver SMS failed to ${formattedPhone}:`, error.message);
-    // Don't throw — a failed caregiver alert must never crash the cron job
+    // Don't throw — a failed caregiver alert must never crash the caller
   }
 };
 
@@ -72,13 +93,13 @@ const sendCaregiverSMS = async (toPhone, messageBody) => {
 //   medName    : medicine name to read aloud
 //   medicineId : MongoDB _id of the Medicine document — embedded in the
 //                webhook action URL so /voice knows which medicine to update.
+// Twilio fetches the call's TwiML from our server: trial accounts reject the
+// inline `twiml` parameter but accept a `url` pointing at our own server.
 // ─────────────────────────────────────────────────────────────────────────────
 const makePatientCall = async (toPhone, medName, medicineId) => {
-  const formattedTo = toPhone.startsWith('+') ? toPhone : `+91${toPhone}`;
-  // Twilio fetches the call's TwiML from our server. Trial accounts reject the
-  // inline `twiml` parameter ("trial accounts have limited parameter access"),
-  // but accept a `url` pointing at our own server.
-  const promptUrl = `${NGROK_URL}/api/v1/webhooks/voice/prompt?medicineId=${medicineId}`;
+  const formattedTo = withCountryCode(toPhone);
+  const path = `/api/v1/webhooks/voice/prompt?medicineId=${encodeURIComponent(medicineId)}`;
+  const client = getClient();
 
   if (!client) {
     console.log(`[SIMULATION] Voice Call → ${formattedTo} for "${medName}" (medicineId: ${medicineId})`);
@@ -87,7 +108,7 @@ const makePatientCall = async (toPhone, medName, medicineId) => {
 
   try {
     const call = await client.calls.create({
-      url: promptUrl,
+      url: callbackUrl(path),
       to: formattedTo,
       from: process.env.TWILIO_PHONE_NUMBER,
     });
@@ -103,12 +124,12 @@ const makePatientCall = async (toPhone, medName, medicineId) => {
 // makeAlertCall — phones a caregiver with a short spoken alert (A2.5).
 //   Twilio fetches the words from POST /api/v1/webhooks/voice/alert?alertId=...
 //   (a URL, because the trial rejects inline TwiML). Returns the call, or true in
-//   simulation mode.
+//   simulation mode. Throws if the call can't be placed.
 // ─────────────────────────────────────────────────────────────────────────────
 const makeAlertCall = async (toPhone, alertId) => {
-  const formattedTo = toPhone.startsWith('+') ? toPhone : `+91${toPhone}`;
-  const baseUrl = NGROK_URL;
-  const alertUrl = `${baseUrl}/api/v1/webhooks/voice/alert?alertId=${encodeURIComponent(alertId)}`;
+  const formattedTo = withCountryCode(toPhone);
+  const path = `/api/v1/webhooks/voice/alert?alertId=${encodeURIComponent(alertId)}`;
+  const client = getClient();
 
   if (!client) {
     console.log(`[SIMULATION] Caregiver alert call → ${formattedTo} (alertId: ${alertId})`);
@@ -116,7 +137,7 @@ const makeAlertCall = async (toPhone, alertId) => {
   }
 
   const call = await client.calls.create({
-    url: alertUrl,
+    url: callbackUrl(path),
     to: formattedTo,
     from: process.env.TWILIO_PHONE_NUMBER,
   });
@@ -124,41 +145,4 @@ const makeAlertCall = async (toPhone, alertId) => {
   return call;
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// makeCall — LEGACY helper used by reminderJob.js (kept intact)
-// ─────────────────────────────────────────────────────────────────────────────
-const makeCall = async (to, medName, dosage, mealTiming) => {
-  const formattedTo = to.startsWith('+') ? to : `+91${to}`;
-
-  if (!client) {
-    console.log(`[SIMULATION] Legacy Voice Call → ${formattedTo} for "${medName}"`);
-    return true;
-  }
-
-  try {
-    const call = await client.calls.create({
-      twiml: `
-        <Response>
-          <Gather numDigits="1" action="${NGROK_URL}/api/v1/webhooks/voice" method="POST">
-            <Say voice="alice">
-              Hello from Med Time. This is your automated reminder.
-              It is time to take your ${medName}, ${dosage}.
-              Instructions are: ${mealTiming} food.
-              Press 1 to confirm you have taken it. Press 2 to skip.
-            </Say>
-          </Gather>
-          <Say voice="alice">We didn't receive any input. Goodbye!</Say>
-        </Response>
-      `,
-      to: formattedTo,
-      from: process.env.TWILIO_PHONE_NUMBER,
-    });
-    console.log(`📞 Legacy call initiated to ${formattedTo}. Call SID: ${call.sid}`);
-    return call;
-  } catch (error) {
-    console.error('❌ Legacy voice call error:', error.message);
-    throw error;
-  }
-};
-
-module.exports = { sendSMS, makeCall, sendCaregiverSMS, makePatientCall, makeAlertCall };
+module.exports = { sendSMS, sendCaregiverSMS, makePatientCall, makeAlertCall, callbackUrl };

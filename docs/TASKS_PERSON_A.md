@@ -398,7 +398,7 @@ In order, top to bottom:
 - [x] A2.6 cron hands over to the agent
 - [x] A2.7 text simulate endpoints (with a basic dose flow; A4.1 replaces it)
 - [x] A1.1 #4 webhook signatures
-- [ ] A1.2 #10 `PUBLIC_BASE_URL` and `TWILIO_ENABLED`
+- [x] A1.2 #10 `PUBLIC_BASE_URL` and `TWILIO_ENABLED`
 - [ ] A1.3 #13 per-dose escalation and `doseService`
 - [ ] A1.4 #14 dose endpoint and dashboard update
 - [ ] A3.1–A3.4 voice pipeline, browser call screen, emergency reflex (Media Streams only after an upgrade)

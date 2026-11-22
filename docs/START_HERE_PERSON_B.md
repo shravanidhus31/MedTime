@@ -85,7 +85,7 @@ cd ../client && npm install
 1. Copy `server/.env.example` to `server/.env`. It's gitignored, so it won't be committed.
 2. Fill in the values Person A gives you, plus your own `GROQ_API_KEY`. Keep `LLM_PROVIDER=groq`.
 3. **Use your own database name.** In `MONGO_URI`, change the database part to `medtime_dev_b`, as in `…mongodb.net/medtime_dev_b?…`. Then you never overwrite Person A's or the live data.
-4. **Leave every `TWILIO_*` value and `NGROK_URL` empty.** The server then runs in **simulation mode**: calls and SMS are only printed in the terminal (`[SIMULATION] Voice Call → …`). Your laptop will never call a real phone.
+4. **Leave every `TWILIO_*` value and `PUBLIC_BASE_URL` empty** (or keep the Twilio values and set `TWILIO_ENABLED=false`). The server then runs in **simulation mode**: calls and SMS are only printed in the terminal (`[SIMULATION] Voice Call → …`). Your laptop will never call a real phone. Don't set `NODE_ENV=production` locally: the server then refuses to start without `PUBLIC_BASE_URL`.
 5. `ENCRYPTION_KEY` must be 64 hex characters. Use the one Person A gives you, so data stays readable.
 
 **Run it** in two terminals:

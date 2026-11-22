@@ -1,4 +1,14 @@
 require('dotenv').config();
+// A1.2: refuse to start in production without PUBLIC_BASE_URL (Person A). Runs
+// before anything else loads, because the cron jobs start as soon as they're required.
+{
+  const urlCheck = require('./utils/publicUrl').checkPublicBaseUrl();
+  if (!urlCheck.ok) {
+    console.error(`❌ [Startup] ${urlCheck.error}`);
+    process.exit(1);
+  }
+  if (urlCheck.warning) console.warn(`⚠️  [Startup] ${urlCheck.warning}`);
+}
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');

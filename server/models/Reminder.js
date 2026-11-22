@@ -36,6 +36,19 @@ const reminderSchema = new mongoose.Schema({
   },
   caregiverNotifiedAt: {
     type: Date
+  },
+  // SMS reminder retries (A1.2): at most 3 tries, then smsFailed stops the job
+  // picking this reminder up again every 10 seconds.
+  smsAttempts: {
+    type: Number,
+    default: 0
+  },
+  smsFailed: {
+    type: Boolean,
+    default: false
+  },
+  smsFailReason: {
+    type: String
   }
 }, { timestamps: true });
 

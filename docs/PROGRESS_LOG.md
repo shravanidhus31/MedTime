@@ -18,7 +18,7 @@ A running record of what's done, what's in progress and what's next. **It's upda
 | Twilio | ✅ New trial account works end to end for keypad calls driven by our server |
 | Agent code | ✅ Phase 1 agent platform done on `feat/a-agent-runtime` (A2.1–A2.7). Phase 1 gate met on Person A's side: a simulated dose call runs end to end in text and every step shows through `GET /agent/runs/:id`; the Activity panel itself is Person B's. Next: A1 Phase 0 fixes |
 | Person B | 🟡 Working on a feature branch; Day-1 items (#2, #3, #1/#19 and soft delete, #5 top-up) |
-| Phase 0 security fixes | 🟡 In progress on `feat/a-phase0-fixes`. A1.1 webhook signatures done; A1.2–A1.4 next |
+| Phase 0 security fixes | 🟡 In progress on `feat/a-phase0-fixes`. A1.1 webhook signatures and A1.2 `PUBLIC_BASE_URL` / `TWILIO_ENABLED` done; A1.3–A1.4 next |
 | Person B onboarding | 🟡 Docs pushed; access and secrets still to be sent privately |
 
 ## In progress / next up
@@ -29,8 +29,8 @@ A running record of what's done, what's in progress and what's next. **It's upda
    - `.env` values, sent privately. Each person makes their own free Groq key
    - the research papers
    - their phone number added to Twilio
-3. **Person A, now: A1 Phase 0 fixes.** A1.1 webhook signatures ✅. Next: A1.2 `PUBLIC_BASE_URL` and `TWILIO_ENABLED`, A1.3 per-dose escalation, A1.4 dose endpoint. Then Phase 2 (A3 voice pipeline, A4 dose agent).
-   - **Before merging to `main`:** on Render, `PUBLIC_BASE_URL` must be exactly the Render service URL and `TWILIO_AUTH_TOKEN` the trial account's token. Otherwise Twilio's own webhooks get 403 and real calls fail.
+3. **Person A, now: A1 Phase 0 fixes.** A1.1 webhook signatures ✅, A1.2 `PUBLIC_BASE_URL` and `TWILIO_ENABLED` ✅. Next: A1.3 per-dose escalation (missed-dose alerts as phone calls), then A1.4 dose endpoint. Then Phase 2 (A3 voice pipeline, A4 dose agent).
+   - **Before merging to `main`, check Render → Environment:** `PUBLIC_BASE_URL` must be set to exactly the Render service URL (no trailing slash), and `TWILIO_AUTH_TOKEN` must be the trial account's token. Without `PUBLIC_BASE_URL` the server now **refuses to start**; with a wrong value Twilio's webhooks get 403 and real calls fail. `NGROK_URL` is no longer read, so if Render only has `NGROK_URL`, copy its value into `PUBLIC_BASE_URL`.
 4. **Person A, after A2 and A1:** A3.5 Twilio phone adapter (turn by turn, trial-compatible) and the Core dose agent.
 
 ## Open questions
@@ -67,6 +67,15 @@ A running record of what's done, what's in progress and what's next. **It's upda
 ## Change log
 
 ### 22 Nov 2026
+- **A1.2 `PUBLIC_BASE_URL` only, `TWILIO_ENABLED`, quieter SMS job (PRD #10, #19 twilioClient part)** (branch `feat/a-phase0-fixes`, not committed yet).
+  - `PUBLIC_BASE_URL` is the only callback setting. The hard-coded ngrok tunnel and `NGROK_URL` are gone. Twilio on with no URL → the call fails with a clear error instead of pointing at a dead tunnel.
+  - **Startup check** (`utils/publicUrl.js` `checkPublicBaseUrl()`, first thing in `server/index.js`): in production the server exits with a clear message if `PUBLIC_BASE_URL` is missing or isn't an http(s) URL. On Render the message names the right value (from Render's `RENDER_EXTERNAL_URL`), and it says when an old `NGROK_URL` is set. Locally it's only a warning, and only if Twilio is on.
+  - "Production" (`utils/runtime.js`) = `NODE_ENV=production` or `RENDER=true`. Checked against Render's docs: Render sets `NODE_ENV=production` for Node services at runtime, and `RENDER=true` on every service.
+  - `TWILIO_ENABLED=false` (also `0`/`no`/`off`): simulation mode even with Twilio credentials filled in. Unset = on if credentials exist, so Render needs no new variable. The webhook signature check follows the same switch (skipped locally when Twilio is off; 403 in production).
+  - Deleted the unused `makeCall`.
+  - SMS job (`jobs/reminderJob.js`): a failed SMS is tried at most 3 times, then the reminder gets `smsFailed: true` (+ `smsFailReason`) and is no longer picked up. A reminder with no phone number is given up once instead of warning every 10 seconds. The "Skipping … voice calls owned by escalation cron" line is gone. New `Reminder` fields: `smsAttempts`, `smsFailed`, `smsFailReason`. The tick is now an exported `runReminderTick()`.
+  - Docs: `.env.example` (`TWILIO_ENABLED`, `PUBLIC_BASE_URL` required on Render, `NGROK_URL` removed), START_HERE_PERSON_B step 4, ISSUES.md #4, #10, #19 and #20 marked fixed.
+  - Tests: 14 new offline tests (`utils/publicUrl.test.js`, `jobs/reminderJob.test.js`, one more in `twilioSignature.test.js`), including starting the real `index.js` with `NODE_ENV=production` and no URL → exits with code 1 before connecting to MongoDB. `npm test` now also runs `utils/` and `jobs/`: **58/58 pass**. `cron:check` 9/9 and `tools:check` 22/22 still pass.
 - **Two decisions:** Phase 0 work moves to a new branch `feat/a-phase0-fixes` (from `feat/a-agent-runtime`), and missed-dose alerts become phone calls instead of SMS. A1.3 in TASKS_PERSON_A.md updated to match. Found while re-reading the plan: on the trial the old escalation SMS always failed silently.
 - **A1.1 Twilio webhook signatures checked (PRD #4)** (branch `feat/a-phase0-fixes`).
   - New `middleware/twilioSignature.js`, mounted on the whole webhooks router, so `/sms`, `/voice`, `/voice/prompt` and `/voice/alert` all need a valid `X-Twilio-Signature`; otherwise 403. The URL checked is `PUBLIC_BASE_URL` + `req.originalUrl` (not `req.protocol`/host, which Render's proxy changes).
@@ -198,4 +207,5 @@ A running record of what's done, what's in progress and what's next. **It's upda
 ---
 
 ## Not yet committed (local only)
-- Nothing uncommitted. Neither branch is pushed yet: `feat/a-agent-runtime` (A2.1–A2.7) and `feat/a-phase0-fixes` (A1.1, on top of it).
+- A1.2: `server/utils/runtime.js`, `server/utils/publicUrl.js`, `server/utils/twilioClient.js`, `server/index.js`, `server/models/Reminder.js`, `server/jobs/reminderJob.js`, `server/middleware/twilioSignature.js`, the new tests, `server/package.json`, `server/.env.example`, `ISSUES.md`, `docs/START_HERE_PERSON_B.md`, `docs/TASKS_PERSON_A.md` and this log.
+- Neither branch is pushed yet: `feat/a-agent-runtime` (A2.1–A2.7) and `feat/a-phase0-fixes` (A1.1 committed in `1b288ad`, on top of it).
