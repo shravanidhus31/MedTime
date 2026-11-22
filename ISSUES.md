@@ -27,6 +27,7 @@ Priority: **High** = security or data-correctness problem, **Medium** = function
 - `/webhooks/sms` and `/webhooks/voice` don't validate `X-Twilio-Signature`, so anyone can POST to them and mark doses taken, skipped or snoozed.
 - `/webhooks/sms` also reads `req.body.Body.trim()` with no guard, and dereferences `patient._id` when the user has no `Patient` profile.
 - **Fix:** use `twilio.webhook()` or `validateRequest`, and add null checks.
+- **Status:** ✅ fixed in A1.1 (`server/middleware/twilioSignature.js`, branch `feat/a-phase0-fixes`).
 
 ## Medium
 
@@ -34,6 +35,7 @@ Priority: **High** = security or data-correctness problem, **Medium** = function
 - **Where:** [server/routes/medicineRoutes.js](server/routes/medicineRoutes.js)
 - Reminders are created once when a medicine is added and nothing regenerates them. SMS reminders stop after a week. Voice calls match on `scheduledTimes`, so they are unaffected.
 - **Fix:** add a daily job that tops up reminders for active medicines.
+- **Note (A1.3):** voice calls now work per `Reminder`. Until the top-up exists, the escalation cron creates the Reminder for a call-type dose that is due this minute and has none (upsert on medicine + minute, so it never duplicates). The top-up should also upsert, not insert blindly, so the two never create two records for one dose.
 
 ### 6. Editing a medicine doesn't regenerate reminders
 - **Where:** [server/routes/medicineRoutes.js](server/routes/medicineRoutes.js) (`PUT /:id`)
@@ -57,6 +59,7 @@ Priority: **High** = security or data-correctness problem, **Medium** = function
 - **Where:** [server/utils/twilioClient.js:14](server/utils/twilioClient.js#L14)
 - If `NGROK_URL` is not set on Render, voice-call webhooks point at a dead tunnel. Patients' button presses are lost and the caregiver gets a false "missed" alert.
 - **Fix:** use a `PUBLIC_BASE_URL` variable and fail loudly at startup if it is missing.
+- **Status:** ✅ fixed in A1.2 (branch `feat/a-phase0-fixes`). `NGROK_URL` is no longer read.
 
 ### 11. Access token is never refreshed, and is lost on reload
 - **Where:** [client/src/utils/api.js](client/src/utils/api.js), [client/src/redux/authSlice.js](client/src/redux/authSlice.js)
@@ -72,6 +75,7 @@ Priority: **High** = security or data-correctness problem, **Medium** = function
 - Escalation state lives on `Medicine`, not per `Reminder`. Medicines with more than one scheduled time share one `caregiverAlertTime`, so a second dose can be skipped while the first is still armed.
 - `caregiverAlerted` is only reset when the patient presses 1. It is not reset at the next scheduled dose, so the card can stay red.
 - A caregiver SMS failure inside the loop is swallowed, so the `missed` state is recorded even if no one was notified.
+- **Status:** ✅ fixed in A1.3 (branch `feat/a-phase0-fixes`): escalation fields live on each `Reminder`; confirming clears only that dose; the missed-dose alert is a phone call, and a failed one is marked `alertFailed` and retried up to 3 times. The dashboard badges switch to the per-dose fields in A1.4 (#14).
 
 ### 14. Take/Skip from the web app does not clear escalation state
 - **Where:** [server/routes/medicineRoutes.js](server/routes/medicineRoutes.js) (`POST /:id/status`)
@@ -99,7 +103,7 @@ Priority: **High** = security or data-correctness problem, **Medium** = function
 
 ### 19. Duplicate and dead code
 - `DELETE /medicines/:id` is defined twice in [medicineRoutes.js](server/routes/medicineRoutes.js).
-- `makeCall` in [twilioClient.js](server/utils/twilioClient.js) is a legacy helper that nothing uses.
+- `makeCall` in [twilioClient.js](server/utils/twilioClient.js) is a legacy helper that nothing uses. ✅ Deleted in A1.2.
 - Stray `// 3. Parse...` comment repeated three times in [ocrRoutes.js](server/routes/ocrRoutes.js).
 - Diagnostic `console.log`s in [reportRoutes.js](server/routes/reportRoutes.js) that say "remove after confirming".
 - Unused dependency `socket.io-client` in [client/package.json](client/package.json).
@@ -107,7 +111,7 @@ Priority: **High** = security or data-correctness problem, **Medium** = function
 
 ### 20. Repository housekeeping
 - [README.md](README.md) is empty. There is no setup guide or list of required environment variables.
-- Required variables, found by reading the code: `MONGO_URI`, `JWT_SECRET`, `ENCRYPTION_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`, `NGROK_URL`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS`, `EMAIL_FROM_NAME`, `VITE_API_URL`.
+- Required variables, found by reading the code: `MONGO_URI`, `JWT_SECRET`, `ENCRYPTION_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`, `PUBLIC_BASE_URL` (was `NGROK_URL` before A1.2), `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS`, `EMAIL_FROM_NAME`, `VITE_API_URL`.
 - `server/eng.traineddata` (a binary Tesseract model) is committed to git.
 - `dns.setServers(["1.1.1.1", "8.8.8.8"])` in [server/index.js](server/index.js) is a global workaround for DNS resolution and should be documented or removed.
 - The reminder job polls the database every 10 seconds and every medicine card polls every 5 seconds, which is heavy for a free-tier deployment.

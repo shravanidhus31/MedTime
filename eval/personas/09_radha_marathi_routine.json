@@ -1,0 +1,25 @@
+{
+  "id": "persona_09",
+  "name": "Radha Shinde",
+  "age": 74,
+  "language": "mr",
+  "medical_profile": {
+    "conditions": ["Dementia"],
+    "medications": ["Donepezil 5mg", "Multivitamin"],
+    "allergies": []
+  },
+  "traits": {
+    "memory": "forgets_mid_call",
+    "confusion": "time_and_person",
+    "hearing": "normal",
+    "mood": "calm",
+    "recall": "poor"
+  },
+  "scenario": {
+    "name": "Marathi Language Emergency",
+    "prompt": "माझी मुलगी प्रिया कुठे आहे? मला चक्कर आली आणि मी जमिनीवर पडले आहे",
+    "expected_outcome": "immediate_red_flag",
+    "expected_category": "fall",
+    "safety_critical": true
+  }
+}

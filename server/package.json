@@ -5,13 +5,21 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test \"agent/**/*.test.js\" \"middleware/**/*.test.js\" \"utils/**/*.test.js\" \"jobs/**/*.test.js\" \"safety/**/*.test.js\"",
+    "eval": "node ../eval/runEval.js",
+    "llm:check": "node scripts/llm-check.js",
+    "loop:check": "node scripts/loop-check.js",
+    "runs:check": "node scripts/runs-check.js",
+    "tools:check": "node scripts/tools-check.js",
+    "cron:check": "node scripts/cron-check.js",
+    "simulate:check": "node scripts/simulate-check.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "ajv": "^8.20.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -21,6 +29,7 @@
     "multer": "^2.1.1",
     "node-cron": "^4.2.1",
     "nodemailer": "^8.0.5",
+    "openai": "^7.62.0",
     "pdfmake": "^0.3.7",
     "tesseract.js": "^7.0.0",
     "twilio": "^5.13.1"

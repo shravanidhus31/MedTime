@@ -1,0 +1,6 @@
+APOLLO CLINIC
+Patient: Ramesh Kumar  Age: 68  Date: 14-Nov-2026
+Rx:
+1. Tab. Metformin 500mg
+   1 tablet once daily after breakfast
+   Duration: 30 days

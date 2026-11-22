@@ -22,7 +22,7 @@ Person A owns the Twilio account, the agent runtime, the voice pipeline, the dos
 ## 0. How we split the work (same section in both files)
 
 ### Rule: one feature, one owner
-Interlinked work stays with one person. Each feature is owned end to end (model, routes, tools, prompt, UI, tests) by one person. The only crossings are the **contracts** in section 0.3. They're written once, on Day 1, and changed only by agreement.
+Interlinked work stays with one person. Each feature is owned end to end (model, routes, tools, prompt, UI, tests) by one person. The only crossings are the **contracts** in section 0.3. They're written once, before coding starts, and changed only by agreement.
 
 ### 0.1 Who owns what
 
@@ -54,27 +54,27 @@ Interlinked work stays with one person. Each feature is owned end to end (model,
 | `server/index.js`, `package.json` | Shared | Each person adds only their own lines, and says so in the PR |
 
 ### 0.2 The two edits that cross files
-Phase 0 is lower priority than the agent, so **A does it on Friday of week 1**, after the runtime.
-1. **B does #1 (medicine route ownership) on Day 1** in `medicineRoutes.js`, with no waiting.
-2. **On Friday, A edits B's files in one small PR:**
+Phase 0 is lower priority than the agent, so **A does it after the runtime (A2)**.
+1. **B does #1 (medicine route ownership) first** in `medicineRoutes.js`, with no waiting.
+2. **After the runtime, A edits B's files in one small PR:**
    - In `medicineRoutes.js`: moves `POST /medicines/:id/status` into A's new `doseRoutes.js` (#14), and adds today's per-dose fields to `GET /medicines` (#13).
    - In `PatientDashboard.jsx`: the take/skip call (around line 51) and the missed/escalation badge logic (around lines 248–290).
-   - B doesn't edit those handlers on Friday, and reviews the PR.
+   - B doesn't edit those handlers while that PR is open, and reviews it.
 
-### 0.3 Contracts, agreed on Day 1 (Monday, the first hour)
+### 0.3 Contracts, agreed before coding starts
 
 | # | Contract | Written by | Used by |
 |---|---|---|---|
 | C1 | **Tool interface:** `{ name, description, inputSchema, approvalLevel, run(input, ctx) → { ok, data } \| { ok:false, error } }`. `ctx` = `{ patientId, runId, flow, now }`. Tools register through `registerTool(tool)` in `server/agent/tools/index.js`. Each owner writes their tools in their own file | A | Both |
 | C2 | **`AgentRun` schema** (`trigger, patient, reminder, flow, steps[{tool, input, output, ms, at}], outcome, status, promptVersion, model, approver`) and `GET /api/v1/agent/runs?patient=&from=&to=`, `GET /api/v1/agent/runs/:id` | A | B (Activity panel, journal, evaluation) |
 | C3 | **Access helper:** `requirePatientAccess(minRole)` middleware plus `canAccess(userId, patientId, minRole)` function. Roles: `view < approve < primary`; `doctor` is separate | B | A (dose, recordings and agent routes) |
-| C4 | **Dose service:** `markDose(reminderId, status, source)`. `source` is one of `app \| sms \| ivr \| speech \| agent`. It clears escalation, and emits `dose.taken`, `dose.skipped` or `dose.missed` on `server/events.js` (a Node EventEmitter) | A | B (refill alerts, journal), A (`mark_dose`) |
+| C4 | **Dose service:** `markDose(reminderId, status, source)`. `source` is one of `app \| sms \| ivr \| speech \| agent \| scheduler` (`scheduler` = the escalation cron marking a dose missed; added in A1.3). It clears escalation, and emits `dose.taken`, `dose.skipped` or `dose.missed` on `server/events.js` (a Node EventEmitter) | A | B (refill alerts, journal), A (`mark_dose`) |
 | C5 | **Proposals:** `ProposedChange` schema, `propose_change` tool, and `registerProposalKind(kind, { level, apply(payload) })`, so each owner applies their own approved changes | B | A (Planner) |
 | C6 | **Caregiver questions:** `ask_caregiver` tool and the `AgentQuestion` model; the answer resumes the run | B | A (rarely), B |
 | C7 | **Phrase bank:** `voice/phrasebank/catalogue.json` (line IDs, text, slots, tone, language), plus `resolveLine(lineId, slots, patientId) → { audioUrl } \| { neutralText }` | A | B (call-in lines, journal wording check) |
-| C8 | **Voice ↔ agent API:** the pipeline posts `POST /api/v1/agent/turn { sessionId, flow, transcript, isFinal, asrConfidence, dtmf? }` and gets back `{ actions:[{ type:'play', lineId, slots } \| { type:'neutral', text } \| { type:'hangup' } \| { type:'listen' }] }`. Flows are `dose \| callin \| chat`. Each flow registers a handler with `registerFlow(name, handler)`. Also `startDoseFlow(reminderId)`. **Two front ends call the same API:** the browser pipeline (streaming, with partial transcripts) and the **Twilio phone adapter** (A3.5), which sends one final transcript per turn and turns the returned actions into `<Gather>`/`<Play>`/`<Say>`/`<Hangup>` | A | B (call-in flow) |
+| C8 | **Voice ↔ agent API:** the pipeline posts `POST /api/v1/agent/turn { sessionId, flow, transcript, isFinal, asrConfidence, dtmf? }` and gets back `{ actions:[{ type:'play', lineId, slots } \| { type:'neutral', text } \| { type:'hangup' } \| { type:'listen' } \| { type:'wait' } \| { type:'fallback', reason }] }`. `wait` = still working: pause, then send an empty turn to collect the answer; `fallback` = the agent failed: use the keypad menu. A red flag adds `emergency: <category>` to the reply. Flows are `dose \| callin \| chat`. Each flow registers a handler with `registerFlow(name, handler)`. Also `startDoseFlow(reminderId)`. **Two front ends call the same API:** the browser pipeline (streaming, with partial transcripts) and the **Twilio phone adapter** (A3.5), which sends one final transcript per turn and turns the returned actions into `<Gather>`/`<Play>`/`<Say>`/`<Hangup>` | A | B (call-in flow) |
 | C9 | **Safety screen:** `screen(text, ctx) → { verdict:'ok'\|'redflag'\|'unsafe', category, responseLineId? }` and `server/safety/redflags.json` (English, Hindi, Marathi) | B | A (called on every partial and final transcript) |
-| C10 | **Medicine fields for step-by-step:** `pillDescription`, `pillboxSlot`, `locationHint`, added by B to the model and the medicine form by **Day 3** | B | A (Feature 4) |
+| C10 | **Medicine fields for step-by-step:** `pillDescription`, `pillboxSlot`, `locationHint`, added by B to the model and the medicine form | B | A (Feature 4) |
 | C11 | **Env vars:** `LLM_PROVIDER` (`groq` or `anthropic`), `LLM_MODEL_FAST`, `LLM_MODEL_SMART`, `LLM_MODEL_SAFETY`, `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, `PUBLIC_BASE_URL`, `VOICE_WS_URL`, `TWILIO_*`, `CLOUDINARY_URL`, `AGENT_ENABLED`. **Model tiers:** the fast tier (live call turns) defaults to Groq `openai/gpt-oss-20b`, or Claude Haiku 5.5. The smart tier (journal, prescription, Planner, weekly review, test judge) defaults to Groq `openai/gpt-oss-120b`, or Claude Sonnet 5.5. The safety tier (safety screen) defaults to Groq `openai/gpt-oss-safeguard-20b`, or Claude Haiku 5.5. Code only ever asks for a tier, never a model name | A keeps `.env.example` | Both |
 
 ### 0.4 Working rules
@@ -85,13 +85,16 @@ Phase 0 is lower priority than the agent, so **A does it on Friday of week 1**, 
 - **Daily sync:** 15 minutes covering what's merged, what's blocked, and any contract changes.
 - **Definition of done:** merged to `main`, the gate test from the PRD passes, and the `.env.example` and README notes are updated.
 
-### 0.5 Calendar (both people)
-- **Week 1:** Mon 23 Nov to Fri 27 Nov 2026. Phase 1 (Mon–Thu); Phase 0 (Fri), since it's lower priority.
-- **Week 2:** Mon 30 Nov to Fri 4 Dec. Phase 2.
-- **Week 3:** Mon 7 Dec to Fri 11 Dec. Phases 3 to 5.
-- **Week 4:** Mon 14 Dec to Fri 18 Dec. Phase 6, plus 7 and 8 if time allows, and demo prep.
+### 0.5 Order of work (both people)
+No dates: work goes task by task, in this order.
+1. Phase 1: agent platform
+2. Phase 0: fixes (lower priority, so after Phase 1)
+3. Phase 2: Core dose agent and daily journal
+4. Phases 3 to 5: family voice, call-in agent, prescription-to-schedule
+5. Phase 6: step-by-step guidance
+6. Phases 7 and 8 if time allows, then demo prep
 
-The deadline isn't confirmed yet. If it's earlier, cut from the bottom of each list.
+If time runs short, cut from the bottom of each list.
 
 ---
 

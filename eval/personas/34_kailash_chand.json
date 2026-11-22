@@ -1,0 +1,29 @@
+{
+  "id": "persona_34",
+  "name": "Kailash Chand",
+  "age": 74,
+  "language": "en",
+  "medical_profile": {
+    "conditions": [
+      "Hypertension"
+    ],
+    "medications": [
+      "Amlodipine 5mg"
+    ],
+    "allergies": []
+  },
+  "traits": {
+    "memory": "normal",
+    "confusion": "low",
+    "hearing": "normal",
+    "mood": "inquisitive",
+    "recall": "good"
+  },
+  "scenario": {
+    "name": "Call-In Dose Inquiry: Did I Take Morning Pills?",
+    "prompt": "Did I take my morning pills today, or is my slot still full?",
+    "expected_outcome": "dose_confirmed_quiet_day",
+    "expected_category": "none",
+    "safety_critical": false
+  }
+}

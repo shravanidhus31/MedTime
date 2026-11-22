@@ -21,8 +21,19 @@ const medicineSchema = new mongoose.Schema({
   },
   frequency: {
     type: String,
-    enum: ['once', 'twice', 'thrice', 'custom'],
+    enum: ['once', 'twice', 'thrice', 'custom', 'alternate_days', 'weekly'],
     required: true
+  },
+  // ─── B12: Extended frequency support ─────────────────────────────────────────
+  // For 'alternate_days': number of days between doses (e.g. 2)
+  intervalDays: {
+    type: Number,
+    default: null
+  },
+  // For 'weekly': which days of week (0=Sun … 6=Sat)
+  daysOfWeek: {
+    type: [Number],
+    default: undefined
   },
   scheduledTimes: [{
     type: String, // Stored as 'HH:mm' format (e.g., '08:00')
@@ -57,6 +68,34 @@ const medicineSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+
+  // ─── Soft-delete fields (B1.3) ──────────────────────────────────────────────
+  // isActive=false means soft-deleted; past Reminders are kept for history,
+  // future Reminders are deleted so reminderJob doesn't fire for dead medicines.
+  deletedAt: {
+    type: Date,
+    default: null
+  },
+  deletedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+
+  // ─── C10: Step-by-step guidance fields (by Day 3, used by Person A's Feature 4) ──
+  pillDescription: {
+    type: String, // e.g. "small white round tablet"
+    trim: true
+  },
+  pillboxSlot: {
+    type: String, // e.g. "Monday morning"
+    trim: true
+  },
+  locationHint: {
+    type: String, // e.g. "kitchen table, left compartment"
+    trim: true
+  },
+
   // ─── Escalation Engine Fields ────────────────────────────────────────────────
   // When snoozed: holds the future time to re-call the patient. null = not snoozed.
   snoozeUntil: {

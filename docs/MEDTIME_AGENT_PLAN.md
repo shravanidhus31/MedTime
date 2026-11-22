@@ -425,7 +425,7 @@ The CHI 2025 study used GPT-4 inside Alexa, with 17 interviews, 10 people in co-
 6. **Out:** pre-rendered phrase-bank audio. There is no text-to-speech during the call, so each reply takes about 1 to 2 seconds.
 7. **Fallback:** the keypad (1 taken, 2 snooze, 9 help) always works. If the agent or the voice server fails, the call drops to today's keypad flow.
 
-**Twilio free trial (tested 21 Nov 2026):**
+**Twilio free trial (tested):**
 - Calls come from a shared trial number, only to up to 5 verified recipients, with 75 free minutes.
 - Call instructions must be a URL; our own server works. Inline `twiml` is rejected.
 - `<Stream>` is blocked on the trial, so live streaming over the phone needs an upgraded account.
@@ -490,38 +490,20 @@ The detailed task lists are in **[TASKS_PERSON_A.md](TASKS_PERSON_A.md)** and **
 
 | | Person A: calls, voice and the live agent | Person B: caregiver app, schedules, background agents, evaluation |
 |---|---|---|
-| Before Monday | **New Twilio account**: trial number, verified callers, India geo permissions, credentials swapped, smoke test | Local setup, read the PRD sections and papers |
-| Phase 0 (Friday of week 1, lower priority) | #4 webhook signatures, #10 `PUBLIC_BASE_URL` and quieter SMS logs, #13 per-dose escalation and `doseService`, #14 dose endpoint | #2 and #8 caregiver access and `requirePatientAccess`, #3 and #9 report, #1 and #19 medicine ownership (Day 1) |
-| Week 1 | Agent runtime: Claude adapter, tool registry, loop, `AgentRun`, orchestrator, 5 core tools, cron handover, simulate endpoints | Auth and registration (#11, #12), medicine fields for steps, approval gate and caregiver questions, safety screen and red-flag lists, Activity panel, seed data |
-| Week 2 | Voice pipeline in browser mode (Pipecat, Silero, Whisper), emergency reflex, **Twilio phone adapter** (turn by turn, works on the free trial), Core dose agent, Planner follow-ups, real family recordings | Daily journal with refill alerts, life notes, evaluation harness with the 10 core scenarios |
-| Week 3 | Family voice: phrase bank, consent, OpenVoice on OpenVINO rendering, line approval, player | Call-in agent (Feature 7), prescription-to-schedule (Feature 8) with new frequencies and reminder generation (#5, #6, #7, #18) |
-| Week 4 | Step-by-step guidance (Feature 4), weekly chat call, live Twilio tests, backup recording | Full 40-persona evaluation, GrandGuard sample, SUS; then the weekly review (Features 1 and 3) and the copilot (Feature 2) if time allows; demo script, README |
+| Setup ✅ | **New Twilio account**: shared trial number, verified callers, credentials swapped, smoke test | Local setup, read the PRD sections and papers |
+| 1. Phase 1 | Agent runtime: LLM adapter, tool registry, loop, `AgentRun`, orchestrator, 5 core tools, cron handover, simulate endpoints | #1 and #19 medicine ownership (first), auth and registration (#11, #12), medicine fields for steps, approval gate and caregiver questions, safety screen and red-flag lists, Activity panel, seed data |
+| 2. Phase 0 (lower priority) | #4 webhook signatures, #10 `PUBLIC_BASE_URL` and quieter SMS logs, #13 per-dose escalation and `doseService`, #14 dose endpoint | #2 and #8 caregiver access and `requirePatientAccess`, #3 and #9 report |
+| 3. Phase 2 | Voice pipeline in browser mode (Pipecat, Silero, Whisper), emergency reflex, **Twilio phone adapter** (turn by turn, works on the free trial), Core dose agent, Planner follow-ups, real family recordings | Daily journal with refill alerts, life notes, evaluation harness with the 10 core scenarios |
+| 4. Phases 3 to 5 | Family voice: phrase bank, consent, OpenVoice on OpenVINO rendering, line approval, player | Call-in agent (Feature 7), prescription-to-schedule (Feature 8) with new frequencies and reminder generation (#5, #6, #7, #18) |
+| 5. Phase 6 and after | Step-by-step guidance (Feature 4), weekly chat call, live Twilio tests, backup recording | Full 40-persona evaluation, GrandGuard sample, SUS; then the weekly review (Features 1 and 3) and the copilot (Feature 2) if time allows; demo script, README |
 
-### Timeline
+### Order of work
+
+No dates: each person works task by task, top to bottom.
 
 ```mermaid
-gantt
-    dateFormat  YYYY-MM-DD
-    title MedTime Care Agent: two-person plan
-    axisFormat %d %b
-    section Both
-    Day-1 contracts                 :milestone, m0, 2026-11-23, 0d
-    Integration + demo rehearsal    :b1, 2026-12-17, 3d
-    section Person A: calls and voice
-    New Twilio account              :a0, 2026-11-21, 2d
-    Phase 0 fixes 4, 10, 13, 14     :a1, 2026-11-23, 1d
-    Agent runtime + core tools      :a2, after a1, 4d
-    Voice pipeline + reflex         :a3, 2026-11-30, 3d
-    Dose agent + follow-ups         :a4, after a3, 2d
-    Family voice phrase bank        :a5, 2026-12-07, 5d
-    Step-by-step + chat call + live :a6, 2026-12-14, 3d
-    section Person B: app, agents, eval
-    Phase 0 fixes 2, 3, 1           :p1, 2026-11-23, 1d
-    Auth, approvals, safety, panel  :p2, after p1, 4d
-    Journal, life notes, eval rig   :p3, 2026-11-30, 5d
-    Call-in agent F7                :p4, 2026-12-07, 2d
-    Prescription agent F8           :p5, after p4, 3d
-    Full eval, then F1/F3, F2       :p6, 2026-12-14, 3d
+flowchart LR
+    C["Contracts C1-C11"] --> P1["Phase 1<br/>agent platform"] --> P0["Phase 0<br/>fixes"] --> P2["Phase 2<br/>Core dose agent + journal"] --> P35["Phases 3-5<br/>family voice · call-in · prescription"] --> P6["Phase 6<br/>step-by-step"] --> P78["Phases 7-8<br/>if time allows"] --> D["Demo"]
 ```
 
 ### Demo (about 5 minutes)

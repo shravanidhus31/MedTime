@@ -1,22 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import api from '../utils/api';
-import { useNavigate } from 'react-router-dom'; // Add this line
+import { useNavigate } from 'react-router-dom';
+import { logoutUser } from '../redux/authSlice';
 import DoctorSettings from '../components/DoctorSettings';
 
 
 export default function PatientDashboard() {
   const { user } = useSelector((state) => state.auth);
+  const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  
+
   // UI States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDoctorPanelOpen, setIsDoctorPanelOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const fileInputRef = useRef(null);
-  
+
   // Data States
   const [medicines, setMedicines] = useState([]);
   const [editingMedId, setEditingMedId] = useState(null);
@@ -25,9 +27,12 @@ export default function PatientDashboard() {
     name: '',
     dosage: '',
     frequency: 'once',
-    time: '08:00', 
+    time: '08:00',
     mealTiming: 'any',
-    tabletCount: ''
+    tabletCount: '',
+    pillDescription: '',
+    pillboxSlot: '',
+    locationHint: ''
   });
 
   // --- 1. DATA FETCHING (Auto-updates every 5 seconds) ---
@@ -40,8 +45,8 @@ export default function PatientDashboard() {
         console.error('Failed to fetch medicines:', error);
       }
     };
-    fetchMedicines(); 
-    const interval = setInterval(fetchMedicines, 5000); 
+    fetchMedicines();
+    const interval = setInterval(fetchMedicines, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -50,7 +55,7 @@ export default function PatientDashboard() {
     try {
       await api.post(`/medicines/${id}/status`, { status: newStatus });
       // Instantly update UI to feel fast!
-      setMedicines(medicines.map(med => 
+      setMedicines(medicines.map(med =>
         med._id === id ? { ...med, status: newStatus } : med
       ));
     } catch (error) {
@@ -77,6 +82,9 @@ export default function PatientDashboard() {
       time: med.scheduledTimes[0] || '08:00',
       mealTiming: med.mealTiming,
       tabletCount: med.tabletCount,
+      pillDescription: med.pillDescription || '',
+      pillboxSlot: med.pillboxSlot || '',
+      locationHint: med.locationHint || ''
     });
     setNotificationType(med.notificationType || 'sms');
     setIsEditModalOpen(true);
@@ -91,7 +99,7 @@ export default function PatientDashboard() {
         notificationType: notificationType
       });
       // Update the local list so UI changes instantly
-      setMedicines(medicines.map(med => 
+      setMedicines(medicines.map(med =>
         med._id === editingMedId ? { ...response.data.medicine, status: med.status } : med
       ));
       setIsEditModalOpen(false);
@@ -113,20 +121,36 @@ export default function PatientDashboard() {
       });
       setMedicines([...medicines, response.data.medicine]);
       setIsModalOpen(false);
-      setFormData({ name: '', dosage: '', frequency: 'once', time: '08:00', mealTiming: 'any', tabletCount: '' });
+      setFormData({
+        name: '',
+        dosage: '',
+        frequency: 'once',
+        time: '08:00',
+        mealTiming: 'any',
+        tabletCount: '',
+        pillDescription: '',
+        pillboxSlot: '',
+        locationHint: ''
+      });
       setNotificationType('sms');
     } catch (error) {
       console.error('Failed to save medicine:', error);
     }
   };
 
-const handleFileUpload = async (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    
+
     // Prevent PDFs/Docs on the client side just in case
     if (!file.type.startsWith('image/')) {
       alert('Please upload an Image (PNG/JPG) of the prescription. PDFs and Word Documents cannot be scanned by the OCR.');
+      return;
+    }
+
+    // 5MB file size limit (B12 requirement)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File is too large. Prescriptions must be 5 MB or smaller.');
       return;
     }
 
@@ -135,46 +159,42 @@ const handleFileUpload = async (e) => {
     uploadData.append('prescription', file);
 
     try {
-      // 1. Send image to Tesseract Backend
+      // 1. Send image to OCR & Prescription-to-Schedule Agent Backend
       const response = await api.post('/ocr/parse', uploadData, {
         headers: {
-          'Content-Type':undefined
+          'Content-Type': undefined
         }
-        
       });
 
-      const { extractedMedicines } = response.data;
+      const { proposalId, proposalLevel, medicines: extractedMeds, message } = response.data;
 
-      if (extractedMedicines && extractedMedicines.length > 0) {
-        // 2. We found multiple medicines! Let's auto-save them all to the DB immediately.
-        const savePromises = extractedMedicines.map(med => {
-          return api.post('/medicines', {
-            name: med.name,
-            dosage: med.dosage,
-            frequency: med.frequency,
-            scheduledTimes: [med.time],
-            type: 'tablet',
-            mealTiming: med.mealTiming,
-            startDate: new Date(),
-            tabletCount: 30, // Defaulting stock to 30 for auto-scans
-            notificationType: 'sms'
-          });
-        });
+      if (proposalId && extractedMeds && extractedMeds.length > 0) {
+        // If Level 1 (clear lines, no conflicts), patient/caregiver can approve immediately
+        if (proposalLevel === 1) {
+          const autoApprove = window.confirm(
+            `Prescription parsed ${extractedMeds.length} medicine(s) successfully:\n` +
+            extractedMeds.map(m => `• ${m.name} (${m.strength || ''}) - ${m.frequency || 'once'}`).join('\n') +
+            `\n\nWould you like to approve and add these to your schedule now?`
+          );
 
-        // Wait for all of them to save
-        await Promise.all(savePromises);
+          if (autoApprove) {
+            await api.post(`/ocr/proposals/${proposalId}/approve`);
+            const refreshRes = await api.get('/medicines');
+            setMedicines(refreshRes.data);
+            alert(`Schedule approved! Added ${extractedMeds.length} medicines.`);
+          } else {
+            alert('Prescription schedule proposal saved. Awaiting review.');
+          }
+        } else {
+          // Level 2: Doctor review required
+          alert(`Prescription scanned! Some lines require clinical review (Level 2). A proposal has been queued for your doctor or primary caregiver.`);
+        }
 
-        // 3. Refresh the dashboard to show the new list!
-        const refreshRes = await api.get('/medicines');
-        setMedicines(refreshRes.data);
-        
-        setIsModalOpen(false); // Close the modal, we're done!
-        alert(`Successfully scanned and auto-scheduled ${extractedMedicines.length} medicines!`);
-
+        setIsModalOpen(false);
       } else {
-        alert('We could not detect any standard medicines in this image. Please enter them manually.');
+        alert('Could not detect clear medicines in this image. Please enter them manually.');
       }
-      
+
     } catch (error) {
       console.error('Failed to parse prescription:', error);
       alert(error.response?.data?.message || 'Could not read the prescription.');
@@ -187,7 +207,7 @@ const handleFileUpload = async (e) => {
   // --- 3. UI RENDERING ---
   return (
     <div className="min-h-screen bg-cream text-textDark font-sans pb-12">
-      
+
       {/* Top Navigation */}
       <nav className="sticky top-0 z-40 bg-white border-b border-sand px-8 h-[68px] flex items-center shadow-sm">
         <div className="flex items-center gap-3 mr-10">
@@ -208,10 +228,27 @@ const handleFileUpload = async (e) => {
           >
             <span className="text-base">🩺</span> My Doctor
           </button>
+          <button
+            onClick={() => navigate('/caregiver/access')}
+            className="px-4 py-2 rounded-lg text-sm font-semibold text-textLight hover:bg-cream hover:text-textDark transition-colors flex items-center gap-1.5"
+          >
+            <span className="text-base">🤝</span> Caregivers
+          </button>
         </div>
-        <button className="flex items-center gap-2 bg-[#fff0ef] border-[1.5px] border-rose text-[#c0392b] rounded-lg px-4 py-2 font-bold transition-transform hover:scale-105">
-          <span className="w-2 h-2 rounded-full bg-rose animate-pulse"></span> SOS
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              dispatch(logoutUser());
+              navigate('/');
+            }}
+            className="text-xs font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-lg border border-red-200 transition-colors"
+          >
+            Sign Out
+          </button>
+          <button className="flex items-center gap-2 bg-[#fff0ef] border-[1.5px] border-rose text-[#c0392b] rounded-lg px-4 py-2 font-bold transition-transform hover:scale-105">
+            <span className="w-2 h-2 rounded-full bg-rose animate-pulse"></span> SOS
+          </button>
+        </div>
       </nav>
 
       {/* Hero Banner */}
@@ -232,111 +269,131 @@ const handleFileUpload = async (e) => {
       {/* Main Content Area */}
       <div className="max-w-6xl mx-auto px-8">
         <h2 className="font-serif text-2xl text-brown2 mb-4">Your Active Prescriptions</h2>
-        
+
         {medicines.length === 0 ? (
           <div className="p-8 text-center bg-white rounded-xl border border-dashed border-sand">
             <p className="text-textLight">No medicines added yet. Click "Add Medicine" to get started.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            
+
             {/* EXACTLY ONE CLEAN MAP LOOP HERE */}
             {medicines.map((med) => {
               // ── Escalation Engine Visual State (priority order) ─────────────
               // 1. caregiverAlerted → solid red (missed, caregiver was notified)
               // 2. snoozeUntil set → amber (patient snoozed, awaiting re-call)
               // 3. Reminder-based status fallback (taken / skipped / due / upcoming)
-              const isMissed  = !!med.caregiverAlerted;
+              const isMissed = !!med.caregiverAlerted;
               const isSnoozed = !isMissed && !!med.snoozeUntil;
 
               const cardClass = isMissed
                 ? 'bg-[#ffebee] border-[#e57373]'          // solid red — missed
                 : isSnoozed
-                ? 'bg-[#fff8e1] border-[#ffca28]'          // amber — snoozed
-                : med.status === 'taken'
-                ? 'bg-[#e8f5e9] border-[#a5d6a7]'         // green — taken
-                : med.status === 'skipped'
-                ? 'bg-[#ffebee] border-[#ef9a9a]'          // light red — skipped
-                : med.status === 'due'
-                ? 'bg-[#fffef5] border-amber2'             // warm yellow — due
-                : 'bg-white border-sand';                  // default — upcoming
+                  ? 'bg-[#fff8e1] border-[#ffca28]'          // amber — snoozed
+                  : med.status === 'taken'
+                    ? 'bg-[#e8f5e9] border-[#a5d6a7]'         // green — taken
+                    : med.status === 'skipped'
+                      ? 'bg-[#ffebee] border-[#ef9a9a]'          // light red — skipped
+                      : med.status === 'due'
+                        ? 'bg-[#fffef5] border-amber2'             // warm yellow — due
+                        : 'bg-white border-sand';                  // default — upcoming
 
               return (
-              <div
-                key={med._id}
-                className={`rounded-[18px] p-5 border-2 shadow-sm flex flex-col gap-3 transition-colors duration-300 ${cardClass}`}
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="text-[18px] font-bold text-textDark">{med.name} {med.dosage}</div>
-                    <div className="text-xs text-textLight mt-0.5 capitalize">
-                      {med.mealTiming} Food • Scheduled: {med.scheduledTimes?.join(', ')}
+                <div
+                  key={med._id}
+                  className={`rounded-[18px] p-5 border-2 shadow-sm flex flex-col gap-3 transition-colors duration-300 ${cardClass}`}
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="text-[18px] font-bold text-textDark">{med.name} {med.dosage}</div>
+                      <div className="text-xs text-textLight mt-0.5 capitalize">
+                        {med.mealTiming} Food • Scheduled: {med.scheduledTimes?.join(', ')}
+                      </div>
+                      {/* C10 Step-by-Step Guidance Badges */}
+                      {(med.pillDescription || med.locationHint || med.pillboxSlot) && (
+                        <div className="text-[11px] text-[#5c4535] mt-2 flex flex-wrap gap-1.5 items-center">
+                          {med.pillDescription && (
+                            <span className="bg-white/80 border border-sand px-2 py-0.5 rounded-md font-medium" title="Pill Appearance">
+                              💊 {med.pillDescription}
+                            </span>
+                          )}
+                          {med.pillboxSlot && (
+                            <span className="bg-white/80 border border-sand px-2 py-0.5 rounded-md font-medium" title="Pillbox Compartment">
+                              📦 {med.pillboxSlot}
+                            </span>
+                          )}
+                          {med.locationHint && (
+                            <span className="bg-white/80 border border-sand px-2 py-0.5 rounded-md font-medium" title="Storage Location">
+                              📍 {med.locationHint}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
+
+                    {/* Dynamic Badges — escalation states take priority */}
+                    {isMissed && (
+                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#ffcdd2] text-[#b71c1c] animate-pulse">
+                        🚨 Missed – Caregiver Alerted
+                      </span>
+                    )}
+                    {isSnoozed && (
+                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#fff9c4] text-[#7a5a10]">
+                        ⏰ Snoozed
+                      </span>
+                    )}
+                    {!isMissed && !isSnoozed && med.status === 'taken' && (
+                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#c8e6c9] text-[#2e7d32]">✓ Taken</span>
+                    )}
+                    {!isMissed && !isSnoozed && med.status === 'skipped' && (
+                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#ffcdd2] text-[#c62828]">✗ Skipped</span>
+                    )}
+                    {!isMissed && !isSnoozed && med.status === 'due' && (
+                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amberSoft text-[#7a5a10] animate-pulse">● Due Now</span>
+                    )}
+                    {!isMissed && !isSnoozed && med.status === 'upcoming' && (
+                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-500">⏳ Upcoming</span>
+                    )}
                   </div>
 
-                  {/* Dynamic Badges — escalation states take priority */}
-                  {isMissed && (
-                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#ffcdd2] text-[#b71c1c] animate-pulse">
-                      🚨 Missed – Caregiver Alerted
-                    </span>
-                  )}
-                  {isSnoozed && (
-                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#fff9c4] text-[#7a5a10]">
-                      ⏰ Snoozed
-                    </span>
-                  )}
-                  {!isMissed && !isSnoozed && med.status === 'taken' && (
-                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#c8e6c9] text-[#2e7d32]">✓ Taken</span>
-                  )}
-                  {!isMissed && !isSnoozed && med.status === 'skipped' && (
-                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#ffcdd2] text-[#c62828]">✗ Skipped</span>
-                  )}
-                  {!isMissed && !isSnoozed && med.status === 'due' && (
-                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amberSoft text-[#7a5a10] animate-pulse">● Due Now</span>
-                  )}
-                  {!isMissed && !isSnoozed && med.status === 'upcoming' && (
-                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-500">⏳ Upcoming</span>
-                  )}
-                </div>
-                
-                <div className="flex gap-2 mt-2">
-                  {/* Take / Skip Buttons (Only show if due!) */}
-                  {med.status === 'due' && (
-                    <>
-                      <button 
-                        onClick={() => handleStatusUpdate(med._id, 'taken')} 
-                        className="flex-1 bg-sage2 text-[#1e3a1d] py-2 rounded-lg font-bold text-sm border-2 border-sage2 hover:bg-sage transition-colors shadow-sm"
-                      >
-                        ✓ Take
-                      </button>
-                      <button 
-                        onClick={() => handleStatusUpdate(med._id, 'skipped')} 
-                        className="flex-1 bg-blush2 text-[#7a2a1a] py-2 rounded-lg font-bold text-sm border-2 border-blush2 hover:bg-blush transition-colors shadow-sm"
-                      >
-                        ✗ Skip
-                      </button>
-                    </>
-                  )}
-                  
-                  {/* Edit Button */}
-                  <button 
-                    onClick={() => openEditModal(med)}
-                    className="flex-[0.5] bg-white border-2 border-sky2 text-[#2c658a] py-2 rounded-lg font-bold text-sm hover:bg-[#f0f7fc] transition-colors shadow-sm"
-                    title="Edit Medication"
-                  >
-                    ✏️ Edit
-                  </button>
+                  <div className="flex gap-2 mt-2">
+                    {/* Take / Skip Buttons (Only show if due!) */}
+                    {med.status === 'due' && (
+                      <>
+                        <button
+                          onClick={() => handleStatusUpdate(med._id, 'taken')}
+                          className="flex-1 bg-sage2 text-[#1e3a1d] py-2 rounded-lg font-bold text-sm border-2 border-sage2 hover:bg-sage transition-colors shadow-sm"
+                        >
+                          ✓ Take
+                        </button>
+                        <button
+                          onClick={() => handleStatusUpdate(med._id, 'skipped')}
+                          className="flex-1 bg-blush2 text-[#7a2a1a] py-2 rounded-lg font-bold text-sm border-2 border-blush2 hover:bg-blush transition-colors shadow-sm"
+                        >
+                          ✗ Skip
+                        </button>
+                      </>
+                    )}
 
-                  {/* Cancel Button */}
-                  <button 
-                    onClick={() => handleDelete(med._id)}
-                    className="flex-[0.5] bg-white border-2 border-gray-200 text-gray-500 py-2 rounded-lg font-bold text-sm hover:bg-gray-50 transition-colors shadow-sm"
-                    title="Cancel Medication"
-                  >
-                    🗑️ Cancel
-                  </button>
+                    {/* Edit Button */}
+                    <button
+                      onClick={() => openEditModal(med)}
+                      className="flex-[0.5] bg-white border-2 border-sky2 text-[#2c658a] py-2 rounded-lg font-bold text-sm hover:bg-[#f0f7fc] transition-colors shadow-sm"
+                      title="Edit Medication"
+                    >
+                      ✏️ Edit
+                    </button>
+
+                    {/* Cancel Button */}
+                    <button
+                      onClick={() => handleDelete(med._id)}
+                      className="flex-[0.5] bg-white border-2 border-gray-200 text-gray-500 py-2 rounded-lg font-bold text-sm hover:bg-gray-50 transition-colors shadow-sm"
+                      title="Cancel Medication"
+                    >
+                      🗑️ Cancel
+                    </button>
+                  </div>
                 </div>
-              </div>
               );
             })}
             {/* END OF MAP LOOP */}
@@ -357,9 +414,8 @@ const handleFileUpload = async (e) => {
 
       {/* Panel */}
       <div
-        className={`fixed top-0 right-0 h-full w-full max-w-[480px] bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-in-out ${
-          isDoctorPanelOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
+        className={`fixed top-0 right-0 h-full w-full max-w-[480px] bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-in-out ${isDoctorPanelOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
       >
         {/* Panel Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-sand bg-gradient-to-r from-[#fae8d8] to-[#f0dded]">
@@ -401,26 +457,26 @@ const handleFileUpload = async (e) => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <label className="block text-[13px] font-bold text-textLight mb-1">Medicine Name</label>
-                  <input type="text" required value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg" placeholder="e.g. Crocin" />
+                  <input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg" placeholder="e.g. Crocin" />
                 </div>
                 <div>
                   <label className="block text-[13px] font-bold text-textLight mb-1">Dosage</label>
-                  <input type="text" required value={formData.dosage} onChange={(e) => setFormData({...formData, dosage: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg" placeholder="e.g. 500mg" />
+                  <input type="text" required value={formData.dosage} onChange={(e) => setFormData({ ...formData, dosage: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg" placeholder="e.g. 500mg" />
                 </div>
                 <div>
                   <label className="block text-[13px] font-bold text-textLight mb-1">Frequency</label>
-                  <select value={formData.frequency} onChange={(e) => setFormData({...formData, frequency: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg">
+                  <select value={formData.frequency} onChange={(e) => setFormData({ ...formData, frequency: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg">
                     <option value="once">Once Daily</option>
                     <option value="twice">Twice Daily</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-[13px] font-bold text-textLight mb-1">Time</label>
-                  <input type="time" required value={formData.time} onChange={(e) => setFormData({...formData, time: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg" />
+                  <input type="time" required value={formData.time} onChange={(e) => setFormData({ ...formData, time: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg" />
                 </div>
                 <div>
                   <label className="block text-[13px] font-bold text-textLight mb-1">Meal Timing</label>
-                  <select value={formData.mealTiming} onChange={(e) => setFormData({...formData, mealTiming: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg">
+                  <select value={formData.mealTiming} onChange={(e) => setFormData({ ...formData, mealTiming: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg">
                     <option value="before">Before Food</option>
                     <option value="after">After Food</option>
                     <option value="any">Anytime</option>
@@ -428,7 +484,7 @@ const handleFileUpload = async (e) => {
                 </div>
                 <div className="col-span-2">
                   <label className="block text-[13px] font-bold text-textLight mb-1">Pill Stock</label>
-                  <input type="number" required value={formData.tabletCount} onChange={(e) => setFormData({...formData, tabletCount: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg" placeholder="30" />
+                  <input type="number" required value={formData.tabletCount} onChange={(e) => setFormData({ ...formData, tabletCount: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg" placeholder="30" />
                 </div>
                 <div className="col-span-2">
                   <label className="block text-[13px] font-bold text-textLight mb-1">Alert Method</label>
@@ -436,6 +492,46 @@ const handleFileUpload = async (e) => {
                     <option value="sms">SMS Text Message</option>
                     <option value="call">Automated Voice Call</option>
                   </select>
+                </div>
+                {/* ── C10 Fields: Step-by-Step Guidance (Voice Agent) ── */}
+                <div className="col-span-2 pt-2 border-t border-sand">
+                  <h3 className="text-xs font-bold text-textDark uppercase tracking-wider mb-2">Step-by-Step Guidance (C10 Hints)</h3>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[13px] font-bold text-textLight mb-1">
+                    Pill Appearance / Description <span className="text-xs font-normal text-gray-400">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.pillDescription}
+                    onChange={(e) => setFormData({ ...formData, pillDescription: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg text-sm"
+                    placeholder="e.g. Small round white tablet with a center score"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[13px] font-bold text-textLight mb-1">
+                    Pillbox Slot <span className="text-xs font-normal text-gray-400">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.pillboxSlot}
+                    onChange={(e) => setFormData({ ...formData, pillboxSlot: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg text-sm"
+                    placeholder="e.g. Monday Morning / Slot 1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[13px] font-bold text-textLight mb-1">
+                    Storage Location Hint <span className="text-xs font-normal text-gray-400">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.locationHint}
+                    onChange={(e) => setFormData({ ...formData, locationHint: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg text-sm"
+                    placeholder="e.g. Kitchen table beside water jug"
+                  />
                 </div>
               </div>
               <div className="flex gap-3 pt-4">
@@ -456,26 +552,26 @@ const handleFileUpload = async (e) => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <label className="block text-[13px] font-bold text-textLight mb-1">Medicine Name</label>
-                  <input type="text" required value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg" />
+                  <input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg" />
                 </div>
                 <div>
                   <label className="block text-[13px] font-bold text-textLight mb-1">Dosage</label>
-                  <input type="text" required value={formData.dosage} onChange={(e) => setFormData({...formData, dosage: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg" />
+                  <input type="text" required value={formData.dosage} onChange={(e) => setFormData({ ...formData, dosage: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg" />
                 </div>
                 <div>
                   <label className="block text-[13px] font-bold text-textLight mb-1">Frequency</label>
-                  <select value={formData.frequency} onChange={(e) => setFormData({...formData, frequency: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg">
+                  <select value={formData.frequency} onChange={(e) => setFormData({ ...formData, frequency: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg">
                     <option value="once">Once Daily</option>
                     <option value="twice">Twice Daily</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-[13px] font-bold text-textLight mb-1">Time</label>
-                  <input type="time" required value={formData.time} onChange={(e) => setFormData({...formData, time: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg" />
+                  <input type="time" required value={formData.time} onChange={(e) => setFormData({ ...formData, time: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg" />
                 </div>
                 <div>
                   <label className="block text-[13px] font-bold text-textLight mb-1">Meal Timing</label>
-                  <select value={formData.mealTiming} onChange={(e) => setFormData({...formData, mealTiming: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg">
+                  <select value={formData.mealTiming} onChange={(e) => setFormData({ ...formData, mealTiming: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg">
                     <option value="before">Before Food</option>
                     <option value="after">After Food</option>
                     <option value="any">Anytime</option>
@@ -483,7 +579,7 @@ const handleFileUpload = async (e) => {
                 </div>
                 <div className="col-span-2">
                   <label className="block text-[13px] font-bold text-textLight mb-1">Pill Stock</label>
-                  <input type="number" required value={formData.tabletCount} onChange={(e) => setFormData({...formData, tabletCount: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg" />
+                  <input type="number" required value={formData.tabletCount} onChange={(e) => setFormData({ ...formData, tabletCount: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg" />
                 </div>
                 <div className="col-span-2">
                   <label className="block text-[13px] font-bold text-textLight mb-1">Alert Method</label>
@@ -491,6 +587,46 @@ const handleFileUpload = async (e) => {
                     <option value="sms">SMS Text Message</option>
                     <option value="call">Automated Voice Call</option>
                   </select>
+                </div>
+                {/* ── C10 Fields: Step-by-Step Guidance (Voice Agent) ── */}
+                <div className="col-span-2 pt-2 border-t border-sand">
+                  <h3 className="text-xs font-bold text-textDark uppercase tracking-wider mb-2">Step-by-Step Guidance (C10 Hints)</h3>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[13px] font-bold text-textLight mb-1">
+                    Pill Appearance / Description <span className="text-xs font-normal text-gray-400">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.pillDescription}
+                    onChange={(e) => setFormData({ ...formData, pillDescription: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg text-sm"
+                    placeholder="e.g. Small round white tablet with a center score"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[13px] font-bold text-textLight mb-1">
+                    Pillbox Slot <span className="text-xs font-normal text-gray-400">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.pillboxSlot}
+                    onChange={(e) => setFormData({ ...formData, pillboxSlot: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg text-sm"
+                    placeholder="e.g. Monday Morning / Slot 1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[13px] font-bold text-textLight mb-1">
+                    Storage Location Hint <span className="text-xs font-normal text-gray-400">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.locationHint}
+                    onChange={(e) => setFormData({ ...formData, locationHint: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-sand rounded-lg text-sm"
+                    placeholder="e.g. Kitchen table beside water jug"
+                  />
                 </div>
               </div>
               <div className="flex gap-3 pt-4">
