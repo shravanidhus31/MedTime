@@ -95,7 +95,9 @@ registerTool({
           times: m.scheduledTimes,
           food: m.mealTiming,
         })),
-        pendingFollowUps: [], // A4.3 (Planner) fills this
+        // A4.3: concerns to ask about on a call (the Planner's follow-ups)
+        pendingFollowUps: (await require('../../models/FollowUp').find({ patient: patient._id, status: 'open' }).sort({ createdAt: 1 }).lean())
+          .map((f) => ({ concern: f.concern, quote: f.quote, asks: f.asks, since: ist(f.createdAt) })),
         now: ist(ctx.now || new Date()),
       },
     };

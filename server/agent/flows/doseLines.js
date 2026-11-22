@@ -50,6 +50,19 @@ const LINES = {
   'dose.dont_take_another': "Please don't take another one. I'll ask {caregiver} to check with you. Goodbye.",
   'dose.handover': "{caregiver} will call you soon to help. Please don't take anything until then. Goodbye.",
   'dose.handover_unsure': "Please don't take any more tablets now. {caregiver} will call you to check. Goodbye.",
+
+  // Follow-ups between calls (A4.3): asked once, after the dose is recorded. Only ask, never advise.
+  'dose.praise_short': "That's right. Well done, {name}.",
+  'followup.knee': 'Last time you said your knee was hurting. Is it better today?',
+  'followup.back': 'Last time you said your back was hurting. Is it better today?',
+  'followup.headache': 'Last time you said you had a headache. Is it better today?',
+  'followup.stomach': 'Last time you said your stomach was upset. Is it better today?',
+  'followup.sleep': "Last time you said you weren't sleeping well. Are you sleeping better now?",
+  'followup.appetite': "Last time you said you weren't feeling hungry. Are you eating better now?",
+  'followup.feeling_low': 'Last time you said you were feeling low. Are you feeling a little better today?',
+  'followup.visit': 'Last time you said someone was coming to visit. Did they come?',
+  'followup.glad': "I'm glad to hear that. Goodbye for now.",
+  'followup.noted': "Thank you for telling me. I'll let {caregiver} know. Goodbye for now.",
 };
 
 // The same lines in Hindi (Patient.language 'hi'; core scenario 9: "replies in Hindi, same
@@ -80,6 +93,17 @@ const LINES_HI = {
   'dose.dont_take_another': 'कृपया दूसरी गोली मत लीजिए। मैं {caregiver} से आपसे बात करने को कहूँगी। नमस्ते।',
   'dose.handover': '{caregiver} जल्दी ही आपको फ़ोन करके मदद करेंगे। तब तक कोई दवा मत लीजिए। नमस्ते।',
   'dose.handover_unsure': 'अभी और गोलियाँ मत लीजिए। {caregiver} आपको फ़ोन करके पूछेंगे। नमस्ते।',
+  'dose.praise_short': 'बिल्कुल सही। शाबाश, {name} जी।',
+  'followup.knee': 'पिछली बार आपने कहा था कि आपके घुटने में दर्द है। क्या आज कुछ आराम है?',
+  'followup.back': 'पिछली बार आपने कहा था कि आपकी कमर में दर्द है। क्या आज कुछ आराम है?',
+  'followup.headache': 'पिछली बार आपने कहा था कि आपके सिर में दर्द है। क्या आज कुछ आराम है?',
+  'followup.stomach': 'पिछली बार आपने कहा था कि आपका पेट ठीक नहीं है। क्या आज कुछ आराम है?',
+  'followup.sleep': 'पिछली बार आपने कहा था कि आपको नींद ठीक से नहीं आ रही। क्या अब नींद बेहतर है?',
+  'followup.appetite': 'पिछली बार आपने कहा था कि आपको भूख नहीं लग रही। क्या अब ठीक से खा पा रहे हैं?',
+  'followup.feeling_low': 'पिछली बार आपने कहा था कि आपका मन उदास है। क्या आज मन कुछ बेहतर है?',
+  'followup.visit': 'पिछली बार आपने कहा था कि कोई आपसे मिलने आने वाला है। क्या वे आए?',
+  'followup.glad': 'यह सुनकर अच्छा लगा। फिर बात करेंगे।',
+  'followup.noted': 'बताने के लिए धन्यवाद। मैं {caregiver} को बता दूँगी। फिर बात करेंगे।',
 };
 const BANKS = { en: LINES, hi: LINES_HI };
 

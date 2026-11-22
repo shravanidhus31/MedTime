@@ -29,6 +29,11 @@ const { notifyCaregivers } = require('../../services/caregiverAlerts');
 const { snoozeDose, noteCaregiverInformed } = require('../../services/doseService');
 const { line } = require('./doseLines');
 const policy = require('./dosePolicy');
+const FollowUp = require('../../models/FollowUp');
+const { classifyAnswer, CONCERN_WORDS } = require('./followups');
+const { planFollowUps } = require('../planner');
+const MAX_FOLLOWUP_ASKS = 3;
+const FOLLOWUP_REASK_MS = 20 * 3600 * 1000; // not better: asked again on a later day
 
 // Person B's ask_caregiver tool (C6): a question on the caregiver's dashboard.
 if (!getTool('ask_caregiver')) registerTool(require('../tools/askCaregiver'));
@@ -186,6 +191,45 @@ async function runDecisionTools(session, tools) {
   return informed;
 }
 
+// ── follow-ups between calls (A4.3) ─────────────────────────────────────────
+
+async function askFollowUp(session) {
+  const s = session.state;
+  const f = s.followUp;
+  s.policy = { ...s.policy, phase: 'followup' };
+  await FollowUp.updateOne({ _id: f.id }, {
+    $inc: { asks: 1 },
+    $set: { lastAskedAt: new Date(), lastAskedRun: session.runId || undefined, nextAsk: new Date(Date.now() + FOLLOWUP_REASK_MS) },
+  }).catch((err) => console.error('[flow:dose] could not update follow-up:', err.message));
+  await log(session, { tool: 'ask_followup', input: { concern: f.concern, followUpId: f.id }, output: { ok: true, quote: f.quote }, ms: 0, at: new Date(), label: 'action_taken', summaryText: `Asked about ${CONCERN_WORDS[f.concern]} (she said: "${f.quote}")` });
+  return say(session, ['dose.praise_short', `followup.${f.concern}`], 'listen');
+}
+
+async function answerFollowUp(session, said) {
+  const s = session.state;
+  const f = s.followUp;
+  const answer = classifyAnswer(said, f.concern);
+  const doc = await FollowUp.findById(f.id).catch(() => null);
+  const close = answer === 'better' || (doc && doc.asks >= MAX_FOLLOWUP_ASKS);
+  const reason = answer === 'better' ? (f.concern === 'visit' ? 'visited' : 'better') : 'asked_3_times';
+  if (doc) {
+    doc.lastAnswer = String(said).slice(0, 200);
+    if (close) Object.assign(doc, { status: 'closed', closedReason: reason, closedAt: new Date() });
+    await doc.save().catch((err) => console.error('[flow:dose] could not save follow-up:', err.message));
+  }
+  await log(session, {
+    tool: 'followup_answer',
+    input: { concern: f.concern, text: said },
+    output: { ok: true, answer, closed: !!close, closedReason: close ? reason : undefined },
+    ms: 0,
+    at: new Date(),
+    label: 'patient_said',
+    summaryText: `About ${CONCERN_WORDS[f.concern]}: "${String(said).slice(0, 120)}"`,
+  });
+  s.followUp = null;
+  return say(session, [answer === 'better' ? 'followup.glad' : 'followup.noted'], 'hangup');
+}
+
 // ── the flow ────────────────────────────────────────────────────────────────
 
 const doseFlow = {
@@ -206,6 +250,10 @@ const doseFlow = {
     const said = input.transcript || (input.dtmf ? `(pressed key ${input.dtmf})` : '');
     s.transcript.push({ who: 'patient', text: said });
     await log(session, { tool: 'patient_said', input: { text: said, asrConfidence: input.asrConfidence }, output: { ok: true }, ms: 0, at: new Date(), label: 'patient_said', summaryText: said });
+
+    // Her answer to the follow-up question (A4.3): recorded, never advised on, then goodbye.
+    if (s.policy.phase === 'followup') return answerFollowUp(session, said);
+    s.planLines.push(said);
 
     // Keypad: 1 = taken (the check question still follows), 2 = later.
     let label;
@@ -237,6 +285,10 @@ const doseFlow = {
       s.settled = true;
       s.ending = { outcome: 'done' };
     }
+    // The dose is recorded: ask the one pending follow-up now, after the dose (A4.3, plan 6.1).
+    if (d.end && d.say.includes('dose.praise') && s.recorded === 'taken' && s.followUp && session.maxTurns - session.turns >= 1) {
+      return askFollowUp(session);
+    }
     return say(session, d.say, d.end ? 'hangup' : 'listen');
   },
 
@@ -250,6 +302,11 @@ const doseFlow = {
         .catch((err) => ({ ok: false, error: err.message }));
       if (r.ok) await noteCaregiverInformed(s.reminderId).catch(() => {});
       s.ending = { outcome: 'done', fallbackReason: 'turn_limit' };
+    }
+    // The Planner: concerns she mentioned become follow-ups for a later call (background).
+    if (s.planLines && s.planLines.length) {
+      planFollowUps({ patientId: session.patientId, runId: session.runId, lines: s.planLines })
+        .catch((err) => console.error('[flow:dose] planner failed:', err.message));
     }
     if (!session.runId) return;
     // A red flag ends the dose part of the call; 'red_flag' is what Person B's journal looks for.
@@ -314,6 +371,9 @@ async function loadDoseState(reminderId) {
   const med = reminder.medicine;
   const caregiver = (await listCaregivers(patient._id)).find((c) => c.role !== 'doctor' && c.name);
   const label = loadPrompt('dose_label', { medicine: '', pillDescribed: '', question: '' });
+  // One pending follow-up, oldest first, asked after the dose on this call (A4.3).
+  const pending = await FollowUp.findOne({ patient: patient._id, status: 'open', nextAsk: { $lte: new Date() }, asks: { $lt: MAX_FOLLOWUP_ASKS } })
+    .sort({ createdAt: 1 }).lean().catch(() => null);
   const promptVersion = `${FLOW_VERSION}+${label.promptVersion}`;
   const state = {
     reminderId: String(reminder._id),
@@ -326,6 +386,8 @@ async function loadDoseState(reminderId) {
     policy: policy.newState(),
     promptVersion,
     transcript: [],
+    planLines: [], // her words before any follow-up answer, for the Planner
+    followUp: pending ? { id: String(pending._id), concern: pending.concern, quote: pending.quote } : null,
     lastQuestion: '',
     llmCalls: 0,
     usage: { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
@@ -342,7 +404,8 @@ async function loadDoseState(reminderId) {
 // flow's opening (context, double-dose check, reminder line) is returned as the next actions.
 async function switchToDose(session, reminderId) {
   const { reminder, state } = await loadDoseState(reminderId);
-  session.state = { ...state, transcript: (session.state && session.state.transcript) || [] };
+  const before = (session.state && session.state.transcript) || [];
+  session.state = { ...state, transcript: before, planLines: before.filter((t) => t.who === 'patient').map((t) => t.text) };
   session.flow = 'dose';
   session.lang = state.lang;
   session.reminderId = reminder._id;

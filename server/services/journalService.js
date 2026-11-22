@@ -145,6 +145,20 @@ async function generateDailyJournal(patientId, targetDate = new Date()) {
     const text = `Patient said: "${shorten(w)}"`;
     if (!quoted.has(text)) rest.push({ text, source: 'patient_said', runId: src(run) });
   }
+  // Follow-ups (A4.3): her answer to "Is your knee better?", and new concerns the Planner noted.
+  const { CONCERN_WORDS } = require('../agent/flows/followups');
+  for (const run of runs) {
+    for (const st of run.steps || []) {
+      if (st.tool === 'followup_answer' && st.input && st.input.text) {
+        const what = CONCERN_WORDS[st.input.concern] || st.input.concern;
+        rest.push({ text: `Asked about ${what}: "${shorten(st.input.text)}"${st.output && st.output.closed ? ' (closed)' : ''}`, source: 'patient_said', runId: src(run) });
+      }
+      if (st.tool === 'plan_followup' && st.output && Array.isArray(st.output.created) && st.output.created.length) {
+        const words = st.output.created.map((c) => CONCERN_WORDS[c] || c).join(', ');
+        rest.push({ text: `Mentioned ${words}; MedTime will ask about it on the next call.`, source: 'agent_noticed', runId: src(run) });
+      }
+    }
+  }
   const taken = reminders.filter((r) => r.status === 'taken');
   if (taken.length) {
     const list = taken.map((r) => `${(r.medicine && r.medicine.name) || 'medicine'} ${istTime(r.scheduledTime)}`).join(', ');

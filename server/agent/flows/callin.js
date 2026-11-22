@@ -21,6 +21,7 @@ const { listCaregivers } = require('../../services/caregiverLinks');
 const { notifyCaregivers } = require('../../services/caregiverAlerts');
 const { handleCallinQuestion } = require('./callinFlow');
 const { switchToDose } = require('./dose');
+const { planFollowUps } = require('../planner');
 
 // The call-in's own fixed lines (neutral voice until the phrase bank, A5).
 const LINES = {
@@ -121,8 +122,11 @@ const callinFlow = {
   },
 
   onEnd: async (session) => {
-    if (!session.runId) return;
     const s = session.state;
+    // The Planner: concerns she mentioned become follow-ups for her next dose call (A4.3).
+    const lines = (s.transcript || []).filter((t) => t.who === 'patient').map((t) => t.text);
+    if (lines.length) planFollowUps({ patientId: session.patientId, runId: session.runId, lines }).catch((err) => console.error('[flow:callin] planner failed:', err.message));
+    if (!session.runId) return;
     const ending = session.emergency
       ? { outcome: 'red_flag', fallbackReason: session.emergency.category }
       : s.ending || { outcome: 'done', fallbackReason: 'ended' };

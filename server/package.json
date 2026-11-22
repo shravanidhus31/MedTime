@@ -18,7 +18,8 @@
     "dose:check": "node scripts/dose-endpoint-check.js",
     "journal:check": "node scripts/journal-check.js",
     "callin:check": "node scripts/callin-check.js",
-    "phone:check": "node scripts/phone-check.js"
+    "phone:check": "node scripts/phone-check.js",
+    "followup:check": "node scripts/followup-check.js"
   },
   "keywords": [],
   "author": "",

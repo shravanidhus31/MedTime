@@ -315,6 +315,8 @@ function writeReport(results, meta) {
       if (res.judge && res.judge.unavailable) console.log(`        (judge unavailable: ${res.judge.error.slice(0, 80)})`);
     }
   } finally {
+    await sleep(800); // the Planner runs after each call
+    await S('models/FollowUp').deleteMany({ patient: { $in: made.patients } });
     await CaregiverAlert.deleteMany({ patient: { $in: made.patients } });
     await CaregiverAccess.deleteMany({ patient: { $in: made.patients } });
     await AgentQuestion.deleteMany({ patient: { $in: made.patients } });

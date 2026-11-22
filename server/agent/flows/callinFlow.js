@@ -166,6 +166,25 @@ async function handleCallinQuestion(ctx) {
       return medName && lowerQ.includes(medName.split(' ')[0]);
     });
 
+    // She names one of her medicines that has no dose today: say so about THAT medicine (22 Nov:
+    // the answer fell back to another medicine's dose, e.g. "Did I take my Losartan?" →
+    // "Yes, you took Atorvastatin at 12:06 am").
+    if (!matchedReminder) {
+      const meds = await Medicine.find({ patient: patientId, isActive: true }).select('name').lean();
+      const namedMed = meds.find((m) => {
+        const w = String(m.name || '').toLowerCase().split(/\s+/)[0];
+        return w.length >= 3 && lowerQ.includes(w);
+      });
+      if (namedMed) {
+        const next = await findNextDoseTime(namedMed, patientId);
+        return {
+          reply: `I don't see a dose of ${namedMed.name} due today.${next ? ` Your next ${namedMed.name} is at ${next}.` : ''}`,
+          done: true,
+          source: 'dose_log',
+        };
+      }
+    }
+
     // "my morning pills" / "evening tablet": the dose in that part of the day (review, 22 Nov:
     // the time of day in the question was ignored and the first dose found was answered).
     // If she names a medicine, only that medicine's doses count; then the dose nearest the asked

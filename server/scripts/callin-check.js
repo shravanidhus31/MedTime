@@ -69,7 +69,9 @@ const spoken = (actions) => (actions || []).filter((a) => a.text).map((a) => a.t
     await dose(aml, new Date(+now - 3 * 3600000), { status: 'taken', confirmedBy: 'app', confirmedAt: new Date(+now - 3 * 3600000) });
     const metDose = await dose(met, new Date(+now - 2 * MIN));
     const donDose = await dose(don, new Date(+now - 2 * 3600000));
-    const losDose = await dose(los, new Date(+now + 5 * 3600000));
+    // later today, but before midnight IST (in the evening, now + 5 h is already tomorrow)
+    const losDose = await dose(los, new Date(Math.min(+now + 5 * 3600000, +istToday(23, 50))));
+    const tel = await mkMed('Telmisartan'); // no dose today
     await dose(ator, istToday(0, 5), { status: 'taken', confirmedBy: 'app', confirmedAt: istToday(0, 6) }); // just after midnight
     await dose(ator, istToday(21), {}); // 9:00 PM
 
@@ -114,6 +116,11 @@ const spoken = (actions) => (actions || []).filter((a) => a.text).map((a) => a.t
     r = await say(c.callId, 'Did I take my Losartan?');
     check('later today: "It isn\'t time yet" with the time; no dose call (used to start it hours early)',
       /isn't time yet/i.test(spoken(r.actions)) && !/let's do it together/.test(spoken(r.actions)) && (await Reminder.findById(losDose._id).lean()).status === 'pending', spoken(r.actions));
+
+    // 4b. a medicine with no dose today → said about THAT medicine, never another one's dose
+    r = await say(c.callId, 'Did I take my Telmisartan?');
+    check("named medicine with no dose today: \"I don't see a dose of Telmisartan due today\", no other medicine answered",
+      /I don't see a dose of Telmisartan due today/.test(spoken(r.actions)) && !/Atorvastatin|Amlodipine|Losartan/.test(spoken(r.actions)), spoken(r.actions));
 
     // 5. the part of the day she asks about
     r = await say(c.callId, 'Did I take my evening Atorvastatin?');

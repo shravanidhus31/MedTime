@@ -38,6 +38,10 @@ async function addStep(runId, step) {
           at: step.at,
           approvalLevel: step.approvalLevel,
           proposalId: step.proposalId,
+          // the plain-language line the Activity panel and journal show (were dropped here before
+          // 22 Nov, so every step saved through addStep lost its summary)
+          label: step.label,
+          summaryText: step.summaryText,
         },
       },
       $inc: { stepCount: 1 },
