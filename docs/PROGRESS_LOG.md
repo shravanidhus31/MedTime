@@ -17,7 +17,7 @@ A running record of what's done, what's in progress and what's next. **It's upda
 | Task split | ✅ Done. Person A (calls, voice, live agent) and Person B (caregiver app, schedules, background agents, evaluation) |
 | Twilio | ✅ New trial account works end to end for keypad calls driven by our server |
 | Agent code | ✅ Phase 1 agent platform done on `feat/a-agent-runtime` (A2.1–A2.7). Phase 1 gate met on Person A's side: a simulated dose call runs end to end in text and every step shows through `GET /agent/runs/:id`; the Activity panel itself is Person B's. Next: A1 Phase 0 fixes |
-| Person B | 🟡 Working on a feature branch; Day-1 items (#2, #3, #1/#19 and soft delete, #5 top-up) |
+| Person B | 🟡 Reports B1–B12 done (status shared 22 Nov), all on branch `origin/Anuj`, **not merged to `main`**. Left: B13 40-persona evaluation, B13.2 GrandGuard recall, B13.3 SUS form, B14 weekly review, B15 copilot (optional), B16 demo script and README |
 | Phase 0 security fixes | 🟡 In progress on `feat/a-phase0-fixes`. A1.1 webhook signatures, A1.2 `PUBLIC_BASE_URL` / `TWILIO_ENABLED` and A1.3 per-dose escalation done (PRD gate passes in `cron:check`); A1.4 next |
 | Person B onboarding | 🟡 Docs pushed; access and secrets still to be sent privately |
 
@@ -31,12 +31,14 @@ A running record of what's done, what's in progress and what's next. **It's upda
    - their phone number added to Twilio
 3. **Person A, now: A1 Phase 0 fixes.** A1.1 ✅, A1.2 ✅, A1.3 per-dose escalation ✅. Next: A1.4 dose endpoint and dashboard (its own small PR; it edits Person B's `medicineRoutes.js` and `PatientDashboard.jsx`, rule 0.2). Then Phase 2 (A3 voice pipeline, A4 dose agent).
    - **Merge A1.3 and A1.4 to `main` together.** After A1.3 the escalation state is on each Reminder, but the dashboard badges still read the old Medicine fields until A1.4, so on their own the red "missed" and amber "snoozed" badges would stop showing.
-   - **Before merging to `main`, check Render → Environment:** `PUBLIC_BASE_URL` must be set to exactly the Render service URL (no trailing slash), and `TWILIO_AUTH_TOKEN` must be the trial account's token. Without `PUBLIC_BASE_URL` the server now **refuses to start**; with a wrong value Twilio's webhooks get 403 and real calls fail. `NGROK_URL` is no longer read, so if Render only has `NGROK_URL`, copy its value into `PUBLIC_BASE_URL`.
+   - ✅ **Render → Environment: `PUBLIC_BASE_URL` added (22 Nov)**, same value as `NGROK_URL`. Keep `NGROK_URL` until the new code is deployed and a real call works (today's `main` still reads it), then delete it. Also check that `TWILIO_AUTH_TOKEN` on Render is the trial account's token, or Twilio's webhooks will get 403.
 4. **Person A, after A2 and A1:** A3.5 Twilio phone adapter (turn by turn, trial-compatible) and the Core dose agent.
 
 ## Open questions
+- **Person B's branch `origin/Anuj` overlaps ours (found 22 Nov, before starting A1.4).** 12 commits, about 9,700 lines, not merged to `main`. Same 5 files changed on both sides: `events.js`, `index.js`, `models/AgentRun.js`, `models/Patient.js`, `package.json`. B wrote their own `AgentRun` model and `GET /agent/runs` routes (C2 is Person A's, done in A2.3), and B's `Patient.js` defaults `dementiaMode` and `familyClipsEnabled` to **true** (A2.6 uses false, so every patient would go to the agent). A1.4 edits `medicineRoutes.js` and `PatientDashboard.jsx`, which B's branch also rewrote (ownership checks, `requirePatientAccess`, soft delete). B's reminder top-up skips slots that already exist, so it fits A1.3's stand-in. **Needs a decision on how and when to integrate before A1.4.**
 - **Tell Person B (A1.3):** (1) contract C4 gained a `source` value, `scheduler` (the cron marking a dose missed); `dose.missed` events now really fire. (2) `reportRoutes.js` and `monthlyReportCron.js` still read `Medicine.caregiverAlerted`, which is no longer updated; they should read the per-dose `Reminder` fields (`status`, `caregiverAlerted`). (3) The nightly reminder top-up (#5) should upsert on medicine + time, because the cron now creates a missing call-type Reminder itself.
-- **Submission deadline?** It decides whether Phases 7 and 8 (weekly review, copilot) are in.
+- **Submission deadline?** Person B's status (22 Nov) says only one week is left, so roughly the end of November 2026. Exact date still to confirm. It decides what gets cut from both task lists.
+- **B's call-in agent (B11) doesn't use Person A's runtime:** `callinFlow.js` and `routes/voiceIncoming.js` don't go through `registerFlow` / `/agent/turn` (C8), and they write to B's own `AgentRun` model. To sort out during integration.
 - **Upgrade Twilio near the end?** That would add live streaming, caregiver SMS, call-in on our own number, and timing measures from phone calls.
 - **Does the trial route incoming calls to our server?** Test it via Try out Voice → Receive a call. This matters for Feature 7 on the phone.
 - **Marathi speech recognition:** Twilio's docs don't list it; test a Google V2 model on a real call.
@@ -69,6 +71,7 @@ A running record of what's done, what's in progress and what's next. **It's upda
 ## Change log
 
 ### 22 Nov 2026
+- **Render:** `PUBLIC_BASE_URL` added with the same value as `NGROK_URL` (the `onrender.com` address). `NGROK_URL` stays until the A1.2 code is live and a real call works.
 - **A1.3 per-dose escalation (PRD #13)** (branch `feat/a-phase0-fixes`, not committed yet).
   - `Reminder` now holds the escalation for its own dose: `snoozeUntil`, `caregiverAlertTime`, `caregiverAlerted`, plus `attempts`, `lastCallAt`, `callError`, and for the caregiver alert `alertAttempts`, `alertFailed`, `alertError`. The old `Medicine` fields stay in the schema, unused.
   - `jobs/missedDoseCron.js` rewritten to loop over **due Reminders**: [C] first call for a dose due in the last 15 minutes and never called (a dose from longer ago isn't called late, so a deploy can't set off a burst of old calls); [B] call again when the snooze is over; [A] after 10 unconfirmed minutes, `markDose(missed, 'scheduler')`, then **phone the caregivers** through `services/caregiverAlerts.js` (decision of 22 Nov). An alert that couldn't be placed sets `alertFailed` and is retried on the next ticks, 3 tries in all; `caregiverNotified`/`caregiverAlerted` are set only when a call was placed. Each step "claims" the dose in the database first, so an overlapping tick can't double-call.
@@ -218,5 +221,4 @@ A running record of what's done, what's in progress and what's next. **It's upda
 ---
 
 ## Not yet committed (local only)
-- A1.3: `server/models/Reminder.js`, `server/jobs/missedDoseCron.js`, `server/services/doseService.js`, `server/services/caregiverAlerts.js`, `server/agent/doseDue.js`, `server/routes/webhookRoutes.js`, `server/utils/twilioClient.js`, `server/scripts/cron-check.js`, `server/scripts/tools-check.js`, `ISSUES.md`, both task files and this log.
-- Neither branch is pushed yet: `feat/a-agent-runtime` (A2.1–A2.7) and `feat/a-phase0-fixes` (A1.1 `1b288ad`, A1.2 `0070f8b`, on top of it).
+- Nothing uncommitted. No branch is pushed yet: `feat/a-agent-runtime` (A2.1–A2.7), `feat/a-phase0-fixes` on top of it (A1.1 `1b288ad`, A1.2 `0070f8b`, A1.3 `ca84733`), and `feat/a-dose-endpoint` on top of that (A1.4, not started).
